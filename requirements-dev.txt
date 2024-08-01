@@ -1,5 +1,5 @@
 ruff
 pre-commit
 pytest
-request-mock
+requests-mock
 pytest-cov
