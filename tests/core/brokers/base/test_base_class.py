@@ -1011,12 +1011,10 @@ def test_from_timestamp_negative():
     """
     Test from_timestamp with a negative Unix timestamp.
 
-    The test verifies that a negative Unix timestamp (representing a date before January 1, 1970) is
-    correctly converted to a naive datetime object, and that the resulting datetime object represents a date before 1970.
+    This should raise a ValueError as negative timestamps are not supported.
     """
-    result = Broker.from_timestamp(-1000000)  # A date before 1970
-    assert isinstance(result, datetime)
-    assert result.year < 1970
+    with pytest.raises(ValueError):
+        Broker.from_timestamp(-1000000)  # A date before 1970
 
 
 def test_from_timestamp_float():
@@ -1039,7 +1037,7 @@ def test_from_timestamp_string():
 
     The test verifies that a TypeError is raised when the input is a string, as the function should only accept numerical timestamps.
     """
-    with pytest.raises(TypeError):
+    with pytest.raises(ValueError):
         Broker.from_timestamp("1620000000")
 
 
@@ -1049,7 +1047,7 @@ def test_from_timestamp_none():
 
     The test verifies that a TypeError is raised when the input is None, as the function should only accept numerical timestamps.
     """
-    with pytest.raises(TypeError):
+    with pytest.raises(ValueError):
         Broker.from_timestamp(None)
 
 
@@ -1077,22 +1075,6 @@ def test_from_timestamp_very_small_number():
         )  # A very small number that should cause an error
 
 
-def test_from_timestamp_reasonable_negative():
-    """
-    Test from_timestamp with a reasonable negative Unix timestamp.
-
-    The test verifies that a reasonable negative Unix timestamp is correctly converted to a naive datetime object,
-    and that the resulting datetime object represents the expected date.
-    """
-    result = Broker.from_timestamp(
-        -1000000000
-    )  # Roughly 1938-04-25 in Asia/Kolkata timezone
-    assert isinstance(result, datetime)
-    assert result.year == 1938
-    assert result.month == 4
-    assert result.day == 25
-
-
 def test_from_timestamp_timezone():
     """
     Test from_timestamp with a Unix timestamp and verify its relationship to UTC.
@@ -1107,3 +1089,36 @@ def test_from_timestamp_timezone():
     assert (
         abs((result - utc_time.replace(tzinfo=None)).total_seconds()) < 24 * 3600
     )  # Should be within 24 hours of UTC time
+
+
+def test_current_datetime_type():
+    """
+    Test current_datetime to ensure it returns a datetime object.
+    """
+    result = Broker.current_datetime()
+    assert isinstance(result, datetime)
+
+
+def test_current_datetime_accuracy():
+    """
+    Test current_datetime to ensure the returned datetime is close to the actual current time.
+
+    The test verifies that the returned datetime is within 1 second of the system's current time.
+    """
+    current_time = datetime.now()
+    result = Broker.current_datetime()
+    assert isinstance(result, datetime)
+    assert (
+        abs((result - current_time).total_seconds()) < 1
+    )  # Allow up to 1 second difference
+
+
+def test_current_datetime_utc_offset():
+    """
+    Test current_datetime to ensure the returned datetime is in the local timezone and not UTC.
+
+    The test verifies that the returned datetime object does not have a timezone (i.e., it is naive).
+    """
+    result = Broker.current_datetime()
+    assert isinstance(result, datetime)
+    assert result.tzinfo is None  # Ensure datetime is naive (no timezone info)

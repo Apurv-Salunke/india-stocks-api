@@ -388,8 +388,20 @@ class Broker:
             TypeError: If the input is not a number
         """
         try:
+            if not isinstance(datetime_obj, (int, float)) or datetime_obj < 0:
+                raise ValueError("Timestamp must be a non-negative number.")
             return datetime.fromtimestamp(datetime_obj)
         except (ValueError, OverflowError, OSError) as e:
             raise ValueError(f"Invalid timestamp: {e}")
         except TypeError as e:
             raise TypeError(f"Invalid input type: {e}")
+
+    @staticmethod
+    def current_datetime() -> datetime:
+        """
+        Get Current System Datetime
+
+        Returns:
+            datetime: datetime.datetime object
+        """
+        return datetime.now()
