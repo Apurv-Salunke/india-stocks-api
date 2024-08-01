@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import base64
 from json import JSONDecodeError, dumps, loads
 from ssl import SSLError
 from typing import Any, Dict, List, Optional, Tuple, Union
+from pyotp import TOTP
 from requests.adapters import HTTPAdapter
 from requests.sessions import session as req_session
 from requests.models import Response
@@ -213,3 +215,36 @@ class Broker:
             dict: Json Object received from Response.
         """
         return loads(response.text.strip())
+
+    @staticmethod
+    def generate_verified_totp(totpbase: str, max_attempts: int = 3) -> str:
+        """
+        Generate and verify a TOTP from the given base string.
+
+        Parameters:
+            totpbase (str): String used to Generate TOTP.
+            max_attempts (int): Maximum number of attempts to generate a valid TOTP.
+
+        Returns:
+            str: Six-Digit TOTP
+
+        Raises:
+            ValueError: If unable to generate a valid TOTP within the maximum attempts.
+        """
+        if not totpbase:
+            raise ValueError("Invalid TOTP base")
+
+        try:
+            base64.b32decode(totpbase, casefold=True)
+        except ValueError:
+            raise ValueError("Invalid TOTP base")
+        for _ in range(max_attempts):
+            totpobj = TOTP(totpbase)
+            totp = totpobj.now()
+
+            if totpobj.verify(totp):
+                return totp
+
+        raise ValueError(
+            f"Unable to generate a valid TOTP after {max_attempts} attempts"
+        )

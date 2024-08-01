@@ -421,3 +421,160 @@ def test_on_json_response_non_json_content(mock_response):
     mock_response._content = b"This is not JSON"  # Non-JSON content
     with pytest.raises(JSONDecodeError):
         Broker.on_json_response(mock_response)
+
+
+def test_generate_verified_totp_success():
+    """
+    Test case for successfully generating a valid TOTP.
+
+    Verifies that a valid TOTP is generated with a length of 6 digits and consists only of digits.
+    """
+    totpbase = "JBSWY3DPEHPK3PXP"
+    totp = Broker.generate_verified_totp(totpbase)
+    assert len(totp) == 6
+    assert totp.isdigit()
+
+
+def test_generate_verified_totp_invalid_base():
+    """
+    Test case for providing an invalid base string.
+
+    Ensures that a ValueError is raised when an invalid TOTP base string is provided.
+    """
+    with pytest.raises(ValueError):
+        Broker.generate_verified_totp("invalid_base")
+
+
+def test_generate_verified_totp_max_attempts_reached():
+    """
+    Test case for reaching the maximum number of attempts.
+
+    Verifies that a ValueError is raised when the maximum number of attempts to generate a valid TOTP is exceeded.
+    """
+    totpbase = "JBSWY3DPEHPK3PXP"
+    with patch("pyotp.TOTP.verify", return_value=False):
+        with pytest.raises(
+            ValueError, match="Unable to generate a valid TOTP after 3 attempts"
+        ):
+            Broker.generate_verified_totp(totpbase)
+
+
+def test_generate_verified_totp_custom_max_attempts():
+    """
+    Test case for using a custom maximum number of attempts.
+
+    Verifies that a ValueError is raised with the correct message when the maximum number of attempts is set to a custom value.
+    """
+    totpbase = "JBSWY3DPEHPK3PXP"
+    with patch("pyotp.TOTP.verify", return_value=False):
+        with pytest.raises(
+            ValueError, match="Unable to generate a valid TOTP after 5 attempts"
+        ):
+            Broker.generate_verified_totp(totpbase, max_attempts=5)
+
+
+def test_generate_verified_totp_second_attempt_success():
+    """
+    Test case for successful TOTP generation on the second attempt.
+
+    Verifies that a valid TOTP is generated if it takes more than one attempt.
+    """
+    totpbase = "JBSWY3DPEHPK3PXP"
+    with patch("pyotp.TOTP.verify", side_effect=[False, True]):
+        totp = Broker.generate_verified_totp(totpbase)
+        assert len(totp) == 6
+        assert totp.isdigit()
+
+
+def test_generate_verified_totp_empty_base():
+    """
+    Test case for providing an empty base string.
+
+    Ensures that a ValueError is raised when an empty TOTP base string is provided.
+    """
+    with pytest.raises(ValueError):
+        Broker.generate_verified_totp("")
+
+
+def test_valid_totp_base():
+    """
+    Test case for a valid TOTP base string.
+
+    Verifies that a valid TOTP is generated when a valid TOTP base string is used.
+    """
+    valid_totp = "ABCDEFGHIJKLMNOP"
+    assert Broker.generate_verified_totp(valid_totp) is not None
+
+
+def test_invalid_totp_base_non_base32():
+    """
+    Test case for a non-base32 TOTP base string.
+
+    Ensures that a ValueError is raised when a TOTP base string containing non-base32 characters is provided.
+    """
+    invalid_totp = "ABCDEFGH12345678"
+    with pytest.raises(ValueError, match="Invalid TOTP base"):
+        Broker.generate_verified_totp(invalid_totp)
+
+
+def test_empty_totp_base():
+    """
+    Test case for an empty TOTP base string.
+
+    Ensures that a ValueError is raised when an empty TOTP base string is provided.
+    """
+    with pytest.raises(ValueError, match="Invalid TOTP base"):
+        Broker.generate_verified_totp("")
+
+
+def test_totp_base_with_padding():
+    """
+    Test case for a TOTP base string with padding characters.
+
+    Ensures that a ValueError is raised when a TOTP base string contains padding characters (e.g., '=').
+    """
+    valid_totp_with_padding = "ABCDEFGHIJKLMNOP===="
+    with pytest.raises(ValueError, match="Invalid TOTP base"):
+        Broker.generate_verified_totp(valid_totp_with_padding)
+
+
+def test_totp_base_lowercase():
+    """
+    Test case for a TOTP base string with lowercase letters.
+
+    Verifies that a TOTP is generated when the base string contains lowercase letters.
+    """
+    lowercase_totp = "abcdefghijklmnop"
+    assert Broker.generate_verified_totp(lowercase_totp) is not None
+
+
+def test_totp_base_mixed_case():
+    """
+    Test case for a TOTP base string with mixed case letters.
+
+    Verifies that a TOTP is generated when the base string contains mixed case letters.
+    """
+    mixed_case_totp = "AbCdEfGhIjKlMnOp"
+    assert Broker.generate_verified_totp(mixed_case_totp) is not None
+
+
+def test_totp_base_with_spaces():
+    """
+    Test case for a TOTP base string with spaces.
+
+    Ensures that a ValueError is raised when a TOTP base string contains spaces.
+    """
+    totp_with_spaces = "ABCD EFGH IJKL MNOP"
+    with pytest.raises(ValueError, match="Invalid TOTP base"):
+        Broker.generate_verified_totp(totp_with_spaces)
+
+
+def test_totp_base_with_special_characters():
+    """
+    Test case for a TOTP base string with special characters.
+
+    Ensures that a ValueError is raised when a TOTP base string contains special characters.
+    """
+    totp_with_special_chars = "ABCDEFGH!@#$%^&*"
+    with pytest.raises(ValueError, match="Invalid TOTP base"):
+        Broker.generate_verified_totp(totp_with_special_chars)
