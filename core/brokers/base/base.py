@@ -4,6 +4,7 @@ import base64
 from json import JSONDecodeError, dumps, loads
 from ssl import SSLError
 from typing import Any, Dict, List, Optional, Tuple, Union
+from pandas import DataFrame, read_csv, read_json
 from pyotp import TOTP
 from requests.adapters import HTTPAdapter
 from requests.sessions import session as req_session
@@ -18,6 +19,7 @@ from requests.exceptions import (
 
 from core.config.network import RETRY_STRATEGY
 from core.brokers.base.errors import (
+    InputError,
     RequestTimeout,
     NetworkError,
     BrokerError,
@@ -247,4 +249,52 @@ class Broker:
 
         raise ValueError(
             f"Unable to generate a valid TOTP after {max_attempts} attempts"
+        )
+
+    @staticmethod
+    def data_reader(
+        link: str,
+        filetype: str,
+        dtype: dict | None = None,
+        sep: str = ",",
+        col_names: list = [],
+    ) -> DataFrame:
+        """
+        Pandas.read_csv & Pandas.read_json Functions Wrapper
+
+        Parameters:
+            link (str): URL to get the Data From.
+            filetype (str): 'json' | 'csv'
+            dtype (dict | None, optional): A Dicitonary with Column-Names as the Keys and their Datatypes as the values. Defaults to None.
+            sep (str, optional): Needed with filetype as 'csv', to input the data seperator. Defaults to ','.
+
+        Raises:
+            InputError: If Wrong filetype Given as Input
+
+        Returns:
+            DataFrame: Pandas DataFrame
+        """
+        if filetype == "json":
+            return read_json(link)
+
+        if filetype == "csv":
+            if col_names:
+                return read_csv(
+                    link,
+                    dtype=dtype,
+                    sep=sep,
+                    names=col_names,
+                    # sep="|",
+                )
+
+            return read_csv(
+                link,
+                dtype=dtype,
+                sep=sep,
+                on_bad_lines="skip",
+                encoding_errors="ignore",
+            )
+
+        raise InputError(
+            f"Wrong Filetype: {filetype}, the possible values are: 'json', 'csv'"
         )

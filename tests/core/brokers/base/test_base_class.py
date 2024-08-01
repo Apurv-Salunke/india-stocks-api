@@ -1,6 +1,7 @@
 from json import JSONDecodeError, dumps
 import random
 from ssl import SSLError
+from pandas import DataFrame
 import pytest
 from unittest.mock import patch, Mock
 from requests.models import Response
@@ -14,7 +15,7 @@ from requests.exceptions import (
 
 from core.brokers.base import Broker
 from core.brokers.base import RequestTimeout, BrokerError, NetworkError
-from core.brokers.base.errors import ResponseError
+from core.brokers.base.errors import InputError, ResponseError
 
 
 @pytest.fixture
@@ -578,3 +579,162 @@ def test_totp_base_with_special_characters():
     totp_with_special_chars = "ABCDEFGH!@#$%^&*"
     with pytest.raises(ValueError, match="Invalid TOTP base"):
         Broker.generate_verified_totp(totp_with_special_chars)
+
+
+@pytest.fixture
+def mock_read_json():
+    """
+    Fixture to mock the pandas.read_json function.
+
+    This fixture patches the read_json function in the Broker's module,
+    allowing you to simulate different return values or behaviors for
+    reading JSON data in tests.
+    """
+    with patch("core.brokers.base.base.read_json") as mock:
+        yield mock
+
+
+@pytest.fixture
+def mock_read_csv():
+    """
+    Fixture to mock the pandas.read_csv function.
+
+    This fixture patches the read_csv function in the Broker's module,
+    allowing you to simulate different return values or behaviors for
+    reading CSV data in tests.
+    """
+    with patch("core.brokers.base.base.read_csv") as mock:
+        yield mock
+
+
+def test_data_reader_json(mock_read_json):
+    """
+    Test reading JSON data using the data_reader method.
+
+    This test verifies that when the filetype is 'json', the data_reader method
+    correctly calls the read_json function and returns the expected DataFrame.
+    """
+    # Mock return value
+    mock_df = DataFrame({"key": ["value"]})
+    mock_read_json.return_value = mock_df
+
+    result = Broker.data_reader("http://example.com/data.json", "json")
+
+    mock_read_json.assert_called_once_with("http://example.com/data.json")
+    assert isinstance(result, DataFrame)
+    assert result.equals(mock_df)
+
+
+def test_data_reader_csv(mock_read_csv):
+    """
+    Test reading CSV data using the data_reader method with default parameters.
+
+    This test verifies that when the filetype is 'csv' and no additional parameters
+    are provided, the data_reader method correctly calls the read_csv function with
+    default arguments and returns the expected DataFrame.
+    """
+    # Mock return value
+    mock_df = DataFrame({"col1": [1, 2], "col2": ["a", "b"]})
+    mock_read_csv.return_value = mock_df
+
+    result = Broker.data_reader("http://example.com/data.csv", "csv")
+
+    mock_read_csv.assert_called_once_with(
+        "http://example.com/data.csv",
+        dtype=None,
+        sep=",",
+        on_bad_lines="skip",
+        encoding_errors="ignore",
+    )
+    assert isinstance(result, DataFrame)
+    assert result.equals(mock_df)
+
+
+def test_data_reader_csv_with_dtype(mock_read_csv):
+    """
+    Test reading CSV data using the data_reader method with specified data types.
+
+    This test verifies that the data_reader method correctly passes the dtype argument
+    to the read_csv function and returns the expected DataFrame.
+    """
+    # Mock return value
+    mock_df = DataFrame({"col1": [1, 2], "col2": ["a", "b"]})
+    mock_read_csv.return_value = mock_df
+
+    dtype = {"col1": "int", "col2": "str"}
+
+    result = Broker.data_reader("http://example.com/data.csv", "csv", dtype=dtype)
+
+    mock_read_csv.assert_called_once_with(
+        "http://example.com/data.csv",
+        dtype=dtype,
+        sep=",",
+        on_bad_lines="skip",
+        encoding_errors="ignore",
+    )
+    assert isinstance(result, DataFrame)
+    assert result.equals(mock_df)
+
+
+def test_data_reader_csv_with_sep(mock_read_csv):
+    """
+    Test reading CSV data using the data_reader method with a custom separator.
+
+    This test verifies that the data_reader method correctly uses the custom separator
+    provided in the sep argument and returns the expected DataFrame.
+    """
+    # Mock return value
+    mock_df = DataFrame({"col1": [1, 2], "col2": ["a", "b"]})
+    mock_read_csv.return_value = mock_df
+
+    result = Broker.data_reader("http://example.com/data.csv", "csv", sep="|")
+
+    mock_read_csv.assert_called_once_with(
+        "http://example.com/data.csv",
+        dtype=None,
+        sep="|",
+        on_bad_lines="skip",
+        encoding_errors="ignore",
+    )
+    assert isinstance(result, DataFrame)
+    assert result.equals(mock_df)
+
+
+def test_data_reader_csv_with_col_names(mock_read_csv):
+    """
+    Test reading CSV data using the data_reader method with custom column names.
+
+    This test verifies that the data_reader method correctly passes the col_names argument
+    to the read_csv function and returns the expected DataFrame with the specified column names.
+    """
+    # Mock return value
+    mock_df = DataFrame({"col1": [1, 2], "col2": ["a", "b"]})
+    mock_read_csv.return_value = mock_df
+
+    col_names = ["col1", "col2"]
+
+    result = Broker.data_reader(
+        "http://example.com/data.csv", "csv", col_names=col_names
+    )
+
+    mock_read_csv.assert_called_once_with(
+        "http://example.com/data.csv",
+        dtype=None,
+        sep=",",
+        names=col_names,
+    )
+    assert isinstance(result, DataFrame)
+    assert result.equals(mock_df)
+
+
+def test_data_reader_invalid_filetype():
+    """
+    Test that the data_reader method raises an InputError for invalid file types.
+
+    This test verifies that when an unsupported file type is provided, the data_reader method
+    raises an InputError with the appropriate error message.
+    """
+    with pytest.raises(
+        InputError, match="Wrong Filetype: xml, the possible values are: 'json', 'csv'"
+    ):
+        Broker.data_reader("http://example.com/data.xml", "xml")
