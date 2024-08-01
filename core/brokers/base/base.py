@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import base64
+from pandas.errors import OutOfBoundsDatetime
 from json import JSONDecodeError, dumps, loads
 from ssl import SSLError
 from typing import Any, Dict, List, Optional, Tuple, Union
-from pandas import DataFrame, read_csv, read_json
+from pandas import DataFrame, Timestamp, read_csv, read_json, to_datetime
 from pyotp import TOTP
+import pytz
 from requests.adapters import HTTPAdapter
 from requests.sessions import session as req_session
 from requests.models import Response
@@ -298,3 +300,50 @@ class Broker:
         raise InputError(
             f"Wrong Filetype: {filetype}, the possible values are: 'json', 'csv'"
         )
+
+    @staticmethod
+    def data_frame(data: list) -> DataFrame:
+        """
+        Pandas.DataFrame Function Wrapper
+
+        Parameters:
+            data (list): List of Data to make the DataFrame out of.
+
+        Returns:
+            DataFrame: Pandas DataFrame
+        """
+        return DataFrame(data)
+
+    @staticmethod
+    def pd_datetime(
+        datetime_obj: Union[str, int, float],
+        unit: str = "ns",
+        tz: str = None,
+    ) -> Timestamp:
+        valid_units = ["D", "s", "ms", "us", "ns"]
+        if unit not in valid_units:
+            raise ValueError(f"Invalid unit. Must be one of {valid_units}")
+
+        if tz and tz not in pytz.all_timezones:
+            raise ValueError(f"Invalid timezone: {tz}")
+
+        try:
+            if isinstance(datetime_obj, str) and datetime_obj.isdigit():
+                datetime_obj = float(datetime_obj)
+
+            if isinstance(datetime_obj, (int, float)):
+                timestamp = Timestamp(datetime_obj, unit=unit)
+            else:
+                timestamp = to_datetime(datetime_obj)
+
+            if tz:
+                timestamp = timestamp.tz_localize("UTC").tz_convert(tz)
+
+            return timestamp
+
+        except OutOfBoundsDatetime:
+            raise OutOfBoundsDatetime(
+                f"Datetime value is out of range for unit '{unit}': {datetime_obj}"
+            )
+        except ValueError as e:
+            raise ValueError(f"Invalid input: {e}")

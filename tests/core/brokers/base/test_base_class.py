@@ -1,7 +1,7 @@
 from json import JSONDecodeError, dumps
 import random
 from ssl import SSLError
-from pandas import DataFrame
+from pandas import DataFrame, Timestamp
 import pytest
 from unittest.mock import patch, Mock
 from requests.models import Response
@@ -12,6 +12,7 @@ from requests.exceptions import (
     RequestException,
     TooManyRedirects,
 )
+from pandas.errors import OutOfBoundsDatetime
 
 from core.brokers.base import Broker
 from core.brokers.base import RequestTimeout, BrokerError, NetworkError
@@ -738,3 +739,154 @@ def test_data_reader_invalid_filetype():
         InputError, match="Wrong Filetype: xml, the possible values are: 'json', 'csv'"
     ):
         Broker.data_reader("http://example.com/data.xml", "xml")
+
+
+def test_data_frame_with_valid_data():
+    """
+    Test data_frame method with valid list data.
+
+    This test verifies that the data_frame method correctly converts a list of dictionaries
+    into a DataFrame with the expected structure and content.
+    """
+    data = [{"col1": 1, "col2": "a"}, {"col1": 2, "col2": "b"}]
+    result = Broker.data_frame(data)
+
+    expected_df = DataFrame(data)
+
+    assert isinstance(result, DataFrame)
+    assert result.equals(expected_df)
+
+
+def test_data_frame_with_empty_list():
+    """
+    Test data_frame method with an empty list.
+
+    This test verifies that the data_frame method correctly handles an empty list input
+    by returning an empty DataFrame.
+    """
+    data = []
+    result = Broker.data_frame(data)
+
+    expected_df = DataFrame(data)
+
+    assert isinstance(result, DataFrame)
+    assert result.equals(expected_df)
+    assert result.empty
+
+
+def test_data_frame_with_mixed_data():
+    """
+    Test data_frame method with mixed data types in the list.
+
+    This test verifies that the data_frame method correctly handles a list containing
+    mixed data types, converting it into a DataFrame with the appropriate structure.
+    """
+    data = [
+        {"col1": 1, "col2": "a"},
+        {"col1": 2, "col2": None},
+        {"col1": None, "col2": "c"},
+    ]
+    result = Broker.data_frame(data)
+
+    expected_df = DataFrame(data)
+
+    assert isinstance(result, DataFrame)
+    assert result.equals(expected_df)
+
+
+def test_pd_datetime_with_string():
+    """
+    Test pd_datetime with a string input representing a date.
+
+    The test verifies that a string date is correctly converted to a Timestamp object.
+    """
+    result = Broker.pd_datetime("2023-05-01")
+    assert isinstance(result, Timestamp)
+    assert result == Timestamp("2023-05-01")
+
+
+def test_pd_datetime_with_integer():
+    """
+    Test pd_datetime with an integer input representing a Unix timestamp in seconds.
+
+    The test verifies that an integer timestamp (in seconds) is correctly converted to a Timestamp object.
+    """
+    result = Broker.pd_datetime(1620000000, unit="s")
+    assert isinstance(result, Timestamp)
+    assert result == Timestamp("2021-05-03 00:00:00")
+
+
+def test_pd_datetime_with_float():
+    """
+    Test pd_datetime with a float input representing a Unix timestamp in seconds.
+
+    The test verifies that a float timestamp (in seconds, with fractional seconds) is correctly converted to a Timestamp object,
+    including fractional seconds.
+    """
+    result = Broker.pd_datetime(1620000000.5, unit="s")
+    assert isinstance(result, Timestamp)
+    assert result == Timestamp("2021-05-03 00:00:00.500000")
+
+
+def test_pd_datetime_with_numeric_string():
+    """
+    Test pd_datetime with a numeric string input representing a Unix timestamp in seconds.
+
+    The test verifies that a numeric string timestamp is correctly converted to a Timestamp object.
+    """
+    result = Broker.pd_datetime("1620000000", unit="s")
+    assert isinstance(result, Timestamp)
+    assert result == Timestamp("2021-05-03 00:00:00")
+
+
+def test_pd_datetime_with_timezone():
+    """
+    Test pd_datetime with a string input and a specified timezone.
+
+    The test verifies that a date string with a specified timezone is correctly converted to a Timestamp object with timezone information.
+    """
+    result = Broker.pd_datetime("2023-05-01", tz="UTC")
+    assert isinstance(result, Timestamp)
+    assert result == Timestamp("2023-05-01", tz="UTC")
+
+
+def test_pd_datetime_with_different_units():
+    """
+    Test pd_datetime with various units to ensure correct conversion.
+
+    The test verifies that different units ('D', 's', 'ms', 'us', 'ns') are handled correctly by pd_datetime.
+    """
+    units = ["D", "s", "ms", "us", "ns"]
+    for unit in units:
+        result = Broker.pd_datetime(1, unit=unit)
+        assert isinstance(result, Timestamp)
+
+
+def test_pd_datetime_out_of_bounds():
+    """
+    Test pd_datetime with a value that is out of bounds for the specified unit.
+
+    The test ensures that pd_datetime raises an OutOfBoundsDatetime exception when given a timestamp that exceeds the allowable range.
+    """
+    with pytest.raises(OutOfBoundsDatetime):
+        Broker.pd_datetime(10**20, unit="ns")
+
+
+def test_pd_datetime_invalid_input():
+    """
+    Test pd_datetime with an invalid date string.
+
+    The test ensures that pd_datetime raises a ValueError when given a string that cannot be parsed into a valid datetime.
+    """
+    with pytest.raises(ValueError):
+        Broker.pd_datetime("invalid date")
+
+
+def test_pd_datetime_invalid_unit():
+    """
+    Test pd_datetime with an invalid unit.
+
+    The test ensures that pd_datetime raises a ValueError when given an unrecognized unit.
+    """
+    with pytest.raises(ValueError):
+        Broker.pd_datetime(1, unit="invalid")
