@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from json import JSONDecodeError, dumps
 import random
 from ssl import SSLError
@@ -890,3 +891,219 @@ def test_pd_datetime_invalid_unit():
     """
     with pytest.raises(ValueError):
         Broker.pd_datetime(1, unit="invalid")
+
+
+def test_datetime_strp_valid_input():
+    """
+    Test that Broker.datetime_strp correctly parses a valid datetime string
+    using the specified format and returns a datetime object.
+    """
+    result = Broker.datetime_strp("2023-05-01 14:30:00", "%Y-%m-%d %H:%M:%S")
+    assert isinstance(result, datetime)
+    assert result == datetime(2023, 5, 1, 14, 30, 0)
+
+
+def test_datetime_strp_different_format():
+    """
+    Test that Broker.datetime_strp correctly parses a datetime string
+    with a different format and returns the correct datetime object.
+    """
+    result = Broker.datetime_strp("01/05/2023", "%d/%m/%Y")
+    assert isinstance(result, datetime)
+    assert result == datetime(2023, 5, 1)
+
+
+def test_datetime_strp_with_microseconds():
+    """
+    Test that Broker.datetime_strp correctly parses a datetime string
+    that includes microseconds and returns the correct datetime object.
+    """
+    result = Broker.datetime_strp("2023-05-01 14:30:00.123456", "%Y-%m-%d %H:%M:%S.%f")
+    assert isinstance(result, datetime)
+    assert result == datetime(2023, 5, 1, 14, 30, 0, 123456)
+
+
+def test_datetime_strp_invalid_date():
+    """
+    Test that Broker.datetime_strp raises a ValueError when given an invalid date,
+    such as a month that doesn't exist.
+    """
+    with pytest.raises(ValueError):
+        Broker.datetime_strp("2023-13-01", "%Y-%m-%d")  # Invalid month
+
+
+def test_datetime_strp_mismatched_format():
+    """
+    Test that Broker.datetime_strp raises a ValueError when the datetime string
+    does not match the format specified.
+    """
+    with pytest.raises(ValueError):
+        Broker.datetime_strp(
+            "2023-05-01", "%d/%m/%Y"
+        )  # Format doesn't match the string
+
+
+def test_datetime_strp_empty_string():
+    """
+    Test that Broker.datetime_strp raises a ValueError when given an empty string.
+    """
+    with pytest.raises(ValueError):
+        Broker.datetime_strp("", "%Y-%m-%d")
+
+
+def test_datetime_strp_none_input():
+    """
+    Test that Broker.datetime_strp raises a TypeError when None is passed as the datetime string.
+    """
+    with pytest.raises(TypeError):
+        Broker.datetime_strp(None, "%Y-%m-%d")
+
+
+def test_datetime_strp_invalid_format_string():
+    """
+    Test that Broker.datetime_strp raises a ValueError when the format string includes
+    more specifiers than are present in the datetime string.
+    """
+    with pytest.raises(ValueError):
+        Broker.datetime_strp(
+            "2023-05-01", "%Y-%m-%d %H:%M:%S"
+        )  # More format specifiers than in the string
+
+
+def test_from_timestamp_valid_input():
+    """
+    Test from_timestamp with a valid integer Unix timestamp.
+
+    The test verifies that an integer Unix timestamp is correctly converted to a naive datetime object,
+    and that the resulting datetime object has the same timestamp value.
+    """
+    result = Broker.from_timestamp(1620000000)  # May 3, 2021 12:00:00 AM GMT
+    assert isinstance(result, datetime)
+    assert result.timestamp() == 1620000000
+
+
+def test_from_timestamp_zero():
+    """
+    Test from_timestamp with a Unix timestamp of zero.
+
+    The test verifies that a Unix timestamp of zero (representing January 1, 1970 12:00:00 AM GMT) is
+    correctly converted to a naive datetime object, and that the resulting datetime object has a timestamp of zero.
+    """
+    result = Broker.from_timestamp(0)  # January 1, 1970 12:00:00 AM GMT
+    assert isinstance(result, datetime)
+    assert result.timestamp() == 0
+
+
+def test_from_timestamp_current_time():
+    """
+    Test from_timestamp with the current time's Unix timestamp.
+
+    The test verifies that the current Unix timestamp is correctly converted to a naive datetime object,
+    and that the resulting datetime object is within one second of the current time.
+    """
+    current_timestamp = datetime.now().timestamp()
+    result = Broker.from_timestamp(current_timestamp)
+    assert isinstance(result, datetime)
+    assert abs(result.timestamp() - current_timestamp) < 1  # Allow 1 second difference
+
+
+def test_from_timestamp_negative():
+    """
+    Test from_timestamp with a negative Unix timestamp.
+
+    The test verifies that a negative Unix timestamp (representing a date before January 1, 1970) is
+    correctly converted to a naive datetime object, and that the resulting datetime object represents a date before 1970.
+    """
+    result = Broker.from_timestamp(-1000000)  # A date before 1970
+    assert isinstance(result, datetime)
+    assert result.year < 1970
+
+
+def test_from_timestamp_float():
+    """
+    Test from_timestamp with a float Unix timestamp.
+
+    The test verifies that a float Unix timestamp (including fractional seconds) is correctly converted to a naive datetime object,
+    and that the resulting datetime object has a timestamp value close to the input, allowing for minor differences.
+    """
+    result = Broker.from_timestamp(1620000000.5)
+    assert isinstance(result, datetime)
+    assert (
+        abs(result.timestamp() - 1620000000.5) < 0.001
+    )  # Allow small float difference
+
+
+def test_from_timestamp_string():
+    """
+    Test from_timestamp with a string input.
+
+    The test verifies that a TypeError is raised when the input is a string, as the function should only accept numerical timestamps.
+    """
+    with pytest.raises(TypeError):
+        Broker.from_timestamp("1620000000")
+
+
+def test_from_timestamp_none():
+    """
+    Test from_timestamp with a None input.
+
+    The test verifies that a TypeError is raised when the input is None, as the function should only accept numerical timestamps.
+    """
+    with pytest.raises(TypeError):
+        Broker.from_timestamp(None)
+
+
+def test_from_timestamp_very_large_number():
+    """
+    Test from_timestamp with a very large Unix timestamp.
+
+    The test verifies that a ValueError is raised when a very large Unix timestamp (potentially causing overflow) is provided.
+    """
+    with pytest.raises(ValueError):
+        Broker.from_timestamp(
+            2**63
+        )  # A very large number that should cause an overflow
+
+
+def test_from_timestamp_very_small_number():
+    """
+    Test from_timestamp with a very small (negative) Unix timestamp.
+
+    The test verifies that a ValueError is raised when a very small Unix timestamp (potentially causing an error) is provided.
+    """
+    with pytest.raises(ValueError):
+        Broker.from_timestamp(
+            -(2**63)
+        )  # A very small number that should cause an error
+
+
+def test_from_timestamp_reasonable_negative():
+    """
+    Test from_timestamp with a reasonable negative Unix timestamp.
+
+    The test verifies that a reasonable negative Unix timestamp is correctly converted to a naive datetime object,
+    and that the resulting datetime object represents the expected date.
+    """
+    result = Broker.from_timestamp(
+        -1000000000
+    )  # Roughly 1938-04-25 in Asia/Kolkata timezone
+    assert isinstance(result, datetime)
+    assert result.year == 1938
+    assert result.month == 4
+    assert result.day == 25
+
+
+def test_from_timestamp_timezone():
+    """
+    Test from_timestamp with a Unix timestamp and verify its relationship to UTC.
+
+    The test verifies that the resulting naive datetime object is within 24 hours of the corresponding UTC time
+    and has no timezone information.
+    """
+    timestamp = 1620000000
+    result = Broker.from_timestamp(timestamp)
+    utc_time = datetime.fromtimestamp(timestamp, tz=timezone.utc)
+    assert result.tzinfo is None  # The result should be naive (no timezone info)
+    assert (
+        abs((result - utc_time.replace(tzinfo=None)).total_seconds()) < 24 * 3600
+    )  # Should be within 24 hours of UTC time

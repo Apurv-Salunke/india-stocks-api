@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+from datetime import datetime
 from pandas.errors import OutOfBoundsDatetime
 from json import JSONDecodeError, dumps, loads
 from ssl import SSLError
@@ -347,3 +348,48 @@ class Broker:
             )
         except ValueError as e:
             raise ValueError(f"Invalid input: {e}")
+
+    @staticmethod
+    def datetime_strp(
+        datetime_obj: str,
+        dtformat: str,
+    ) -> datetime:
+        """
+        Python datetime.datetime.strptime Function Wrapper
+
+        Parameters:
+            datetime_obj (str): Datetime String to convert to datetime object.
+            dtformat (str): corresponding datetime format string.
+
+        Returns:
+            datetime: datetime.datetime object
+
+        Raises:
+            ValueError: If the datetime string doesn't match the given format.
+        """
+        try:
+            return datetime.strptime(datetime_obj, dtformat)
+        except ValueError as e:
+            raise ValueError(f"Error parsing datetime: {e}")
+
+    @staticmethod
+    def from_timestamp(datetime_obj: Union[int, float]) -> datetime:
+        """
+        Convert Epoch Time to datetime.datetime object
+
+        Parameters:
+            datetime_obj (int or float): Epoch datetime in seconds
+
+        Returns:
+            datetime: datetime.datetime object in local timezone
+
+        Raises:
+            ValueError: If the timestamp is out of the range of values supported by datetime
+            TypeError: If the input is not a number
+        """
+        try:
+            return datetime.fromtimestamp(datetime_obj)
+        except (ValueError, OverflowError, OSError) as e:
+            raise ValueError(f"Invalid timestamp: {e}")
+        except TypeError as e:
+            raise TypeError(f"Invalid input type: {e}")
