@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from json import JSONDecodeError, dumps, loads
 from ssl import SSLError
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 from requests.adapters import HTTPAdapter
 from requests.sessions import session as req_session
 from requests.models import Response
@@ -18,6 +19,7 @@ from core.brokers.base.errors import (
     RequestTimeout,
     NetworkError,
     BrokerError,
+    ResponseError,
 )
 
 __all__ = ["Broker"]
@@ -145,3 +147,69 @@ class Broker:
             ):
                 raise NetworkError(exc) from exc
             raise BrokerError(exc) from exc
+
+    @staticmethod
+    def _json_parser(response: Response) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
+        """
+        Get JSON object from a request Response.
+
+        Args:
+            response (Response): Response Object
+
+        Returns:
+            Union[Dict[str, Any], List[Dict[str, Any]]]: JSON Object received from Response.
+
+        Raises:
+            ResponseError: If there's an error parsing the response.
+        """
+        try:
+            return loads(response.text.strip())
+        except JSONDecodeError as json_err:
+            raise ResponseError(
+                {
+                    "Status": response.status_code,
+                    "Error": "Invalid JSON in response",
+                    "URL": response.url,
+                    "Reason": response.reason,
+                }
+            ) from json_err
+        except Exception as exc:
+            raise ResponseError(
+                {
+                    "Status": response.status_code,
+                    "Error": response.text,
+                    "URL": response.url,
+                    "Reason": response.reason,
+                }
+            ) from exc
+
+    @staticmethod
+    def json_dumps(json_data: dict) -> str:
+        """
+        Convert a Python dictionary to a JSON string.
+
+        Args:
+            json_data (dict): The Python dictionary to convert to JSON.
+
+        Returns:
+            str: The JSON string representation of the input dictionary.
+
+        Raises:
+            TypeError: If the input is not a dictionary.
+        """
+        if not isinstance(json_data, dict):
+            raise TypeError("Input must be a dictionary")
+        return dumps(json_data)
+
+    @staticmethod
+    def on_json_response(response: Response) -> dict[Any, Any]:
+        """
+        Get json object from a request Response.
+
+        Parameters:
+            response (Response): Response Object
+
+        Returns:
+            dict: Json Object received from Response.
+        """
+        return loads(response.text.strip())
