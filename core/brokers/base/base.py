@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import base64
-from datetime import datetime
+from datetime import datetime, timedelta
 from pandas.errors import OutOfBoundsDatetime
 from json import JSONDecodeError, dumps, loads
 from ssl import SSLError
 from typing import Any, Dict, List, Optional, Tuple, Union
-from pandas import DataFrame, Timestamp, read_csv, read_json, to_datetime
+from pandas import DataFrame, DateOffset, Timestamp, read_csv, read_json, to_datetime
 from pyotp import TOTP
 import pytz
 from requests.adapters import HTTPAdapter
@@ -405,3 +405,54 @@ class Broker:
             datetime: datetime.datetime object
         """
         return datetime.now()
+
+    @staticmethod
+    def time_delta(
+        datetime_object: datetime, delta: int, dtformat: str, default="sub"
+    ) -> str:
+        """
+        Add Days to a datetime.datetime object
+
+        Parameters:
+            datetime_object (datetime): datetime object
+            delta (int): No. of Days to add or subtract from datetime_obj
+            dtformat (str): corresponding datetime format string.
+            default (str, optional): Whether to add or subtract a Day from datetime_obj ('add' | 'sub'). Defaults to 'sub'.
+
+        Raises:
+            InputError: If Wrong Value Given for default Parameter.
+
+        Returns:
+            str: A datetime string.
+        """
+        if default == "sub":
+            return (datetime_object - timedelta(days=delta)).strftime(dtformat)
+        if default == "add":
+            return (datetime_object + timedelta(days=delta)).strftime(dtformat)
+
+        raise InputError(
+            f"Wrong default: {default}, the possible values are 'sub', 'add'"
+        )
+
+    @staticmethod
+    def dateoffset(*args: Any, **kwargs: Any) -> DateOffset:
+        """
+        Create a Pandas DateOffset object.
+
+        Args:
+            *args: Positional arguments to pass to DateOffset.
+            **kwargs: Keyword arguments to pass to DateOffset.
+
+        Returns:
+            DateOffset: A Pandas DateOffset object.
+
+        Raises:
+            ValueError: If invalid arguments are provided.
+
+        Example:
+            offset = Broker.dateoffset(days=1, hours=2)
+        """
+        try:
+            return DateOffset(*args, **kwargs)
+        except ValueError as e:
+            raise ValueError(f"Invalid arguments for DateOffset: {e}")

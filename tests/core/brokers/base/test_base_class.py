@@ -1,8 +1,8 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from json import JSONDecodeError, dumps
 import random
 from ssl import SSLError
-from pandas import DataFrame, Timestamp
+from pandas import DataFrame, DateOffset, Timestamp
 import pytest
 from unittest.mock import patch, Mock
 from requests.models import Response
@@ -1122,3 +1122,118 @@ def test_current_datetime_utc_offset():
     result = Broker.current_datetime()
     assert isinstance(result, datetime)
     assert result.tzinfo is None  # Ensure datetime is naive (no timezone info)
+
+
+def test_time_delta_add():
+    """
+    Test time_delta to add days to a datetime object.
+    """
+    dt = datetime(2023, 1, 1)
+    delta_days = 10
+    dtformat = "%Y-%m-%d"
+    result = Broker.time_delta(dt, delta_days, dtformat, default="add")
+    expected = (dt + timedelta(days=delta_days)).strftime(dtformat)
+    assert result == expected
+
+
+def test_time_delta_subtract():
+    """
+    Test time_delta to subtract days from a datetime object.
+    """
+    dt = datetime(2023, 1, 1)
+    delta_days = 10
+    dtformat = "%Y-%m-%d"
+    result = Broker.time_delta(dt, delta_days, dtformat, default="sub")
+    expected = (dt - timedelta(days=delta_days)).strftime(dtformat)
+    assert result == expected
+
+
+def test_time_delta_add_days():
+    """
+    Test time_delta to add days to a datetime object.
+    """
+    dt = datetime(2023, 1, 1)
+    delta_days = 5
+    dtformat = "%Y-%m-%d"
+    result = Broker.time_delta(dt, delta_days, dtformat, default="add")
+    expected = (dt + timedelta(days=delta_days)).strftime(dtformat)
+    assert result == expected
+
+
+def test_time_delta_invalid_default():
+    """
+    Test time_delta with an invalid 'default' value.
+    """
+    dt = datetime(2023, 1, 1)
+    delta_days = 5
+    dtformat = "%Y-%m-%d"
+    try:
+        Broker.time_delta(dt, delta_days, dtformat, default="invalid")
+    except InputError as e:
+        assert str(e) == "Wrong default: invalid, the possible values are 'sub', 'add'"
+    else:
+        assert False, "InputError not raised with an invalid default value."
+
+
+def test_time_delta_invalid_format():
+    """
+    Test time_delta with the default behavior (subtract days) and a valid datetime format.
+    """
+    dt = datetime(2023, 1, 1)
+    delta_days = 5
+    dtformat = "%Y-%m-%d"  # Valid format
+    result = Broker.time_delta(dt, delta_days, dtformat)
+    expected = (dt - timedelta(days=delta_days)).strftime(dtformat)
+    assert result == expected
+
+
+def test_time_delta_edge_case():
+    """
+    Test time_delta with a zero delta.
+    """
+    dt = datetime(2023, 1, 1)
+    delta_days = 0
+    dtformat = "%Y-%m-%d"
+    result = Broker.time_delta(dt, delta_days, dtformat)
+    expected = dt.strftime(dtformat)
+    assert result == expected
+
+
+def test_dateoffset_with_days_and_hours():
+    # Test creating a DateOffset with days and hours
+    offset = Broker.dateoffset(days=1, hours=2)
+    assert isinstance(offset, DateOffset)
+    assert offset.kwds == {"days": 1, "hours": 2}
+
+
+def test_dateoffset_with_months_and_years():
+    # Test creating a DateOffset with months and years
+    offset = Broker.dateoffset(months=6, years=1)
+    assert isinstance(offset, DateOffset)
+    assert offset.kwds == {"months": 6, "years": 1}
+
+
+def test_dateoffset_invalid_arguments():
+    # Test creating a DateOffset with invalid arguments
+    with pytest.raises(ValueError):
+        Broker.dateoffset(invalid_argument=5)
+
+
+def test_dateoffset_with_no_arguments():
+    # Test creating a DateOffset with no arguments
+    offset = Broker.dateoffset()
+    assert isinstance(offset, DateOffset)
+
+
+def test_dateoffset_with_weeks():
+    # Test creating a DateOffset with weeks
+    offset = Broker.dateoffset(weeks=2)
+    assert isinstance(offset, DateOffset)
+    assert offset.kwds == {"weeks": 2}
+
+
+def test_dateoffset_combination():
+    # Test creating a DateOffset with a combination of different arguments
+    offset = Broker.dateoffset(days=3, weeks=1, months=2, years=1)
+    assert isinstance(offset, DateOffset)
+    assert offset.kwds == {"days": 3, "weeks": 1, "months": 2, "years": 1}
