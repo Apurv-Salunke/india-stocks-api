@@ -6,7 +6,15 @@ from pandas.errors import OutOfBoundsDatetime
 from json import JSONDecodeError, dumps, loads
 from ssl import SSLError
 from typing import Any, Dict, List, Optional, Tuple, Union
-from pandas import DataFrame, DateOffset, Timestamp, read_csv, read_json, to_datetime
+from pandas import (
+    DataFrame,
+    DateOffset,
+    Timestamp,
+    read_csv,
+    read_json,
+    to_datetime,
+    concat as pd_concat,
+)
 from pyotp import TOTP
 import pytz
 from requests.adapters import HTTPAdapter
@@ -456,3 +464,25 @@ class Broker:
             return DateOffset(*args, **kwargs)
         except ValueError as e:
             raise ValueError(f"Invalid arguments for DateOffset: {e}")
+
+    @staticmethod
+    def concatenate_dataframes(dfs: list[DataFrame], **kwargs) -> DataFrame:
+        """
+        Concatenate a list of pandas DataFrames.
+
+        Args:
+            dfs (list[DataFrame]): List of DataFrames to concatenate.
+            **kwargs: Additional keyword arguments to pass to pandas.concat.
+
+        Returns:
+            DataFrame: Concatenated DataFrame.
+
+        Raises:
+            ValueError: If the input list is empty.
+            TypeError: If any element in the list is not a DataFrame.
+        """
+        if not dfs:
+            raise ValueError("Input list is empty")
+        if not all(isinstance(df, DataFrame) for df in dfs):
+            raise TypeError("All elements must be pandas DataFrames")
+        return pd_concat(dfs, **kwargs)

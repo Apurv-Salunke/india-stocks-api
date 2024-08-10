@@ -1200,40 +1200,124 @@ def test_time_delta_edge_case():
 
 
 def test_dateoffset_with_days_and_hours():
-    # Test creating a DateOffset with days and hours
+    """
+    Test creating a DateOffset with days and hours.
+
+    This test verifies that the Broker.dateoffset method correctly creates
+    a DateOffset object when provided with days and hours as arguments.
+    """
     offset = Broker.dateoffset(days=1, hours=2)
     assert isinstance(offset, DateOffset)
     assert offset.kwds == {"days": 1, "hours": 2}
 
 
 def test_dateoffset_with_months_and_years():
-    # Test creating a DateOffset with months and years
+    """
+    Test creating a DateOffset with months and years.
+
+    This test checks if the Broker.dateoffset method properly creates
+    a DateOffset object with the provided months and years arguments.
+    """
     offset = Broker.dateoffset(months=6, years=1)
     assert isinstance(offset, DateOffset)
     assert offset.kwds == {"months": 6, "years": 1}
 
 
 def test_dateoffset_invalid_arguments():
-    # Test creating a DateOffset with invalid arguments
+    """
+    Test creating a DateOffset with invalid arguments.
+
+    This test ensures that the Broker.dateoffset method raises a ValueError
+    when provided with an invalid argument.
+    """
     with pytest.raises(ValueError):
         Broker.dateoffset(invalid_argument=5)
 
 
 def test_dateoffset_with_no_arguments():
-    # Test creating a DateOffset with no arguments
+    """
+    Test creating a DateOffset with no arguments.
+
+    This test verifies that the Broker.dateoffset method can create a
+    DateOffset object even when no arguments are provided.
+    """
     offset = Broker.dateoffset()
     assert isinstance(offset, DateOffset)
 
 
 def test_dateoffset_with_weeks():
-    # Test creating a DateOffset with weeks
+    """
+    Test creating a DateOffset with weeks.
+
+    This test checks if the Broker.dateoffset method can correctly create
+    a DateOffset object using weeks as an argument.
+    """
     offset = Broker.dateoffset(weeks=2)
     assert isinstance(offset, DateOffset)
     assert offset.kwds == {"weeks": 2}
 
 
 def test_dateoffset_combination():
-    # Test creating a DateOffset with a combination of different arguments
+    """
+    Test creating a DateOffset with a combination of different arguments.
+
+    This test verifies that the Broker.dateoffset method can correctly
+    handle multiple arguments (days, weeks, months, years) and produce
+    a valid DateOffset object.
+    """
     offset = Broker.dateoffset(days=3, weeks=1, months=2, years=1)
     assert isinstance(offset, DateOffset)
     assert offset.kwds == {"days": 3, "weeks": 1, "months": 2, "years": 1}
+
+
+def test_concatenate_dataframes_valid_input():
+    """
+    Test concatenating valid DataFrame inputs.
+
+    This test checks that the Broker.concatenate_dataframes method correctly
+    concatenates a list of valid pandas DataFrames into a single DataFrame.
+    """
+    df1 = DataFrame({"A": [1, 2], "B": [3, 4]})
+    df2 = DataFrame({"A": [5, 6], "B": [7, 8]})
+    result = Broker.concatenate_dataframes([df1, df2]).reset_index(drop=True)
+    expected = DataFrame({"A": [1, 2, 5, 6], "B": [3, 4, 7, 8]})
+    assert result.equals(expected)
+
+
+def test_concatenate_dataframes_empty_list():
+    """
+    Test concatenating an empty list of DataFrames.
+
+    This test ensures that the Broker.concatenate_dataframes method raises
+    a ValueError when an empty list is provided as input.
+    """
+    with pytest.raises(ValueError, match="Input list is empty"):
+        Broker.concatenate_dataframes([])
+
+
+def test_concatenate_dataframes_invalid_element():
+    """
+    Test concatenating a list with an invalid element.
+
+    This test checks that the Broker.concatenate_dataframes method raises
+    a TypeError when an element in the list is not a pandas DataFrame.
+    """
+    df1 = DataFrame({"A": [1, 2], "B": [3, 4]})
+    invalid_element = {"A": [5, 6], "B": [7, 8]}
+    with pytest.raises(TypeError, match="All elements must be pandas DataFrames"):
+        Broker.concatenate_dataframes([df1, invalid_element])
+
+
+def test_concatenate_dataframes_with_kwargs():
+    """
+    Test concatenating DataFrames with additional kwargs.
+
+    This test checks if the Broker.concatenate_dataframes method correctly
+    handles additional keyword arguments, such as ignore_index, passed to
+    the pd.concat function.
+    """
+    df1 = DataFrame({"A": [1, 2], "B": [3, 4]})
+    df2 = DataFrame({"A": [5, 6], "B": [7, 8]})
+    result = Broker.concatenate_dataframes([df1, df2], ignore_index=True)
+    expected = DataFrame({"A": [1, 2, 5, 6], "B": [3, 4, 7, 8]}).reset_index(drop=True)
+    assert result.equals(expected)
