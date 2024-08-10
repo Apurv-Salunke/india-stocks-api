@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 from json import JSONDecodeError, dumps
 import random
 from ssl import SSLError
-from pandas import DataFrame, DateOffset, Timestamp
+from pandas import DataFrame, DateOffset, Series, Timestamp
 import pytest
 from unittest.mock import patch, Mock
 from requests.models import Response
@@ -1314,10 +1314,103 @@ def test_concatenate_dataframes_with_kwargs():
 
     This test checks if the Broker.concatenate_dataframes method correctly
     handles additional keyword arguments, such as ignore_index, passed to
-    the pd.concat function.
+    the concat function.
     """
     df1 = DataFrame({"A": [1, 2], "B": [3, 4]})
     df2 = DataFrame({"A": [5, 6], "B": [7, 8]})
     result = Broker.concatenate_dataframes([df1, df2], ignore_index=True)
     expected = DataFrame({"A": [1, 2, 5, 6], "B": [3, 4, 7, 8]}).reset_index(drop=True)
     assert result.equals(expected)
+
+
+def test_filter_future_dates_with_list():
+    """
+    Test the `filter_future_dates` method with a list of date strings.
+
+    This test ensures that the `filter_future_dates` method correctly filters a list of date strings, keeping only the future dates and removing the past dates.
+    """
+    # Test with a list of date strings
+    data = ["2024-08-12", "2024-07-30", "2024-08-15"]
+    expected = ["2024-08-12", "2024-08-15"]
+    result = Broker.filter_future_dates(data)
+    assert result == expected
+
+
+def test_filter_future_dates_with_series():
+    # Test with a pandas Series of date strings
+    """
+    Create a pandas Series of date strings for testing the `filter_future_dates` method.
+
+    This Series contains a mix of future and past dates, which can be used to test the behavior of the `filter_future_dates` method.
+    """
+    data = Series(["2024-08-12", "2024-07-30", "2024-08-15"])
+    expected = ["2024-08-12", "2024-08-15"]
+    result = Broker.filter_future_dates(data)
+    assert result == expected
+
+
+def test_filter_future_dates_with_empty_list():
+    """
+    Test the `filter_future_dates` method with an empty list.
+
+    This test ensures that the `filter_future_dates` method correctly handles an empty input list, and returns an empty list.
+    """
+    # Test with an empty list
+    data = []
+    expected = []
+    result = Broker.filter_future_dates(data)
+    assert result == expected
+
+
+def test_filter_future_dates_with_empty_series():
+    """
+    Test the `filter_future_dates` method with an empty pandas Series.
+
+    This test ensures that the `filter_future_dates` method correctly handles an empty input Series, and returns an empty list.
+    """
+    # Test with an empty pandas Series
+    data = Series([])
+    expected = []
+    result = Broker.filter_future_dates(data)
+    assert result == expected
+
+
+def test_filter_future_dates_no_future_dates():
+    """
+    Test the `filter_future_dates` method with a list of dates all in the past.
+
+    This test ensures that the `filter_future_dates` method correctly returns an empty list when provided with a list of dates that are all in the past.
+    """
+    # Test with dates all in the past
+    data = ["2024-07-01", "2024-06-30"]
+    expected = []
+    result = Broker.filter_future_dates(data)
+    assert result == expected
+
+
+def test_filter_future_dates_invalid_dates():
+    """
+    Test the `filter_future_dates` method with invalid date formats.
+
+    This test ensures that the `filter_future_dates` method correctly raises a `ValueError` when provided with a list of dates that contain invalid formats.
+    """
+    # Test with invalid date formats
+    data = ["not-a-date", "2024-08-01"]
+    with pytest.raises(ValueError):
+        Broker.filter_future_dates(data)
+
+
+def test_filter_future_dates_edge_case():
+    """
+    Test the `filter_future_dates` method with an edge case where the current date is included in the input list.
+
+    This test ensures that the `filter_future_dates` method correctly handles the case where the current date is present in the input list, and that the returned list is sorted.
+    """
+    fixed_now = "2024-08-11"
+    data = [fixed_now, "2024-08-15"]
+    expected = sorted([fixed_now, "2024-08-15"])
+
+    with patch("pandas.Timestamp.now", return_value=Timestamp(fixed_now)):
+        result = Broker.filter_future_dates(data)
+
+    assert result == expected

@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 from pandas import (
     DataFrame,
     DateOffset,
+    Series,
     Timestamp,
     read_csv,
     read_json,
@@ -486,3 +487,32 @@ class Broker:
         if not all(isinstance(df, DataFrame) for df in dfs):
             raise TypeError("All elements must be pandas DataFrames")
         return pd_concat(dfs, **kwargs)
+
+    @staticmethod
+    def filter_future_dates(data: Union[List[str], Series]) -> List[str]:
+        """
+        Filter and sort dates, returning only future dates.
+
+        Args:
+            data (Union[List[str], Series]): Input dates to filter.
+
+        Returns:
+            List[str]: Sorted list of future dates in string format (YYYY-MM-DD).
+        """
+        # Convert the input data to a pandas Series if it's a list
+        if isinstance(data, list):
+            data = Series(data)
+
+        # Check for invalid date formats and raise ValueError
+        if not all(to_datetime(data, errors="coerce").notna()):
+            raise ValueError("Invalid date format found in input data.")
+
+        # Convert to datetime
+        dates = to_datetime(data, errors="coerce")
+
+        # Filter out NaT values and future dates
+        now = Timestamp.now()
+        future_dates = dates[dates >= now].dropna()
+
+        # Format and return the result as a sorted list of strings
+        return sorted(future_dates.dt.strftime("%Y-%m-%d").tolist())
