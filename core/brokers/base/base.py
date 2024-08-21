@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import base64
 from datetime import datetime, timedelta
+from os import popen
+from time import sleep
 from pandas.errors import OutOfBoundsDatetime
 from json import JSONDecodeError, dumps, loads
 from ssl import SSLError
@@ -67,7 +69,7 @@ class Broker:
             requests.Session: A new requests session object.
         """
         session = req_session()
-        session._session.mount("https://", HTTPAdapter(max_retries=RETRY_STRATEGY))
+        session.mount("https://", HTTPAdapter(max_retries=RETRY_STRATEGY))
         return session
 
     @classmethod
@@ -516,3 +518,60 @@ class Broker:
 
         # Format and return the result as a sorted list of strings
         return sorted(future_dates.dt.strftime("%Y-%m-%d").tolist())
+
+    @classmethod
+    def download_expiry_dates_nfo(
+        cls,
+        root,
+    ):
+        temp_session = req_session()
+
+        for _ in range(5):
+            try:
+                headers = {
+                    "accept": "*/*",
+                    "accept-language": "en-GB,en-US;q=0.9,en;q=0.8,hi;q=0.7",
+                    "dnt": "1",
+                    "referer": "https://www.nseindia.com/option-chain",
+                    "sec-ch-ua": '"Google Chrome";v="123", "Not:A-Brand";v="8", "Chromium";v="123"',
+                    "sec-ch-ua-mobile": "?0",
+                    "sec-ch-ua-platform": '"Windows"',
+                    "sec-fetch-dest": "empty",
+                    "sec-fetch-mode": "cors",
+                    "sec-fetch-site": "same-origin",
+                    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+                }
+
+                params = {
+                    "symbol": f"{root}",
+                }
+
+                response = temp_session.request(
+                    method="GET",
+                    url=cls.nfo_url,
+                    params=params,
+                    cookies=cls.cookies,
+                    headers=headers,
+                    timeout=10,
+                )
+                data = response.json()
+                expiry_dates = data["records"]["expiryDates"]
+                cls.expiry_dates[root] = cls.filter_future_dates(expiry_dates)
+                return None
+
+            except Exception as exc:
+                print(f"Error: {exc}")
+
+            try:
+                response = popen(
+                    f'curl "{cls.nfo_url}?symbol={root}" -H "authority: beta.nseindia.com" -H "cache-control: max-age=0" -H "dnt: 1" -H "upgrade-insecure-requests: 1" -H "user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/79.0.3945.117 Safari/537.36" -H "sec-fetch-user: ?1" -H "accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9" -H "sec-fetch-site: none" -H "sec-fetch-mode: navigate" -H "accept-encoding: gzip, deflate, br" -H "accept-language: en-US,en;q=0.9,hi;q=0.8" --compressed'
+                ).read()
+                data = loads(response)
+                expiry_dates = data["records"]["expiryDates"]
+                cls.expiry_dates[root] = cls.filter_future_dates(expiry_dates)
+                return None
+
+            except Exception as exc:
+                print(f"Error: {exc}")
+
+            sleep(5)

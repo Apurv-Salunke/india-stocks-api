@@ -2,9 +2,9 @@ from datetime import datetime, timedelta, timezone
 from json import JSONDecodeError, dumps
 import random
 from ssl import SSLError
-from pandas import DataFrame, DateOffset, Series, Timestamp
+from pandas import DataFrame, DateOffset, Series, Timedelta, Timestamp
 import pytest
-from unittest.mock import patch, Mock
+from unittest.mock import MagicMock, patch, Mock
 from requests.models import Response
 from requests.exceptions import (
     Timeout,
@@ -1330,23 +1330,53 @@ def test_filter_future_dates_with_list():
     This test ensures that the `filter_future_dates` method correctly filters a list of date strings, keeping only the future dates and removing the past dates.
     """
     # Test with a list of date strings
-    data = ["2024-08-12", "2024-07-30", "2024-08-15"]
-    expected = ["2024-08-12", "2024-08-15"]
+    # Create a Series with dates that are dynamically relative to the current date
+    current_date = datetime.now().date()
+    data = Series(
+        [
+            (current_date - Timedelta(days=5)).strftime("%Y-%m-%d"),
+            (current_date + Timedelta(days=3)).strftime("%Y-%m-%d"),
+            (current_date - Timedelta(days=10)).strftime("%Y-%m-%d"),
+            (current_date + Timedelta(days=15)).strftime("%Y-%m-%d"),
+        ]
+    )
+    # Expected result should include only future dates
+    expected = [
+        (current_date + Timedelta(days=3)).strftime("%Y-%m-%d"),
+        (current_date + Timedelta(days=15)).strftime("%Y-%m-%d"),
+    ]
     result = Broker.filter_future_dates(data)
     assert result == expected
 
 
 def test_filter_future_dates_with_series():
-    # Test with a pandas Series of date strings
     """
-    Create a pandas Series of date strings for testing the `filter_future_dates` method.
+    Test the `filter_future_dates` method with a dynamic pandas Series of date strings.
 
-    This Series contains a mix of future and past dates, which can be used to test the behavior of the `filter_future_dates` method.
+    This Series contains a mix of future and past dates relative to the current date.
     """
-    data = Series(["2024-08-12", "2024-07-30", "2024-08-15"])
-    expected = ["2024-08-12", "2024-08-15"]
+    # Create a Series with dates that are dynamically relative to the current date
+    current_date = datetime.now().date()
+    data = Series(
+        [
+            (current_date - Timedelta(days=5)).strftime("%Y-%m-%d"),
+            (current_date + Timedelta(days=3)).strftime("%Y-%m-%d"),
+            (current_date - Timedelta(days=10)).strftime("%Y-%m-%d"),
+            (current_date + Timedelta(days=15)).strftime("%Y-%m-%d"),
+        ]
+    )
+
+    # Expected result should include only future dates
+    expected = [
+        (current_date + Timedelta(days=3)).strftime("%Y-%m-%d"),
+        (current_date + Timedelta(days=15)).strftime("%Y-%m-%d"),
+    ]
+
+    # Call the method
     result = Broker.filter_future_dates(data)
-    assert result == expected
+
+    # Assert the result matches the expected future dates
+    assert result == expected, f"Expected {expected}, but got {result}"
 
 
 def test_filter_future_dates_with_empty_list():
@@ -1414,3 +1444,116 @@ def test_filter_future_dates_edge_case():
         result = Broker.filter_future_dates(data)
 
     assert result == expected
+
+
+@patch("core.brokers.base.base.req_session")
+def test_successful_request(mock_session):
+    """
+    Test the successful execution of the download_expiry_dates_nfo method.
+
+    This test ensures that when the request is successful, the method correctly
+    processes the response and stores the expiry dates.
+    """
+    mock_response = MagicMock()
+    mock_response.json.return_value = {
+        "records": {"expiryDates": ["2024-08-29", "2024-09-26", "2024-10-31"]}
+    }
+    mock_session.return_value.request.return_value = mock_response
+
+    Broker.expiry_dates = {}
+    Broker.nfo_url = "https://example.com/nfo"
+    Broker.cookies = {"cookie": "value"}
+
+    Broker.download_expiry_dates_nfo("NIFTY")
+
+    assert "NIFTY" in Broker.expiry_dates
+    assert len(Broker.expiry_dates["NIFTY"]) == 3
+
+
+@patch("core.brokers.base.base.req_session")
+@patch("core.brokers.base.base.popen")
+def test_fallback_to_curl(mock_popen, mock_session):
+    """
+    Test the fallback to curl when the initial request fails.
+
+    This test verifies that if the initial request fails, the method
+    falls back to using curl and still processes the response correctly.
+    """
+    mock_session.return_value.request.side_effect = Exception("Request failed")
+
+    mock_popen.return_value.read.return_value = dumps(
+        {"records": {"expiryDates": ["2024-08-29", "2024-09-26"]}}
+    )
+
+    Broker.expiry_dates = {}
+    Broker.nfo_url = "https://example.com/nfo"
+    Broker.cookies = {"cookie": "value"}
+
+    Broker.download_expiry_dates_nfo("BANKNIFTY")
+
+    assert "BANKNIFTY" in Broker.expiry_dates
+    assert len(Broker.expiry_dates["BANKNIFTY"]) == 2
+
+
+@patch("core.brokers.base.base.req_session")
+@patch("core.brokers.base.base.popen")
+@patch("core.brokers.base.base.sleep")
+def test_all_attempts_fail(mock_sleep, mock_popen, mock_session):
+    """
+    Test the behavior when all download attempts fail.
+
+    This test ensures that when both the initial request and the curl fallback
+    fail, the method handles the failure gracefully and does not add any
+    expiry dates for the symbol.
+    """
+    mock_session.return_value.request.side_effect = Exception("Request failed")
+    mock_popen.return_value.read.side_effect = Exception("Curl failed")
+
+    Broker.expiry_dates = {}
+    Broker.nfo_url = "https://example.com/nfo"
+    Broker.cookies = {"cookie": "value"}
+
+    Broker.download_expiry_dates_nfo("FAIL")
+
+    assert "FAIL" not in Broker.expiry_dates
+    assert mock_sleep.call_count == 5
+
+
+@patch("core.brokers.base.base.req_session")
+def test_filter_future_dates(mock_session):
+    """
+    Test the filtering of future dates in the download_expiry_dates_nfo method.
+
+    This test verifies that the method correctly filters out past dates and
+    only keeps future dates (including today) in the expiry_dates dictionary.
+    """
+    today = datetime.now().date()
+    past_date = (today - timedelta(days=1)).strftime("%Y-%m-%d")
+    future_date1 = (today + timedelta(days=1)).strftime("%Y-%m-%d")
+    future_date2 = (today + timedelta(days=30)).strftime("%Y-%m-%d")
+
+    mock_response = MagicMock()
+    mock_response.json.return_value = {
+        "records": {
+            "expiryDates": [
+                past_date,
+                today.strftime("%Y-%m-%d"),
+                future_date1,
+                future_date2,
+            ]
+        }
+    }
+    mock_session.return_value.request.return_value = mock_response
+
+    Broker.expiry_dates = {}
+    Broker.nfo_url = "https://example.com/nfo"
+    Broker.cookies = {"cookie": "value"}
+
+    Broker.download_expiry_dates_nfo("TEST")
+
+    assert "TEST" in Broker.expiry_dates
+    assert len(Broker.expiry_dates["TEST"]) == 2
+    assert past_date not in Broker.expiry_dates["TEST"]
+    assert today.strftime("%Y-%m-%d") not in Broker.expiry_dates["TEST"]
+    assert future_date1 in Broker.expiry_dates["TEST"]
+    assert future_date2 in Broker.expiry_dates["TEST"]
