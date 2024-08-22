@@ -1,7 +1,9 @@
 name: CI Workflow
 
+# Assigning permissions to jobs
 permissions:
-  contents: read
+  contents: write
+  checks: write
   pull-requests: write
 
 on:
@@ -44,8 +46,8 @@ jobs:
           pytest --maxfail=1 --disable-warnings -q
 
       - name: Build coverage file
-        run: >
-          pytest --junitxml=pytest.xml --cov-report=term-missing:skip-covered
+        run: |
+          pytest --junitxml=pytest.xml --cov-report=term-missing:skip-covered \
           --cov=core tests/ | tee pytest-coverage.txt
 
       - name: Pytest coverage comment
