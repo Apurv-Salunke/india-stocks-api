@@ -6,6 +6,7 @@ from core.brokers.base.constants import (
     ExchangeCode,
     OrderType,
     Product,
+    Root,
     Side,
     Status,
     Validity,
@@ -210,10 +211,10 @@ class AngelOne(Broker):
     def create_eq_tokens(cls) -> dict:
         """
         Downlaods NSE & BSE Equity Info for F&O Segment.
-        Stores them in the angelone.indices Dictionary.
+        Stores them in the AngelOne.indices Dictionary.
 
         Returns:
-            dict: Unified fenix indices format.
+            dict: Unified indian-stocks-api indices format.
         """
         print("Fetching NSE & BSE Equity Info for Equity, F&O Segment...")
         json_list = cls._fetch_tokens()
@@ -274,3 +275,137 @@ class AngelOne(Broker):
         cls.eq_tokens[ExchangeCode.BSE] = df_bse.to_dict(orient="index")
 
         return cls.eq_tokens
+
+    @classmethod
+    def create_indices(cls) -> dict:
+        """
+        Downloads all the Broker Indices Token data.
+        Stores them in the AngelOne.indices Dictionary.
+
+        Returns:
+            dict: Unified indian-stocks-api indices format.
+        """
+        json_list = cls._fetch_tokens()
+        if not json_list:
+            raise TokenDownloadError("No data fetched from AngelOne API.")
+
+        df = cls.data_frame(json_list)
+        print("Data fetching complete.")
+
+        if "tick_size" not in df.columns:
+            raise TokenDownloadError(
+                "Required 'tick_size' column not found in fetched data."
+            )
+
+        df["tick_size"] = df["tick_size"].astype(float) / 100
+        df = df[df["instrumenttype"] == "AMXIDX"][["symbol", "token", "exch_seg"]]
+
+        df.rename(
+            {"symbol": "Symbol", "token": "Token", "exch_seg": "Exchange"},
+            axis=1,
+            inplace=True,
+        )
+        df.index = df["Symbol"]
+        df["Token"] = df["Token"].astype(int)
+
+        indices = df.to_dict(orient="index")
+
+        indices[Root.BNF] = indices["Nifty Bank"]
+        indices[Root.NF] = indices["Nifty 50"]
+        indices[Root.FNF] = indices["Nifty Fin Service"]
+        indices[Root.MIDCPNF] = indices["NIFTY MID SELECT"]
+
+        cls.indices = indices
+
+        return indices
+
+    @classmethod
+    def create_fno_tokens(cls) -> dict:
+        """
+        Downloades Token Data for the FNO Segment for the 3 latest Weekly Expiries.
+        Stores them in the AngelOne.fno_tokens Dictionary.
+
+        Raises:
+            TokenDownloadError: Any Error Occured is raised through this Error Type.
+        """
+        try:
+            json_list = cls._fetch_tokens()
+            if not json_list:
+                raise TokenDownloadError("No data fetched from AngelOne API.")
+
+            df = cls.data_frame(json_list)
+            print("Data fetching complete.")
+
+            if "tick_size" not in df.columns:
+                raise TokenDownloadError(
+                    "Required 'tick_size' column not found in fetched data."
+                )
+
+            df.rename(
+                {
+                    "token": "Token",
+                    "name": "Root",
+                    "expiry": "Expiry",
+                    "symbol": "Symbol",
+                    "tick_size": "TickSize",
+                    "lotsize": "LotSize",
+                    "strike": "StrikePrice",
+                    "exch_seg": "Exchange",
+                },
+                axis=1,
+                inplace=True,
+            )
+
+            df_nfo = df[
+                (
+                    (df["Root"] == "BANKNIFTY")
+                    | (df["Root"] == "NIFTY")
+                    | (df["Root"] == "FINNIFTY")
+                    | (df["Root"] == "MIDCPNIFTY")
+                )
+                & (df["Exchange"] == ExchangeCode.NFO)
+                & (df["instrumenttype"] == "OPTIDX")
+            ]
+
+            df_bfo = df[
+                ((df["Root"] == "SENSEX") | (df["Root"] == "BANKEX"))
+                & (df["Exchange"] == ExchangeCode.BFO)
+                & (df["instrumenttype"] == "OPTIDX")
+            ]
+
+            df = cls.concatenate_dataframes([df_nfo, df_bfo])
+
+            df["Option"] = df["Symbol"].str.extract(r"(CE|PE)")
+
+            df["StrikePrice"] = df["StrikePrice"].astype(float)
+            df["StrikePrice"] = (df["StrikePrice"] // 100).astype(str)
+
+            df["TickSize"] = df["TickSize"].astype(float)
+            df["TickSize"] = df["TickSize"] / 100
+
+            df["Token"] = df["Token"].astype(int)
+
+            df = df[
+                [
+                    "Token",
+                    "Symbol",
+                    "Expiry",
+                    "Option",
+                    "StrikePrice",
+                    "LotSize",
+                    "Root",
+                    "TickSize",
+                    "Exchange",
+                ]
+            ]
+
+            df["Expiry"] = cls.pd_datetime(df["Expiry"]).dt.date.astype(str)
+
+            expiry_data = cls.jsonify_expiry(data_frame=df)
+
+            cls.fno_tokens = expiry_data
+
+            return expiry_data
+
+        except Exception as exc:
+            raise TokenDownloadError({"Error": exc.args}) from exc

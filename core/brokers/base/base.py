@@ -4,6 +4,7 @@ import base64
 from datetime import datetime, timedelta
 from os import popen
 from time import sleep
+from numpy import nan
 from pandas.errors import OutOfBoundsDatetime
 from json import JSONDecodeError, dumps, loads
 from ssl import SSLError
@@ -31,7 +32,7 @@ from requests.exceptions import (
     ConnectionError as RequestsConnectionError,
 )
 
-from core.brokers.base.constants import Root
+from core.brokers.base.constants import Root, WeeklyExpiry
 from core.config.network import RETRY_STRATEGY
 from core.brokers.base.errors import (
     InputError,
@@ -644,3 +645,139 @@ class Broker:
                 print(f"Error: {exc}")
 
             sleep(5)
+
+    @classmethod
+    def jsonify_expiry(
+        cls,
+        data_frame: DataFrame,
+    ) -> dict[Any, Any]:
+        """
+        Creates a india-stocks-api Unified Dicitonary for BankNifty & Nifty Options,
+        in the following Format:
+
+            Global[expiry][root][option][strikeprice]
+
+            expiry: 'CURRENT' | 'NEXT' | 'FAR' | 'Expiries'(A List of All Expiries).
+            root: 'BANKNIFTY' | 'NIFTY' | 'FINNIFTY | MIDCPNIFTY.
+            option: 'CE' | 'PE'.
+            strikeprice: Integer Values for Strike Price.
+
+            {
+                'CURRENT': {
+                    'BANKNIFTY': {
+                        'CE': {
+                            34500: {
+                                'Token': 43048,
+                                'Symbol': 'BANKNIFTY2331634500CE',
+                                'Expiry': '2023-03-16',
+                                'Option': 'CE',
+                                'StrikePrice': 34500,
+                                'LotSize': 25,
+                                'Root': 'BANKNIFTY',
+                                'TickSize': 0.05,
+                                'ExpiryName': 'CURRENT'
+                                },
+                    ...
+
+                'Expiries': [
+                     '2023-03-16', '2023-03-23', '2023-03-29', '2023-04-06',
+                     '2023-04-13', '2023-04-27', '2023-05-25', '2023-06-29',
+                     '2023-09-28', '2023-12-28', '2024-06-28', '2024-12-27',
+                     '2025-06-27', '2025-12-25', '2026-06-25', '2026-12-31',
+                     '2027-06-24', '2027-12-30']
+
+            }
+
+        Parameters:
+            data_frame (DataFrame): DataFrame to Convert to india-stocks-api Unified Expiry Dictionary
+
+        Returns:
+            dict[Any, Any]: Dictioanry With 3 Most Recent Expiries for Both BankNifty & Nifty.
+        """
+
+        expiry_data = {
+            WeeklyExpiry.CURRENT: {
+                Root.BNF: {},
+                Root.NF: {},
+                Root.FNF: {},
+                Root.MIDCPNF: {},
+                Root.SENSEX: {},
+                Root.BANKEX: {},
+            },
+            WeeklyExpiry.NEXT: {
+                Root.BNF: {},
+                Root.NF: {},
+                Root.FNF: {},
+                Root.MIDCPNF: {},
+                Root.SENSEX: {},
+                Root.BANKEX: {},
+            },
+            WeeklyExpiry.FAR: {
+                Root.BNF: {},
+                Root.NF: {},
+                Root.FNF: {},
+                Root.MIDCPNF: {},
+                Root.SENSEX: {},
+                Root.BANKEX: {},
+            },
+            WeeklyExpiry.EXPIRY: {
+                Root.BNF: [],
+                Root.NF: [],
+                Root.FNF: [],
+                Root.MIDCPNF: [],
+                Root.SENSEX: [],
+                Root.BANKEX: [],
+            },
+            WeeklyExpiry.LOTSIZE: {
+                Root.BNF: nan,
+                Root.NF: nan,
+                Root.FNF: nan,
+                Root.MIDCPNF: nan,
+                Root.SENSEX: nan,
+                Root.BANKEX: nan,
+            },
+        }
+
+        data_frame = data_frame.sort_values(by=["Expiry"])
+
+        for root in [
+            Root.BNF,
+            Root.NF,
+            Root.FNF,
+            Root.MIDCPNF,
+            Root.SENSEX,
+            Root.BANKEX,
+        ]:
+            if root not in cls.expiry_dates:
+                if root in [Root.SENSEX, Root.BANKEX]:
+                    cls.download_expiry_dates_bfo(root=root)
+                else:
+                    cls.download_expiry_dates_nfo(root=root)
+            small_df = data_frame[data_frame["Root"] == root]
+
+            if small_df.shape[0]:
+                expiries = small_df["Expiry"].unique()
+                expiries = expiries[expiries >= str(datetime.now().date())]
+                lotsize = small_df["LotSize"].unique()[0]
+
+                dfex1 = small_df[small_df["Expiry"] == cls.expiry_dates[root][0]]
+                dfex2 = small_df[small_df["Expiry"] == cls.expiry_dates[root][1]]
+                dfex3 = small_df[small_df["Expiry"] == cls.expiry_dates[root][2]]
+
+                dfexs = [("CURRENT", dfex1), ("NEXT", dfex2), ("FAR", dfex3)]
+
+                for expiry_name, dfex in dfexs:
+                    dfex["ExpiryName"] = expiry_name
+
+                    global_dict = {"CE": {}, "PE": {}}
+
+                    for j, i in dfex.groupby(["Option", "StrikePrice"]):
+                        global_dict[j[0]][j[1]] = i.to_dict("records")[0]
+                        expiry_data[expiry_name][root] = global_dict
+
+                    expiry_data["Expiry"][root] = list(expiries)
+                    expiry_data["LotSize"][root] = lotsize
+            else:
+                pass
+
+        return expiry_data
