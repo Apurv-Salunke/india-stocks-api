@@ -31,6 +31,7 @@ from requests.exceptions import (
     ConnectionError as RequestsConnectionError,
 )
 
+from core.brokers.base.constants import Root
 from core.config.network import RETRY_STRATEGY
 from core.brokers.base.errors import (
     InputError,
@@ -572,6 +573,74 @@ class Broker:
                 return None
 
             except Exception as exc:
+                print(f"Error: {exc}")
+
+            sleep(5)
+
+    @classmethod
+    def download_expiry_dates_bfo(
+        cls,
+        root,
+    ):
+        if root == Root.SENSEX:
+            scrip_cd = 1
+        elif root == Root.BANKEX:
+            scrip_cd = 12
+
+        temp_session = req_session()
+
+        for _ in range(5):
+            try:
+                headers = {
+                    "accept": "application/json, text/plain, */*",
+                    "accept-language": "en-GB,en-US;q=0.9,en;q=0.8,hi;q=0.7",
+                    "dnt": "1",
+                    "if-modified-since": "Sun, 24 Mar 2024 11:21:31 GMT",
+                    "origin": "https://www.bseindia.com",
+                    "referer": "https://www.bseindia.com/",
+                    "sec-ch-ua": '"Google Chrome";v="123", "Not:A-Brand";v="8", "Chromium";v="123"',
+                    "sec-ch-ua-mobile": "?0",
+                    "sec-ch-ua-platform": '"Windows"',
+                    "sec-fetch-dest": "empty",
+                    "sec-fetch-mode": "cors",
+                    "sec-fetch-site": "same-site",
+                    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+                }
+
+                params = {
+                    "ProductType": "IO",
+                    "scrip_cd": scrip_cd,
+                }
+
+                response = temp_session.request(
+                    method="GET",
+                    url=cls.bfo_url,
+                    params=params,
+                    headers=headers,
+                    timeout=10,
+                )
+                data = response.json()
+
+                expiry_dates = data["Table1"]
+                expiry_dates = [i["ExpiryDate"] for i in expiry_dates]
+                cls.expiry_dates[root] = cls.filter_future_dates(expiry_dates)
+                return None
+
+            except Exception as exec:
+                print(f"Error while fetching BSE data: {exec}")
+
+            try:
+                response = popen(
+                    f"curl '{cls.bfo_url}?ProductType=IO&scrip_cd=1' -H 'accept: application/json, text/plain, */*' -H 'accept-language: en-GB,en-US;q=0.9,en;q=0.8,hi;q=0.7' -H 'dnt: 1' -H 'if-modified-since: Sun, 24 Mar 2024 11:21:31 GMT' -H 'origin: https://www.bseindia.com' -H 'referer: https://www.bseindia.com/' -H 'sec-ch-ua-mobile: ?0' -H 'sec-fetch-dest: empty' -H 'sec-fetch-mode: cors' -H 'sec-fetch-site: same-site' -H 'user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36'"
+                ).read()
+                data = loads(response)
+
+                expiry_dates = data["Table1"]
+                expiry_dates = [i["ExpiryDate"] for i in expiry_dates]
+                cls.expiry_dates[root] = cls.filter_future_dates(expiry_dates)
+                return None
+
+            except Exception as exc:  # noqa: E722
                 print(f"Error: {exc}")
 
             sleep(5)

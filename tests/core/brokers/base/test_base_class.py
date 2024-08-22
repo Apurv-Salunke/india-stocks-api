@@ -17,6 +17,7 @@ from pandas.errors import OutOfBoundsDatetime
 
 from core.brokers.base import Broker
 from core.brokers.base import RequestTimeout, BrokerError, NetworkError
+from core.brokers.base.constants import Root
 from core.brokers.base.errors import InputError, ResponseError
 
 
@@ -1557,3 +1558,207 @@ def test_filter_future_dates(mock_session):
     assert today.strftime("%Y-%m-%d") not in Broker.expiry_dates["TEST"]
     assert future_date1 in Broker.expiry_dates["TEST"]
     assert future_date2 in Broker.expiry_dates["TEST"]
+
+
+@pytest.fixture
+def mock_response_data():
+    today = datetime.now().date()
+    return {
+        "Table1": [
+            {"ExpiryDate": (today + timedelta(days=1)).strftime("%Y-%m-%d")},
+            {"ExpiryDate": (today + timedelta(days=8)).strftime("%Y-%m-%d")},
+            {"ExpiryDate": (today + timedelta(days=15)).strftime("%Y-%m-%d")},
+        ]
+    }
+
+
+@patch("core.brokers.base.base.req_session")
+def test_download_expiry_dates_bfo_success(mock_session, mock_response_data):
+    mock_response = MagicMock()
+    mock_response.json.return_value = mock_response_data
+    mock_session.return_value.request.return_value = mock_response
+
+    Broker.bfo_url = "https://example.com/bfo"
+    Broker.expiry_dates = {}
+
+    Broker.download_expiry_dates_bfo(Root.SENSEX)
+
+    assert Root.SENSEX in Broker.expiry_dates
+    assert len(Broker.expiry_dates[Root.SENSEX]) == 3
+    mock_session.return_value.request.assert_called_once()
+
+
+@patch("core.brokers.base.base.req_session")
+def test_download_expiry_dates_bfo_different_roots(mock_session, mock_response_data):
+    mock_response = MagicMock()
+    mock_response.json.return_value = mock_response_data
+    mock_session.return_value.request.return_value = mock_response
+
+    Broker.bfo_url = "https://example.com/bfo"
+    Broker.expiry_dates = {}
+
+    Broker.download_expiry_dates_bfo(Root.SENSEX)
+    Broker.download_expiry_dates_bfo(Root.BANKEX)
+
+    assert Root.SENSEX in Broker.expiry_dates
+    assert Root.BANKEX in Broker.expiry_dates
+    assert mock_session.return_value.request.call_count == 2
+
+
+@patch("core.brokers.base.base.req_session")
+@patch("core.brokers.base.base.popen")
+def test_download_expiry_dates_bfo_fallback_to_curl(
+    mock_popen, mock_session, mock_response_data
+):
+    mock_session.return_value.request.side_effect = Exception("Request failed")
+
+    mock_popen.return_value.read.return_value = dumps(mock_response_data)
+
+    Broker.bfo_url = "https://example.com/bfo"
+    Broker.expiry_dates = {}
+
+    Broker.download_expiry_dates_bfo(Root.SENSEX)
+
+    assert Root.SENSEX in Broker.expiry_dates
+    assert len(Broker.expiry_dates[Root.SENSEX]) == 3
+    mock_session.return_value.request.assert_called_once()
+    mock_popen.assert_called_once()
+
+
+@patch("core.brokers.base.base.req_session")
+@patch("core.brokers.base.base.popen")
+@patch("core.brokers.base.base.sleep")
+def test_download_expiry_dates_bfo_all_attempts_fail(
+    mock_sleep, mock_popen, mock_session
+):
+    mock_session.return_value.request.side_effect = Exception("Request failed")
+    mock_popen.return_value.read.side_effect = Exception("Curl failed")
+
+    Broker.bfo_url = "https://example.com/bfo"
+    Broker.expiry_dates = {}
+
+    Broker.download_expiry_dates_bfo(Root.SENSEX)
+
+    assert Root.SENSEX not in Broker.expiry_dates
+    assert mock_sleep.call_count == 5
+
+
+@patch("core.brokers.base.base.req_session")
+def test_download_expiry_dates_bfo_filter_past_dates(mock_session):
+    today = datetime.now().date()
+    mock_response_data = {
+        "Table1": [
+            {"ExpiryDate": (today - timedelta(days=1)).strftime("%Y-%m-%d")},
+            {"ExpiryDate": today.strftime("%Y-%m-%d")},
+            {"ExpiryDate": (today + timedelta(days=1)).strftime("%Y-%m-%d")},
+        ]
+    }
+    mock_response = MagicMock()
+    mock_response.json.return_value = mock_response_data
+    mock_session.return_value.request.return_value = mock_response
+
+    Broker.bfo_url = "https://example.com/bfo"
+    Broker.expiry_dates = {}
+
+    Broker.download_expiry_dates_bfo(Root.SENSEX)
+
+    assert Root.SENSEX in Broker.expiry_dates
+    assert len(Broker.expiry_dates[Root.SENSEX]) == 1  # Not Today and future date only
+    assert all(
+        date >= today.strftime("%Y-%m-%d") for date in Broker.expiry_dates[Root.SENSEX]
+    )
+
+
+# @pytest.fixture
+# def sample_dataframe():
+#     today = datetime.now().date()
+#     expiry1 = today + timedelta(days=1)
+#     expiry2 = today + timedelta(days=8)
+#     expiry3 = today + timedelta(days=15)
+
+#     data = {
+#         'Token': [1, 2, 3, 4],
+#         'Symbol': ['BANKNIFTY23316CE', 'NIFTY23316PE', 'FINNIFTY23316CE', 'MIDCPNIFTY23316PE'],
+#         'Expiry': [expiry1, expiry2, expiry3, expiry1],
+#         'Option': ['CE', 'PE', 'CE', 'PE'],
+#         'StrikePrice': [34500, 17000, 18000, 7500],
+#         'LotSize': [25, 50, 40, 75],
+#         'Root': ['BANKNIFTY', 'NIFTY', 'FINNIFTY', 'MIDCPNIFTY'],
+#         'TickSize': [0.05, 0.05, 0.05, 0.05]
+#     }
+#     return DataFrame(data)
+
+# @patch.object(Broker, 'download_expiry_dates_nfo')
+# @patch.object(Broker, 'download_expiry_dates_bfo')
+# def test_jsonify_expiry_basic_structure(mock_bfo, mock_nfo, sample_dataframe):
+#     Broker.expiry_dates = {
+#         Root.BNF: [str(datetime.now().date() + timedelta(days=i)) for i in range(1, 4)],
+#         Root.NF: [str(datetime.now().date() + timedelta(days=i)) for i in range(1, 4)],
+#         Root.FNF: [str(datetime.now().date() + timedelta(days=i)) for i in range(1, 4)],
+#         Root.MIDCPNF: [str(datetime.now().date() + timedelta(days=i)) for i in range(1, 4)]
+#     }
+
+#     result = Broker.jsonify_expiry(sample_dataframe)
+
+#     assert set(result.keys()) == {WeeklyExpiry.CURRENT, WeeklyExpiry.NEXT, WeeklyExpiry.FAR, WeeklyExpiry.EXPIRY, WeeklyExpiry.LOTSIZE}
+#     assert set(result[WeeklyExpiry.CURRENT].keys()) == {Root.BNF, Root.NF, Root.FNF, Root.MIDCPNF, Root.SENSEX, Root.BANKEX}
+#     assert set(result[WeeklyExpiry.EXPIRY].keys()) == {Root.BNF, Root.NF, Root.FNF, Root.MIDCPNF, Root.SENSEX, Root.BANKEX}
+#     assert set(result[WeeklyExpiry.LOTSIZE].keys()) == {Root.BNF, Root.NF, Root.FNF, Root.MIDCPNF, Root.SENSEX, Root.BANKEX}
+
+# # def test_jsonify_expiry_lotsize(sample_dataframe):
+# #     result = Broker.jsonify_expiry(sample_dataframe)
+
+# #     assert result[WeeklyExpiry.LOTSIZE][Root.BNF] == 25
+# #     assert result[WeeklyExpiry.LOTSIZE][Root.NF] == 50
+# #     assert result[WeeklyExpiry.LOTSIZE][Root.FNF] == 40
+# #     assert result[WeeklyExpiry.LOTSIZE][Root.MIDCPNF] == 75
+
+# # def test_jsonify_expiry_expiry_dates(sample_dataframe):
+# #     result = Broker.jsonify_expiry(sample_dataframe)
+
+# #     assert len(result[WeeklyExpiry.EXPIRY][Root.BNF]) == 1
+# #     assert len(result[WeeklyExpiry.EXPIRY][Root.NF]) == 1
+# #     assert len(result[WeeklyExpiry.EXPIRY][Root.FNF]) == 1
+# #     assert len(result[WeeklyExpiry.EXPIRY][Root.MIDCPNF]) == 1
+
+# # def test_jsonify_expiry_option_data(sample_dataframe):
+# #     result = Broker.jsonify_expiry(sample_dataframe)
+
+# #     assert 'CE' in result[WeeklyExpiry.CURRENT][Root.BNF]
+# #     assert 'PE' in result[WeeklyExpiry.CURRENT][Root.NF]
+# #     assert 34500 in result[WeeklyExpiry.CURRENT][Root.BNF]['CE']
+# #     assert 17000 in result[WeeklyExpiry.CURRENT][Root.NF]['PE']
+
+# # @patch.object(Broker, 'download_expiry_dates_nfo')
+# # @patch.object(Broker, 'download_expiry_dates_bfo')
+# # def test_jsonify_expiry_download_calls(mock_bfo, mock_nfo, sample_dataframe):
+# #     Broker.expiry_dates = {}
+# #     Broker.jsonify_expiry(sample_dataframe)
+
+# #     assert mock_nfo.call_count == 4  # BNF, NF, FNF, MIDCPNF
+# #     assert mock_bfo.call_count == 2  # SENSEX, BANKEX
+
+# # def test_jsonify_expiry_empty_dataframe():
+# #     empty_df = DataFrame(columns=['Token', 'Symbol', 'Expiry', 'Option', 'StrikePrice', 'LotSize', 'Root', 'TickSize'])
+# #     result = Broker.jsonify_expiry(empty_df)
+
+# #     assert all(not result[WeeklyExpiry.CURRENT][root] for root in Root)
+# #     assert all(not result[WeeklyExpiry.EXPIRY][root] for root in Root)
+# #     assert all(isna(result[WeeklyExpiry.LOTSIZE][root]) for root in Root)
+
+# # @pytest.mark.parametrize("root", [Root.BNF, Root.NF, Root.FNF, Root.MIDCPNF])
+# # def test_jsonify_expiry_specific_root(root, sample_dataframe):
+# #     specific_df = sample_dataframe[sample_dataframe['Root'] == root.value]
+# #     result = Broker.jsonify_expiry(specific_df)
+
+# #     assert result[WeeklyExpiry.CURRENT][root]
+# #     assert result[WeeklyExpiry.EXPIRY][root]
+# #     assert not isna(result[WeeklyExpiry.LOTSIZE][root])
+
+# # def test_jsonify_expiry_sorting(sample_dataframe):
+# #     unsorted_df = sample_dataframe.sort_values(by=['Expiry'], ascending=False)
+# #     result = Broker.jsonify_expiry(unsorted_df)
+
+# #     for root in [Root.BNF, Root.NF, Root.FNF, Root.MIDCPNF]:
+# #         if result[WeeklyExpiry.EXPIRY][root]:
+# #             assert result[WeeklyExpiry.EXPIRY][root] == sorted(result[WeeklyExpiry.EXPIRY][root])
