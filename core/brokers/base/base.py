@@ -235,6 +235,35 @@ class Broker:
         return loads(response.text.strip())
 
     @staticmethod
+    def _key_mapper(
+        dictionary: dict,
+        key: str,
+        name: str,
+    ) -> str:
+        """
+        A Simple Function to help the User if they input a wrong Key in the Dictionary,
+        also tells the User the possible Keys for the Dicitonary.
+
+        Parameters:
+            dictionary (dict): Dicitonary
+            key (str): Dictionary Key to Check Against.
+            name (str): The right Key to the Dicitonary.
+
+        Raises:
+            KeyError: If Key Does not exist in the Dicitonary.
+
+        Returns:
+            str: The Value of the Key in the Dicitonary.
+        """
+
+        if key in dictionary:
+            return dictionary[key]
+
+        raise KeyError(
+            f"Invalid {name}!: {key}, Possible Values: {list(dictionary.keys())}"
+        )
+
+    @staticmethod
     def generate_verified_totp(totpbase: str, max_attempts: int = 3) -> str:
         """
         Generate and verify a TOTP from the given base string.
