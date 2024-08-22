@@ -1,7 +1,25 @@
 from __future__ import annotations
 
+import base64
+from datetime import datetime, timedelta
+from os import popen
+from time import sleep
+from pandas.errors import OutOfBoundsDatetime
+from json import JSONDecodeError, dumps, loads
 from ssl import SSLError
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
+from pandas import (
+    DataFrame,
+    DateOffset,
+    Series,
+    Timestamp,
+    read_csv,
+    read_json,
+    to_datetime,
+    concat as pd_concat,
+)
+from pyotp import TOTP
+import pytz
 from requests.adapters import HTTPAdapter
 from requests.sessions import session as req_session
 from requests.models import Response
@@ -13,11 +31,14 @@ from requests.exceptions import (
     ConnectionError as RequestsConnectionError,
 )
 
+from core.brokers.base.constants import Root
 from core.config.network import RETRY_STRATEGY
 from core.brokers.base.errors import (
+    InputError,
     RequestTimeout,
     NetworkError,
     BrokerError,
+    ResponseError,
 )
 
 __all__ = ["Broker"]
@@ -49,7 +70,7 @@ class Broker:
             requests.Session: A new requests session object.
         """
         session = req_session()
-        session._session.mount("https://", HTTPAdapter(max_retries=RETRY_STRATEGY))
+        session.mount("https://", HTTPAdapter(max_retries=RETRY_STRATEGY))
         return session
 
     @classmethod
@@ -145,3 +166,481 @@ class Broker:
             ):
                 raise NetworkError(exc) from exc
             raise BrokerError(exc) from exc
+
+    @staticmethod
+    def _json_parser(response: Response) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
+        """
+        Get JSON object from a request Response.
+
+        Args:
+            response (Response): Response Object
+
+        Returns:
+            Union[Dict[str, Any], List[Dict[str, Any]]]: JSON Object received from Response.
+
+        Raises:
+            ResponseError: If there's an error parsing the response.
+        """
+        try:
+            return loads(response.text.strip())
+        except JSONDecodeError as json_err:
+            raise ResponseError(
+                {
+                    "Status": response.status_code,
+                    "Error": "Invalid JSON in response",
+                    "URL": response.url,
+                    "Reason": response.reason,
+                }
+            ) from json_err
+        except Exception as exc:
+            raise ResponseError(
+                {
+                    "Status": response.status_code,
+                    "Error": response.text,
+                    "URL": response.url,
+                    "Reason": response.reason,
+                }
+            ) from exc
+
+    @staticmethod
+    def json_dumps(json_data: dict) -> str:
+        """
+        Convert a Python dictionary to a JSON string.
+
+        Args:
+            json_data (dict): The Python dictionary to convert to JSON.
+
+        Returns:
+            str: The JSON string representation of the input dictionary.
+
+        Raises:
+            TypeError: If the input is not a dictionary.
+        """
+        if not isinstance(json_data, dict):
+            raise TypeError("Input must be a dictionary")
+        return dumps(json_data)
+
+    @staticmethod
+    def on_json_response(response: Response) -> dict[Any, Any]:
+        """
+        Get json object from a request Response.
+
+        Parameters:
+            response (Response): Response Object
+
+        Returns:
+            dict: Json Object received from Response.
+        """
+        return loads(response.text.strip())
+
+    @staticmethod
+    def generate_verified_totp(totpbase: str, max_attempts: int = 3) -> str:
+        """
+        Generate and verify a TOTP from the given base string.
+
+        Parameters:
+            totpbase (str): String used to Generate TOTP.
+            max_attempts (int): Maximum number of attempts to generate a valid TOTP.
+
+        Returns:
+            str: Six-Digit TOTP
+
+        Raises:
+            ValueError: If unable to generate a valid TOTP within the maximum attempts.
+        """
+        if not totpbase:
+            raise ValueError("Invalid TOTP base")
+
+        try:
+            base64.b32decode(totpbase, casefold=True)
+        except ValueError:
+            raise ValueError("Invalid TOTP base")
+        for _ in range(max_attempts):
+            totpobj = TOTP(totpbase)
+            totp = totpobj.now()
+
+            if totpobj.verify(totp):
+                return totp
+
+        raise ValueError(
+            f"Unable to generate a valid TOTP after {max_attempts} attempts"
+        )
+
+    @staticmethod
+    def data_reader(
+        link: str,
+        filetype: str,
+        dtype: dict | None = None,
+        sep: str = ",",
+        col_names: list = [],
+    ) -> DataFrame:
+        """
+        Pandas.read_csv & Pandas.read_json Functions Wrapper
+
+        Parameters:
+            link (str): URL to get the Data From.
+            filetype (str): 'json' | 'csv'
+            dtype (dict | None, optional): A Dicitonary with Column-Names as the Keys and their Datatypes as the values. Defaults to None.
+            sep (str, optional): Needed with filetype as 'csv', to input the data seperator. Defaults to ','.
+
+        Raises:
+            InputError: If Wrong filetype Given as Input
+
+        Returns:
+            DataFrame: Pandas DataFrame
+        """
+        if filetype == "json":
+            return read_json(link)
+
+        if filetype == "csv":
+            if col_names:
+                return read_csv(
+                    link,
+                    dtype=dtype,
+                    sep=sep,
+                    names=col_names,
+                    # sep="|",
+                )
+
+            return read_csv(
+                link,
+                dtype=dtype,
+                sep=sep,
+                on_bad_lines="skip",
+                encoding_errors="ignore",
+            )
+
+        raise InputError(
+            f"Wrong Filetype: {filetype}, the possible values are: 'json', 'csv'"
+        )
+
+    @staticmethod
+    def data_frame(data: list) -> DataFrame:
+        """
+        Pandas.DataFrame Function Wrapper
+
+        Parameters:
+            data (list): List of Data to make the DataFrame out of.
+
+        Returns:
+            DataFrame: Pandas DataFrame
+        """
+        return DataFrame(data)
+
+    @staticmethod
+    def pd_datetime(
+        datetime_obj: Union[str, int, float],
+        unit: str = "ns",
+        tz: str = None,
+    ) -> Timestamp:
+        valid_units = ["D", "s", "ms", "us", "ns"]
+        if unit not in valid_units:
+            raise ValueError(f"Invalid unit. Must be one of {valid_units}")
+
+        if tz and tz not in pytz.all_timezones:
+            raise ValueError(f"Invalid timezone: {tz}")
+
+        try:
+            if isinstance(datetime_obj, str) and datetime_obj.isdigit():
+                datetime_obj = float(datetime_obj)
+
+            if isinstance(datetime_obj, (int, float)):
+                timestamp = Timestamp(datetime_obj, unit=unit)
+            else:
+                timestamp = to_datetime(datetime_obj)
+
+            if tz:
+                timestamp = timestamp.tz_localize("UTC").tz_convert(tz)
+
+            return timestamp
+
+        except OutOfBoundsDatetime:
+            raise OutOfBoundsDatetime(
+                f"Datetime value is out of range for unit '{unit}': {datetime_obj}"
+            )
+        except ValueError as e:
+            raise ValueError(f"Invalid input: {e}")
+
+    @staticmethod
+    def datetime_strp(
+        datetime_obj: str,
+        dtformat: str,
+    ) -> datetime:
+        """
+        Python datetime.datetime.strptime Function Wrapper
+
+        Parameters:
+            datetime_obj (str): Datetime String to convert to datetime object.
+            dtformat (str): corresponding datetime format string.
+
+        Returns:
+            datetime: datetime.datetime object
+
+        Raises:
+            ValueError: If the datetime string doesn't match the given format.
+        """
+        try:
+            return datetime.strptime(datetime_obj, dtformat)
+        except ValueError as e:
+            raise ValueError(f"Error parsing datetime: {e}")
+
+    @staticmethod
+    def from_timestamp(datetime_obj: Union[int, float]) -> datetime:
+        """
+        Convert Epoch Time to datetime.datetime object
+
+        Parameters:
+            datetime_obj (int or float): Epoch datetime in seconds
+
+        Returns:
+            datetime: datetime.datetime object in local timezone
+
+        Raises:
+            ValueError: If the timestamp is out of the range of values supported by datetime
+            TypeError: If the input is not a number
+        """
+        try:
+            if not isinstance(datetime_obj, (int, float)) or datetime_obj < 0:
+                raise ValueError("Timestamp must be a non-negative number.")
+            return datetime.fromtimestamp(datetime_obj)
+        except (ValueError, OverflowError, OSError) as e:
+            raise ValueError(f"Invalid timestamp: {e}")
+        except TypeError as e:
+            raise TypeError(f"Invalid input type: {e}")
+
+    @staticmethod
+    def current_datetime() -> datetime:
+        """
+        Get Current System Datetime
+
+        Returns:
+            datetime: datetime.datetime object
+        """
+        return datetime.now()
+
+    @staticmethod
+    def time_delta(
+        datetime_object: datetime, delta: int, dtformat: str, default="sub"
+    ) -> str:
+        """
+        Add Days to a datetime.datetime object
+
+        Parameters:
+            datetime_object (datetime): datetime object
+            delta (int): No. of Days to add or subtract from datetime_obj
+            dtformat (str): corresponding datetime format string.
+            default (str, optional): Whether to add or subtract a Day from datetime_obj ('add' | 'sub'). Defaults to 'sub'.
+
+        Raises:
+            InputError: If Wrong Value Given for default Parameter.
+
+        Returns:
+            str: A datetime string.
+        """
+        if default == "sub":
+            return (datetime_object - timedelta(days=delta)).strftime(dtformat)
+        if default == "add":
+            return (datetime_object + timedelta(days=delta)).strftime(dtformat)
+
+        raise InputError(
+            f"Wrong default: {default}, the possible values are 'sub', 'add'"
+        )
+
+    @staticmethod
+    def dateoffset(*args: Any, **kwargs: Any) -> DateOffset:
+        """
+        Create a Pandas DateOffset object.
+
+        Args:
+            *args: Positional arguments to pass to DateOffset.
+            **kwargs: Keyword arguments to pass to DateOffset.
+
+        Returns:
+            DateOffset: A Pandas DateOffset object.
+
+        Raises:
+            ValueError: If invalid arguments are provided.
+
+        Example:
+            offset = Broker.dateoffset(days=1, hours=2)
+        """
+        try:
+            return DateOffset(*args, **kwargs)
+        except ValueError as e:
+            raise ValueError(f"Invalid arguments for DateOffset: {e}")
+
+    @staticmethod
+    def concatenate_dataframes(dfs: list[DataFrame], **kwargs) -> DataFrame:
+        """
+        Concatenate a list of pandas DataFrames.
+
+        Args:
+            dfs (list[DataFrame]): List of DataFrames to concatenate.
+            **kwargs: Additional keyword arguments to pass to pandas.concat.
+
+        Returns:
+            DataFrame: Concatenated DataFrame.
+
+        Raises:
+            ValueError: If the input list is empty.
+            TypeError: If any element in the list is not a DataFrame.
+        """
+        if not dfs:
+            raise ValueError("Input list is empty")
+        if not all(isinstance(df, DataFrame) for df in dfs):
+            raise TypeError("All elements must be pandas DataFrames")
+        return pd_concat(dfs, **kwargs)
+
+    @staticmethod
+    def filter_future_dates(data: Union[List[str], Series]) -> List[str]:
+        """
+        Filter and sort dates, returning only future dates.
+
+        Args:
+            data (Union[List[str], Series]): Input dates to filter.
+
+        Returns:
+            List[str]: Sorted list of future dates in string format (YYYY-MM-DD).
+        """
+        # Convert the input data to a pandas Series if it's a list
+        if isinstance(data, list):
+            data = Series(data)
+
+        # Check for invalid date formats and raise ValueError
+        if not all(to_datetime(data, errors="coerce").notna()):
+            raise ValueError("Invalid date format found in input data.")
+
+        # Convert to datetime
+        dates = to_datetime(data, errors="coerce")
+
+        # Filter out NaT values and future dates
+        now = Timestamp.now()
+        future_dates = dates[dates >= now].dropna()
+
+        # Format and return the result as a sorted list of strings
+        return sorted(future_dates.dt.strftime("%Y-%m-%d").tolist())
+
+    @classmethod
+    def download_expiry_dates_nfo(
+        cls,
+        root,
+    ):
+        temp_session = req_session()
+
+        for _ in range(5):
+            try:
+                headers = {
+                    "accept": "*/*",
+                    "accept-language": "en-GB,en-US;q=0.9,en;q=0.8,hi;q=0.7",
+                    "dnt": "1",
+                    "referer": "https://www.nseindia.com/option-chain",
+                    "sec-ch-ua": '"Google Chrome";v="123", "Not:A-Brand";v="8", "Chromium";v="123"',
+                    "sec-ch-ua-mobile": "?0",
+                    "sec-ch-ua-platform": '"Windows"',
+                    "sec-fetch-dest": "empty",
+                    "sec-fetch-mode": "cors",
+                    "sec-fetch-site": "same-origin",
+                    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+                }
+
+                params = {
+                    "symbol": f"{root}",
+                }
+
+                response = temp_session.request(
+                    method="GET",
+                    url=cls.nfo_url,
+                    params=params,
+                    cookies=cls.cookies,
+                    headers=headers,
+                    timeout=10,
+                )
+                data = response.json()
+                expiry_dates = data["records"]["expiryDates"]
+                cls.expiry_dates[root] = cls.filter_future_dates(expiry_dates)
+                return None
+
+            except Exception as exc:
+                print(f"Error: {exc}")
+
+            try:
+                response = popen(
+                    f'curl "{cls.nfo_url}?symbol={root}" -H "authority: beta.nseindia.com" -H "cache-control: max-age=0" -H "dnt: 1" -H "upgrade-insecure-requests: 1" -H "user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/79.0.3945.117 Safari/537.36" -H "sec-fetch-user: ?1" -H "accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9" -H "sec-fetch-site: none" -H "sec-fetch-mode: navigate" -H "accept-encoding: gzip, deflate, br" -H "accept-language: en-US,en;q=0.9,hi;q=0.8" --compressed'
+                ).read()
+                data = loads(response)
+                expiry_dates = data["records"]["expiryDates"]
+                cls.expiry_dates[root] = cls.filter_future_dates(expiry_dates)
+                return None
+
+            except Exception as exc:
+                print(f"Error: {exc}")
+
+            sleep(5)
+
+    @classmethod
+    def download_expiry_dates_bfo(
+        cls,
+        root,
+    ):
+        if root == Root.SENSEX:
+            scrip_cd = 1
+        elif root == Root.BANKEX:
+            scrip_cd = 12
+
+        temp_session = req_session()
+
+        for _ in range(5):
+            try:
+                headers = {
+                    "accept": "application/json, text/plain, */*",
+                    "accept-language": "en-GB,en-US;q=0.9,en;q=0.8,hi;q=0.7",
+                    "dnt": "1",
+                    "if-modified-since": "Sun, 24 Mar 2024 11:21:31 GMT",
+                    "origin": "https://www.bseindia.com",
+                    "referer": "https://www.bseindia.com/",
+                    "sec-ch-ua": '"Google Chrome";v="123", "Not:A-Brand";v="8", "Chromium";v="123"',
+                    "sec-ch-ua-mobile": "?0",
+                    "sec-ch-ua-platform": '"Windows"',
+                    "sec-fetch-dest": "empty",
+                    "sec-fetch-mode": "cors",
+                    "sec-fetch-site": "same-site",
+                    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+                }
+
+                params = {
+                    "ProductType": "IO",
+                    "scrip_cd": scrip_cd,
+                }
+
+                response = temp_session.request(
+                    method="GET",
+                    url=cls.bfo_url,
+                    params=params,
+                    headers=headers,
+                    timeout=10,
+                )
+                data = response.json()
+
+                expiry_dates = data["Table1"]
+                expiry_dates = [i["ExpiryDate"] for i in expiry_dates]
+                cls.expiry_dates[root] = cls.filter_future_dates(expiry_dates)
+                return None
+
+            except Exception as exec:
+                print(f"Error while fetching BSE data: {exec}")
+
+            try:
+                response = popen(
+                    f"curl '{cls.bfo_url}?ProductType=IO&scrip_cd=1' -H 'accept: application/json, text/plain, */*' -H 'accept-language: en-GB,en-US;q=0.9,en;q=0.8,hi;q=0.7' -H 'dnt: 1' -H 'if-modified-since: Sun, 24 Mar 2024 11:21:31 GMT' -H 'origin: https://www.bseindia.com' -H 'referer: https://www.bseindia.com/' -H 'sec-ch-ua-mobile: ?0' -H 'sec-fetch-dest: empty' -H 'sec-fetch-mode: cors' -H 'sec-fetch-site: same-site' -H 'user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36'"
+                ).read()
+                data = loads(response)
+
+                expiry_dates = data["Table1"]
+                expiry_dates = [i["ExpiryDate"] for i in expiry_dates]
+                cls.expiry_dates[root] = cls.filter_future_dates(expiry_dates)
+                return None
+
+            except Exception as exc:  # noqa: E722
+                print(f"Error: {exc}")
+
+            sleep(5)
