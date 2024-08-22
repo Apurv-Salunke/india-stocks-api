@@ -28,4 +28,8 @@ archive.zip
 
 # macOS
 .DS_Store
+
 pytest.xml
+
+# local cache store
+_cache/

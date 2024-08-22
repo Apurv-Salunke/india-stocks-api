@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="india_stock_api",
+    name="india_stocks_api",
     version="0.1.0",
     description="A unified API for Indian stock market brokers",
     author="Apurv Salunke",

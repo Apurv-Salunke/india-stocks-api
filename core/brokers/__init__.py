@@ -1,7 +1,7 @@
 #  ------------------------------------------------------------------------------
 
 
-__version__ = "1.0.5"
+__version__ = "1.0.0"
 
 
 #  ------------------------------------------------------------------------------
@@ -11,31 +11,31 @@ from threading import Thread
 from core.brokers.base import Broker  # noqa: F401
 
 
-from core.brokers.base import errors  # noqa: F401
-from core.brokers.base.errors import InputError  # noqa: F401
-from core.brokers.base.errors import ResponseError  # noqa: F401
-from core.brokers.base.errors import TokenDownloadError  # noqa: F401
-from core.brokers.base.errors import RequestTimeout  # noqa: F401
-from core.brokers.base.errors import NetworkError  # noqa: F401
-from core.brokers.base.errors import BrokerError  # noqa: F401
+from core.brokers.base import InputError, constants, errors  # noqa: F401
+from core.brokers.base import ResponseError  # noqa: F401
+from core.brokers.base import TokenDownloadError  # noqa: F401
+from core.brokers.base import RequestTimeout  # noqa: F401
+from core.brokers.base import NetworkError  # noqa: F401
+from core.brokers.base import BrokerError  # noqa: F401
 
 
-from core.brokers.base import constants  # noqa: F401
-from core.brokers.base.constants import Side  # noqa: F401
-from core.brokers.base.constants import Root  # noqa: F401
-from core.brokers.base.constants import WeeklyExpiry  # noqa: F401
-from core.brokers.base.constants import Option  # noqa: F401
-from core.brokers.base.constants import OrderType  # noqa: F401
-from core.brokers.base.constants import ExchangeCode  # noqa: F401
-from core.brokers.base.constants import Product  # noqa: F401
-from core.brokers.base.constants import Validity  # noqa: F401
-from core.brokers.base.constants import Variety  # noqa: F401
-from core.brokers.base.constants import Status  # noqa: F401
-from core.brokers.base.constants import Order  # noqa: F401
-from core.brokers.base.constants import Position  # noqa: F401
-from core.brokers.base.constants import Profile  # noqa: F401
-from core.brokers.base.constants import UniqueID  # noqa: F401
+from core.brokers.base import Side  # noqa: F401
+from core.brokers.base import Root  # noqa: F401
+from core.brokers.base import WeeklyExpiry  # noqa: F401
+from core.brokers.base import Option  # noqa: F401
+from core.brokers.base import OrderType  # noqa: F401
+from core.brokers.base import ExchangeCode  # noqa: F401
+from core.brokers.base import Product  # noqa: F401
+from core.brokers.base import Validity  # noqa: F401
+from core.brokers.base import Variety  # noqa: F401
+from core.brokers.base import Status  # noqa: F401
+from core.brokers.base import Order  # noqa: F401
+from core.brokers.base import Position  # noqa: F401
+from core.brokers.base import Profile  # noqa: F401
+from core.brokers.base import UniqueID  # noqa: F401
 
+
+from core.brokers.angel_one import AngelOne  # noqa: F401
 
 brokers = [
     "aliceblue",

@@ -15,8 +15,8 @@ from requests.exceptions import (
 )
 from pandas.errors import OutOfBoundsDatetime
 
-from core.brokers.base import Broker
-from core.brokers.base import RequestTimeout, BrokerError, NetworkError
+from core.brokers import Broker
+from core.brokers import RequestTimeout, BrokerError, NetworkError
 from core.brokers.base.constants import Root
 from core.brokers.base.errors import InputError, ResponseError
 
