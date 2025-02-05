@@ -1,18 +1,23 @@
 from datetime import datetime, timedelta
 from json import JSONDecodeError, dump, load
+import json
 import os
-from typing import Any
+from typing import Any, List
 
+import pandas as pd
 from requests import Response
 from core.brokers.base.base import Broker
 from core.brokers.base.constants import (
+    CandleStick,
     ExchangeCode,
+    Interval,
     Order,
     OrderType,
     Position,
     Product,
     Profile,
     Root,
+    Segment,
     Side,
     Status,
     UniqueID,
@@ -42,7 +47,6 @@ class AngelOne(Broker):
         "api_key",
     ]
     id = "angelone"
-    _session = Broker._create_session()
     # Cache File for storing tokens master data
     _CACHE_FILE = "_cache/angelone_tokens_cache.json"
     # Base URLs
@@ -65,6 +69,7 @@ class AngelOne(Broker):
         "holdings": f"{base_urls['base']}/portfolio/v1/getAllHolding",
         "rms_limits": f"{base_urls['base']}/user/v1/getRMS",
         "profile": f"{base_urls['base']}/user/v1/getProfile",
+        "candle_data": f"{base_urls['base']}/historical/v1/getCandleData",
     }
 
     # Request Parameters Dictionaries
@@ -105,6 +110,17 @@ class AngelOne(Broker):
     req_validity = {
         Validity.DAY: "DAY",
         Validity.IOC: "IOC",
+    }
+
+    req_interval = {
+        Interval.ONE_MINUTE: "ONE_MINUTE",
+        Interval.THREE_MINUTE: "THREE_MINUTE",
+        Interval.FIVE_MINUTE: "FIVE_MINUTE",
+        Interval.TEN_MINUTE: "TEN_MINUTE",
+        Interval.FIFTEEN_MINUTE: "FIFTEEN_MINUTE",
+        Interval.THIRTY_MINUTE: "THIRTY_MINUTE",
+        Interval.ONE_HOUR: "ONE_HOUR",
+        Interval.ONE_DAY: "ONE_HOUR",
     }
 
     # Response Parameters Dictionaries
@@ -180,6 +196,7 @@ class AngelOne(Broker):
         response = cls.fetch(
             method="GET", url=cls.base_urls["market_data"], headers=headers, timeout=15
         )
+        print("Response: ", response.json())
         AngelOne.cookies = dict(response.cookies)
         data = cls._json_parser(response)
 
@@ -219,7 +236,7 @@ class AngelOne(Broker):
     @classmethod
     def create_eq_tokens(cls) -> dict:
         """
-        Downlaods NSE & BSE Equity Info for F&O Segment.
+        Downloads NSE & BSE Equity Info for F&O Segment.
         Stores them in the AngelOne.indices Dictionary.
 
         Returns:
@@ -230,7 +247,7 @@ class AngelOne(Broker):
         if not json_list:
             raise TokenDownloadError("No data fetched from AngelOne API.")
 
-        df = cls.data_frame(json_list)
+        df = pd.DataFrame(json_list)
         print("Data fetching complete.")
 
         if "tick_size" not in df.columns:
@@ -298,7 +315,7 @@ class AngelOne(Broker):
         if not json_list:
             raise TokenDownloadError("No data fetched from AngelOne API.")
 
-        df = cls.data_frame(json_list)
+        df = pd.DataFrame(json_list)
         print("Data fetching complete.")
 
         if "tick_size" not in df.columns:
@@ -331,18 +348,18 @@ class AngelOne(Broker):
     @classmethod
     def create_fno_tokens(cls) -> dict:
         """
-        Downloades Token Data for the FNO Segment for the 3 latest Weekly Expiries.
+        Downloads Token Data for the FNO Segment for the 3 latest Weekly Expiries.
         Stores them in the AngelOne.fno_tokens Dictionary.
 
         Raises:
-            TokenDownloadError: Any Error Occured is raised through this Error Type.
+            TokenDownloadError: Any Error Occurred is raised through this Error Type.
         """
         try:
             json_list = cls._fetch_tokens()
             if not json_list:
                 raise TokenDownloadError("No data fetched from AngelOne API.")
 
-            df = cls.data_frame(json_list)
+            df = pd.DataFrame(json_list)
             print("Data fetching complete.")
 
             if "tick_size" not in df.columns:
@@ -441,7 +458,7 @@ class AngelOne(Broker):
             if key not in params:
                 raise KeyError(f"Please provide {key}")
 
-        totp = cls.generate_verified_totp(params["totpstr"])
+        totp = cls.totp_creator(params["totpstr"])
 
         headers = {
             "Content-type": "application/json",
@@ -485,8 +502,6 @@ class AngelOne(Broker):
             }
         }
 
-        cls._session = cls._create_session()
-
         return headers
 
     @classmethod
@@ -495,7 +510,7 @@ class AngelOne(Broker):
         response: Response,
     ) -> dict[Any, Any] | list[dict[Any, Any]]:
         """
-        Parses the Json Repsonse Obtained from Broker.
+        Parses the Json Response Obtained from Broker.
 
         Parameters:
             response (Response): Json Response Obtained from Broker.
@@ -506,10 +521,11 @@ class AngelOne(Broker):
         Returns:
             dict: json response obtained from exchange.
         """
-        json_response = cls.on_json_response(response)
+        json_response = json.loads(response.text.strip())
         # print(json_response)
-        if json_response["status"]:
+        if json_response.get("status", True):
             return json_response
+            # return json_response["status"] if "status" in json_response else json_response
 
         raise ResponseError(cls.id + " " + json_response["message"])
 
@@ -525,7 +541,7 @@ class AngelOne(Broker):
             order (dict): Orderbook Order Json Response from Broker.
 
         Returns:
-            dict: Unified fenix Order Response.
+            dict: Unified Order Response.
         """
         parsed_order = {
             Order.ID: order["orderid"],
@@ -2272,3 +2288,109 @@ class AngelOne(Broker):
         profile = cls._profile_json_parser(info["data"])
 
         return profile
+
+    # Data fetching methods
+
+    @classmethod
+    def _candlestick_json_parser(
+        cls,
+        candles_list: List[list],
+    ) -> dict[Any, Any]:
+        """
+        Parses a list of candle data into a dictionary with the following keys:
+                - CandleStick.DATETIME: the datetime of the candle
+                - CandleStick.OPEN: the opening price of the candle
+                - CandleStick.HIGH: the highest price of the candle
+                - CandleStick.LOW: the lowest price of the candle
+                - CandleStick.CLOSE: the closing price of the candle
+                - CandleStick.VOLUME: the trading volume of the candle
+                - CandleStick.OI: set to None by default, but can be set to the open interest of the candle
+        """
+        candle_data = []
+        for candle in candles_list:
+            parsed_candle = {
+                CandleStick.DATETIME: cls.datetime_strp(
+                    datetime_str=candle[0], dtformat="%Y-%m-%dT%H:%M:%S%z"
+                ),
+                CandleStick.OPEN: candle[1],
+                CandleStick.HIGH: candle[2],
+                CandleStick.LOW: candle[3],
+                CandleStick.CLOSE: candle[4],
+                CandleStick.VOLUME: candle[5],
+                CandleStick.OI: candle[6] if len(candle) > 6 else None,
+            }
+            candle_data.append(parsed_candle)
+
+        return candle_data
+
+    @classmethod
+    def get_candle_data_eq(
+        cls,
+        symbol: str,
+        exchange: str,
+        interval: str,
+        from_date: datetime,
+        to_date: datetime,
+        headers: dict,
+    ) -> list[dict]:
+        """
+        Fetch Candle Data.
+        Parameters:
+            symbol (str): symbol
+            dle data for.
+            interval (str): interval to fetch candle data for.
+            from_date (str): from date to fetch candle data for.
+            to_date (str): to date to fetch candle data for.
+            headers (
+            Returns:
+                list[dict]: fenix Unified Candle Data Response.
+        """
+        if not cls.eq_tokens:
+            cls.create_eq_tokens()
+        exchange = cls._key_mapper(cls.req_exchange, exchange, "exchange")
+        interval = cls._key_mapper(cls.req_interval, interval, "interval")
+        detail = cls._eq_mapper(cls.eq_tokens[exchange], symbol)
+        token = str(detail["Token"])
+        symbol = detail["Symbol"]
+        json_data = {
+            "exchange": exchange,
+            "symboltoken": token,
+            "interval": interval,
+            "fromdate": cls.datetime_format(
+                datetime_obj=from_date, dtformat="%Y-%m-%d %H:%M"
+            ),
+            "todate": cls.datetime_format(
+                datetime_obj=to_date, dtformat="%Y-%m-%d %H:%M"
+            ),
+        }
+        response = cls.fetch(
+            method="POST",
+            url=cls.urls["candle_data"],
+            json=json_data,
+            headers=headers["headers"],
+        )
+        info = cls._json_parser(response)
+        return cls._candlestick_json_parser(candles_list=info["data"])
+
+    @classmethod
+    def get_candle_data(
+        cls,
+        segment: Segment,
+        symbol: str,
+        exchange: str,
+        interval: str,
+        from_date: datetime,
+        to_date: datetime,
+        headers: dict,
+    ):
+        if segment == Segment.EQ:
+            return cls.get_candle_data_eq(
+                symbol=symbol,
+                exchange=exchange,
+                interval=interval,
+                from_date=from_date,
+                to_date=to_date,
+                headers=headers,
+            )
+        else:
+            raise NotImplementedError(f"Segment:{segment} not supported")

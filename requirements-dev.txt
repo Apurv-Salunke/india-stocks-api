@@ -3,3 +3,5 @@ pre-commit
 pytest
 requests-mock
 pytest-cov
+notebook
+ipython
