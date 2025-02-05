@@ -26,6 +26,7 @@ from core.brokers.base.constants import (
 )
 from core.brokers.base import TokenDownloadError
 from core.brokers.base.errors import InputError
+from core.utils import chunk_date_range
 
 
 class AngelOne(Broker):
@@ -2297,6 +2298,7 @@ class AngelOne(Broker):
         return candle_data
 
     @classmethod
+    @chunk_date_range(max_days=2)
     def get_candle_data_eq(
         cls,
         symbol: str,
@@ -2310,13 +2312,13 @@ class AngelOne(Broker):
         Fetch Candle Data.
         Parameters:
             symbol (str): symbol
-            dle data for.
+            exchange (str): exchange to fetch candle data from.
             interval (str): interval to fetch candle data for.
-            from_date (str): from date to fetch candle data for.
-            to_date (str): to date to fetch candle data for.
-            headers (
-            Returns:
-                list[dict]: fenix Unified Candle Data Response.
+            from_date (datetime): from date to fetch candle data for.
+            to_date (datetime): to date to fetch candle data for.
+            headers (dict): request headers.
+        Returns:
+            list[dict]: Unified Candle Data Response.
         """
         if not cls.eq_tokens:
             cls.create_eq_tokens()
@@ -2324,22 +2326,22 @@ class AngelOne(Broker):
             raise ValueError(
                 f"Exchange {exchange} not supported. Please use NSE or BSE."
             )
+
         exchange = cls._key_mapper(cls.req_exchange, exchange, "exchange")
         interval = cls._key_mapper(cls.req_interval, interval, "interval")
         detail = cls._eq_mapper(cls.eq_tokens[exchange], symbol)
+
         token = str(detail["Token"])
         symbol = detail["Symbol"]
+
         json_data = {
             "exchange": exchange,
             "symboltoken": token,
             "interval": interval,
-            "fromdate": cls.datetime_format(
-                datetime_obj=from_date, dtformat="%Y-%m-%d %H:%M"
-            ),
-            "todate": cls.datetime_format(
-                datetime_obj=to_date, dtformat="%Y-%m-%d %H:%M"
-            ),
+            "fromdate": cls.datetime_format(from_date, "%Y-%m-%d %H:%M"),
+            "todate": cls.datetime_format(to_date, "%Y-%m-%d %H:%M"),
         }
+
         response = cls.fetch(
             method="POST",
             url=cls.urls["candle_data"],
