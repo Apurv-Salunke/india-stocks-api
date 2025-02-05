@@ -1,6 +1,5 @@
 from datetime import datetime, timedelta
 from json import JSONDecodeError, dump, load
-import json
 import os
 from typing import Any, List
 
@@ -26,7 +25,7 @@ from core.brokers.base.constants import (
     WeeklyExpiry,
 )
 from core.brokers.base import TokenDownloadError
-from core.brokers.base.errors import InputError, ResponseError
+from core.brokers.base.errors import InputError
 
 
 class AngelOne(Broker):
@@ -196,7 +195,6 @@ class AngelOne(Broker):
         response = cls.fetch(
             method="GET", url=cls.base_urls["market_data"], headers=headers, timeout=15
         )
-        print("Response: ", response.json())
         AngelOne.cookies = dict(response.cookies)
         data = cls._json_parser(response)
 
@@ -503,31 +501,6 @@ class AngelOne(Broker):
         }
 
         return headers
-
-    @classmethod
-    def _json_parser(
-        cls,
-        response: Response,
-    ) -> dict[Any, Any] | list[dict[Any, Any]]:
-        """
-        Parses the Json Response Obtained from Broker.
-
-        Parameters:
-            response (Response): Json Response Obtained from Broker.
-
-        Raises:
-            ResponseError: Raised if any error received from broker.
-
-        Returns:
-            dict: json response obtained from exchange.
-        """
-        json_response = json.loads(response.text.strip())
-        # print(json_response)
-        if json_response.get("status", True):
-            return json_response
-            # return json_response["status"] if "status" in json_response else json_response
-
-        raise ResponseError(cls.id + " " + json_response["message"])
 
     @classmethod
     def _orderbook_json_parser(
@@ -2347,6 +2320,10 @@ class AngelOne(Broker):
         """
         if not cls.eq_tokens:
             cls.create_eq_tokens()
+        if exchange not in cls.eq_tokens:
+            raise ValueError(
+                f"Exchange {exchange} not supported. Please use NSE or BSE."
+            )
         exchange = cls._key_mapper(cls.req_exchange, exchange, "exchange")
         interval = cls._key_mapper(cls.req_interval, interval, "interval")
         detail = cls._eq_mapper(cls.eq_tokens[exchange], symbol)
