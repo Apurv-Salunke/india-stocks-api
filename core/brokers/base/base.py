@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import base64
 from datetime import datetime, timedelta
 from os import popen
+import re
 from time import sleep
 from numpy import nan
 from pandas.errors import OutOfBoundsDatetime
@@ -32,7 +32,7 @@ from requests.exceptions import (
     ConnectionError as RequestsConnectionError,
 )
 
-from core.brokers.base.constants import Root, WeeklyExpiry
+from core.brokers.base.constants import DATETIME_FORMAT, Root, WeeklyExpiry
 from core.config.network import RETRY_STRATEGY
 from core.brokers.base.errors import (
     InputError,
@@ -63,7 +63,7 @@ class Broker:
         return f"Indian-Stock-Api.{self.id}()"
 
     @classmethod
-    def _create_session(cls) -> req_session:
+    def _create_session(cls) -> None:
         """
         Creates a new requests session.
 
@@ -72,7 +72,7 @@ class Broker:
         """
         session = req_session()
         session.mount("https://", HTTPAdapter(max_retries=RETRY_STRATEGY))
-        return session
+        cls._session = session
 
     @classmethod
     def fetch(
@@ -204,7 +204,7 @@ class Broker:
             ) from exc
 
     @staticmethod
-    def json_dumps(json_data: dict) -> str:
+    def _json_dumps(json_data: dict) -> str:
         """
         Convert a Python dictionary to a JSON string.
 
@@ -222,17 +222,32 @@ class Broker:
         return dumps(json_data)
 
     @staticmethod
-    def on_json_response(response: Response) -> dict[Any, Any]:
+    def _eq_mapper(
+        dictionary: dict,
+        key: str,
+    ) -> str:
         """
-        Get json object from a request Response.
+        A Simple Function to help the User if they input a wrong Symbol in the eq_tokens dictionary,
+        also tells the User the possible Symbols for the Segment.
 
         Parameters:
-            response (Response): Response Object
+            dictionary (dict): Dicitonary
+            key (str): Dictionary Key to Check Against, should be capital Letters.
+
+        Raises:
+            KeyError: If Key Does not exist in the Dicitonary.
 
         Returns:
-            dict: Json Object received from Response.
+            str: The Value of the Key in the Dicitonary.
         """
-        return loads(response.text.strip())
+        key = key.upper()
+        if key in dictionary:
+            return dictionary[key]
+
+        r = re.compile(r"[A-Z]*<str>[A-Z]*$".replace("<str>", key))
+        possible_values = list(filter(r.findall, dictionary))
+
+        raise KeyError(f"Invalid Symbol!: {key}, Possible Values: {possible_values}")
 
     @staticmethod
     def _key_mapper(
@@ -264,7 +279,7 @@ class Broker:
         )
 
     @staticmethod
-    def generate_verified_totp(totpbase: str, max_attempts: int = 3) -> str:
+    def totp_creator(totpbase: str, max_attempts: int = 3) -> str:
         """
         Generate and verify a TOTP from the given base string.
 
@@ -281,20 +296,12 @@ class Broker:
         if not totpbase:
             raise ValueError("Invalid TOTP base")
 
-        try:
-            base64.b32decode(totpbase, casefold=True)
-        except ValueError:
-            raise ValueError("Invalid TOTP base")
+        # Generate TOTP
         for _ in range(max_attempts):
-            totpobj = TOTP(totpbase)
-            totp = totpobj.now()
+            totpobj = TOTP(totpbase.replace(" ", ""))
+            return totpobj.now()
 
-            if totpobj.verify(totp):
-                return totp
-
-        raise ValueError(
-            f"Unable to generate a valid TOTP after {max_attempts} attempts"
-        )
+        raise ValueError("Failed to generate a valid TOTP within the maximum attempts")
 
     @staticmethod
     def data_reader(
@@ -345,19 +352,6 @@ class Broker:
         )
 
     @staticmethod
-    def data_frame(data: list) -> DataFrame:
-        """
-        Pandas.DataFrame Function Wrapper
-
-        Parameters:
-            data (list): List of Data to make the DataFrame out of.
-
-        Returns:
-            DataFrame: Pandas DataFrame
-        """
-        return DataFrame(data)
-
-    @staticmethod
     def pd_datetime(
         datetime_obj: Union[str, int, float],
         unit: str = "ns",
@@ -393,14 +387,14 @@ class Broker:
 
     @staticmethod
     def datetime_strp(
-        datetime_obj: str,
-        dtformat: str,
+        datetime_str: str,
+        dtformat: str = DATETIME_FORMAT,
     ) -> datetime:
         """
         Python datetime.datetime.strptime Function Wrapper
 
         Parameters:
-            datetime_obj (str): Datetime String to convert to datetime object.
+            datetime_str (str): Datetime String to convert to datetime object.
             dtformat (str): corresponding datetime format string.
 
         Returns:
@@ -410,9 +404,50 @@ class Broker:
             ValueError: If the datetime string doesn't match the given format.
         """
         try:
-            return datetime.strptime(datetime_obj, dtformat)
+            return datetime.strptime(datetime_str, dtformat)
         except ValueError as e:
             raise ValueError(f"Error parsing datetime: {e}")
+
+    @staticmethod
+    def datetime_format(
+        datetime_obj: datetime,
+        dtformat: str = DATETIME_FORMAT,
+    ) -> str:
+        """
+        Converts a datetime object to a formatted string.
+
+        Parameters:
+            datetime_obj (datetime): The datetime object to format.
+            dtformat (str): The desired datetime format string.
+
+        Returns:
+            str: A string representation of the datetime object in the specified format.
+
+        Raises:
+            ValueError: If the datetime object is not a valid datetime or the format is invalid.
+        """
+        # List of supported specifiers based on Python's datetime library
+        supported_specifiers = set("aAbBcdHIjmMpSUwWxXyYZfz%")
+
+        # Find all potential format specifiers in the string
+        try:
+            specifiers_in_format = {
+                match.group(1) for match in re.finditer(r"%(.)", dtformat)
+            }
+        except IndexError:
+            raise ValueError("Invalid format string.")
+
+        # Identify invalid specifiers
+        invalid_specifiers = specifiers_in_format - supported_specifiers
+        if invalid_specifiers:
+            raise ValueError(
+                f"Invalid format string: Unsupported specifiers {invalid_specifiers}"
+            )
+
+        # Proceed with formatting
+        if not isinstance(datetime_obj, datetime):
+            raise ValueError("Input must be a datetime object.")
+        return datetime_obj.strftime(dtformat)
 
     @staticmethod
     def from_timestamp(datetime_obj: Union[int, float]) -> datetime:
@@ -551,10 +586,7 @@ class Broker:
         return sorted(future_dates.dt.strftime("%Y-%m-%d").tolist())
 
     @classmethod
-    def download_expiry_dates_nfo(
-        cls,
-        root,
-    ):
+    def download_expiry_dates_nfo(cls, root):
         temp_session = req_session()
 
         for _ in range(5):
@@ -591,9 +623,10 @@ class Broker:
                 return None
 
             except Exception as exc:
-                print(f"Error: {exc}")
+                print(f"Error in req_session: {exc}")
 
             try:
+                # Fallback to curl
                 response = popen(
                     f'curl "{cls.nfo_url}?symbol={root}" -H "authority: beta.nseindia.com" -H "cache-control: max-age=0" -H "dnt: 1" -H "upgrade-insecure-requests: 1" -H "user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/79.0.3945.117 Safari/537.36" -H "sec-fetch-user: ?1" -H "accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9" -H "sec-fetch-site: none" -H "sec-fetch-mode: navigate" -H "accept-encoding: gzip, deflate, br" -H "accept-language: en-US,en;q=0.9,hi;q=0.8" --compressed'
                 ).read()
@@ -603,7 +636,7 @@ class Broker:
                 return None
 
             except Exception as exc:
-                print(f"Error: {exc}")
+                print(f"Error in curl: {exc}")
 
             sleep(5)
 
