@@ -81,8 +81,8 @@ def initialize_brokers():
             "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
         }
 
-        temp_session = Broker._create_session()
-        response = temp_session.request(
+        # Fetch the page to get the cookies
+        response = Broker.fetch(
             method="GET", url="https://www.nseindia.com/option-chain", headers=headers
         )
         Broker.cookies = dict(response.cookies)

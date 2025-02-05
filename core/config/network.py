@@ -13,8 +13,8 @@ This retry strategy is used when creating a new `requests.Session` object in the
 RETRY_STRATEGY = Retry(
     total=3,
     backoff_factor=0.2,
-    status_forcelist=[408, 500, 502, 503, 504],
-    allowed_methods=["HEAD", "GET", "OPTIONS"],
+    status_forcelist=[403, 408, 500, 502, 503, 504],
+    allowed_methods=["HEAD", "GET", "OPTIONS", "POST"],
 )
 
 DEFAULT_TIMEOUT = 10

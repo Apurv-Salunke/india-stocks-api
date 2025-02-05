@@ -15,6 +15,19 @@ __all__ = [
     "UniqueID",
 ]
 
+# Standard format for datetime strings
+DATETIME_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
+
+
+class Segment:
+    """
+    Segment Constants.
+    """
+
+    EQ = "EQ"
+    FUT = "FUT"
+    OPT = "OPT"
+
 
 class Side:
     """
@@ -225,3 +238,32 @@ class UniqueID:
     LIMITORDER = "LIMITOrder"
     SLORDER = "SLOrder"
     SLMORDER = "SLMOrder"
+
+
+class Interval:
+    """
+    Interval Constants.
+    """
+
+    ONE_MINUTE = "1m"
+    THREE_MINUTE = "3m"
+    FIVE_MINUTE = "5m"
+    TEN_MINUTE = "10m"
+    FIFTEEN_MINUTE = "15m"
+    THIRTY_MINUTE = "30m"
+    ONE_HOUR = "1h"
+    ONE_DAY = "1d"
+
+
+class CandleStick:
+    """
+    CandleStick Constants.
+    """
+
+    DATETIME = "datetime"
+    OPEN = "open"
+    HIGH = "high"
+    LOW = "low"
+    CLOSE = "close"
+    VOLUME = "volume"
+    OI = "oi"

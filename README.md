@@ -42,3 +42,22 @@ Current version: 0.1.0
 ## Contact
 
 For any inquiries, please contact [me](salunke.apurv7@gmail.com) or open an issue in the repository.
+
+## Pending Features
+- [ ] Add Caching
+    - [x] Add instruments caching
+    - [ ] Add access token caching
+- [ ] Add more brokers
+    - [x] AngelOne
+    - [ ] Fyers
+    - [ ] ICICI Direct
+    - [ ] 5Paisa
+    - [ ] Upstox
+    - [ ] Kotak Securities
+    - [ ] Finvasia
+    - [ ] IIFL Securities
+    - [ ] Zerodha
+- [ ] Add rate limiting mechanism.
+- [ ] Test coverage over 90%
+- [ ] Create docs
+- [ ] Publish to PyPI
