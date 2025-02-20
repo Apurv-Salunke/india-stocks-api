@@ -1,5 +1,5 @@
 """
-core/brokers/base/errors.py
+india_stocks_api/brokers/base/errors.py
 
 This module defines custom exception classes for handling specific error conditions in the package.
 

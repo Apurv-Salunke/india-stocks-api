@@ -21,12 +21,16 @@ from requests.exceptions import (
 )
 # from pandas.errors import OutOfBoundsDatetime
 
-from core.brokers import Broker
-from core.brokers import RequestTimeout, BrokerError, NetworkError
-from core.brokers.base.constants import Root
+from india_stocks_api.brokers.base.broker import Broker
+from india_stocks_api.brokers.base.errors import (
+    RequestTimeout,
+    BrokerError,
+    NetworkError,
+)
+from india_stocks_api.brokers.base.constants import Root
 
-# from core.brokers.base.constants import WeeklyExpiry
-from core.brokers.base.errors import InputError, ResponseError
+# from india_stocks_api.brokers.base.constants import WeeklyExpiry
+from india_stocks_api.brokers.base.errors import InputError, ResponseError
 
 
 # Write tests for the following methods:
@@ -500,7 +504,7 @@ def mock_read_json():
     allowing you to simulate different return values or behaviors for
     reading JSON data in tests.
     """
-    with patch("core.brokers.base.base.read_json") as mock:
+    with patch("india_stocks_api.brokers.base.broker.read_json") as mock:
         yield mock
 
 
@@ -513,7 +517,7 @@ def mock_read_csv():
     allowing you to simulate different return values or behaviors for
     reading CSV data in tests.
     """
-    with patch("core.brokers.base.base.read_csv") as mock:
+    with patch("india_stocks_api.brokers.base.broker.read_csv") as mock:
         yield mock
 
 
@@ -1432,7 +1436,7 @@ def test_filter_future_dates_edge_case():
 # # -----------------------------------------------------------------------------
 
 
-@patch("core.brokers.base.base.req_session")
+@patch("india_stocks_api.brokers.base.broker.req_session")
 def test_successful_request(mock_session):
     """
     Test the successful execution of the download_expiry_dates_nfo method.
@@ -1464,10 +1468,10 @@ def test_successful_request(mock_session):
 
 @pytest.mark.parametrize("use_curl", [False, True])
 @patch(
-    "core.brokers.base.base.sleep", return_value=None
+    "india_stocks_api.brokers.base.broker.sleep", return_value=None
 )  # Mocking sleep to avoid delay
-@patch("core.brokers.base.base.popen")  # Mocking popen for curl
-@patch("core.brokers.base.base.req_session")
+@patch("india_stocks_api.brokers.base.broker.popen")  # Mocking popen for curl
+@patch("india_stocks_api.brokers.base.broker.req_session")
 def test_fallback_to_curl(mock_session, mock_popen, mock_sleep, use_curl):
     """
     Test the fallback to curl when the initial request fails.
@@ -1511,9 +1515,9 @@ def test_fallback_to_curl(mock_session, mock_popen, mock_sleep, use_curl):
     assert Broker.expiry_dates["BANKNIFTY"] == future_dates
 
 
-@patch("core.brokers.base.base.sleep", return_value=None)
-@patch("core.brokers.base.base.req_session")
-@patch("core.brokers.base.base.popen")
+@patch("india_stocks_api.brokers.base.broker.sleep", return_value=None)
+@patch("india_stocks_api.brokers.base.broker.req_session")
+@patch("india_stocks_api.brokers.base.broker.popen")
 def test_all_attempts_fail(mock_popen, mock_session, mock_sleep):
     """
     Test the behavior when all download attempts fail.
@@ -1535,8 +1539,8 @@ def test_all_attempts_fail(mock_popen, mock_session, mock_sleep):
     assert mock_sleep.call_count == 5
 
 
-@patch("core.brokers.base.base.sleep", return_value=None)
-@patch("core.brokers.base.base.req_session")
+@patch("india_stocks_api.brokers.base.broker.sleep", return_value=None)
+@patch("india_stocks_api.brokers.base.broker.req_session")
 def test_filter_future_dates(mock_session, mock_sleep):
     """
     Test the filtering of future dates in the download_expiry_dates_nfo method.
@@ -1593,8 +1597,8 @@ def mock_response_data():
     }
 
 
-@patch("core.brokers.base.base.sleep", return_value=None)
-@patch("core.brokers.base.base.req_session")
+@patch("india_stocks_api.brokers.base.broker.sleep", return_value=None)
+@patch("india_stocks_api.brokers.base.broker.req_session")
 def test_download_expiry_dates_bfo_success(
     mock_session, mock_sleep, mock_response_data
 ):
@@ -1612,8 +1616,8 @@ def test_download_expiry_dates_bfo_success(
     mock_session.return_value.request.assert_called_once()
 
 
-@patch("core.brokers.base.base.sleep", return_value=None)
-@patch("core.brokers.base.base.req_session")
+@patch("india_stocks_api.brokers.base.broker.sleep", return_value=None)
+@patch("india_stocks_api.brokers.base.broker.req_session")
 def test_download_expiry_dates_bfo_different_roots(
     mock_session, mock_sleep, mock_response_data
 ):
@@ -1632,9 +1636,9 @@ def test_download_expiry_dates_bfo_different_roots(
     assert mock_session.return_value.request.call_count == 2
 
 
-@patch("core.brokers.base.base.sleep", return_value=None)
-@patch("core.brokers.base.base.req_session")
-@patch("core.brokers.base.base.popen")
+@patch("india_stocks_api.brokers.base.broker.sleep", return_value=None)
+@patch("india_stocks_api.brokers.base.broker.req_session")
+@patch("india_stocks_api.brokers.base.broker.popen")
 def test_download_expiry_dates_bfo_fallback_to_curl(
     mock_popen, mock_session, mock_sleep, mock_response_data
 ):
@@ -1653,9 +1657,9 @@ def test_download_expiry_dates_bfo_fallback_to_curl(
     mock_popen.assert_called_once()
 
 
-@patch("core.brokers.base.base.sleep", return_value=None)
-@patch("core.brokers.base.base.req_session")
-@patch("core.brokers.base.base.popen")
+@patch("india_stocks_api.brokers.base.broker.sleep", return_value=None)
+@patch("india_stocks_api.brokers.base.broker.req_session")
+@patch("india_stocks_api.brokers.base.broker.popen")
 def test_download_expiry_dates_bfo_all_attempts_fail(
     mock_popen, mock_session, mock_sleep
 ):
@@ -1671,8 +1675,8 @@ def test_download_expiry_dates_bfo_all_attempts_fail(
     assert mock_sleep.call_count == 5
 
 
-@patch("core.brokers.base.base.sleep", return_value=None)
-@patch("core.brokers.base.base.req_session")
+@patch("india_stocks_api.brokers.base.broker.sleep", return_value=None)
+@patch("india_stocks_api.brokers.base.broker.req_session")
 def test_download_expiry_dates_bfo_filter_past_dates(mock_session, mock_sleep):
     today = datetime.now().date()
     mock_response_data = {

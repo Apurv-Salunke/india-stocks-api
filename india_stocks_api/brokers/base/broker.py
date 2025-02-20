@@ -32,9 +32,9 @@ from requests.exceptions import (
     ConnectionError as RequestsConnectionError,
 )
 
-from core.brokers.base.constants import DATETIME_FORMAT, Root, WeeklyExpiry
-from core.config.network import RETRY_STRATEGY
-from core.brokers.base.errors import (
+from india_stocks_api.brokers.base.constants import DATETIME_FORMAT, Root, WeeklyExpiry
+from india_stocks_api.config.network import RETRY_STRATEGY
+from india_stocks_api.brokers.base.errors import (
     InputError,
     RequestTimeout,
     NetworkError,

@@ -5,3 +5,5 @@ requests-mock
 pytest-cov
 notebook
 ipython
+build
+twine

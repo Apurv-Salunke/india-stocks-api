@@ -1,0 +1,11 @@
+requests
+pandas
+numpy
+pyotp
+
+[dev]
+pytest
+flake8
+
+[docs]
+sphinx
