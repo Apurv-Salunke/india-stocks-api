@@ -13,6 +13,9 @@ __all__ = [
     "Position",
     "Profile",
     "UniqueID",
+    "Segment",
+    "Interval",
+    "CandleStick",
 ]
 
 # Standard format for datetime strings

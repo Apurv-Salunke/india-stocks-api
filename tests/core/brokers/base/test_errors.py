@@ -1,4 +1,4 @@
-from core.brokers.base import (
+from india_stocks_api.brokers.base.errors import (
     InputError,
     ResponseError,
     TokenDownloadError,

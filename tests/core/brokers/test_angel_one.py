@@ -2,9 +2,9 @@ import pytest
 from unittest.mock import patch, mock_open
 from datetime import datetime, timedelta
 import json
-from core.brokers.angel_one import AngelOne
-from core.brokers.base import ExchangeCode
-from core.brokers.base import TokenDownloadError
+from india_stocks_api.brokers.angelone import AngelOne
+from india_stocks_api.brokers.base.constants import ExchangeCode
+from india_stocks_api.brokers.base.errors import TokenDownloadError
 
 
 @pytest.fixture
@@ -57,8 +57,8 @@ def mock_token_data():
     ]
 
 
-@patch("core.brokers.angel_one.AngelOne.fetch")
-@patch("core.brokers.angel_one.AngelOne._json_parser")
+@patch("india_stocks_api.brokers.angelone.AngelOne.fetch")
+@patch("india_stocks_api.brokers.angelone.AngelOne._json_parser")
 def test_fetch_tokens_no_cache(mock_json_parser, mock_fetch, mock_token_data):
     mock_fetch.return_value.cookies = {"cookie": "value"}
     mock_json_parser.return_value = mock_token_data
@@ -72,8 +72,8 @@ def test_fetch_tokens_no_cache(mock_json_parser, mock_fetch, mock_token_data):
     mock_file.assert_called_once_with(AngelOne._CACHE_FILE, "w")
 
 
-@patch("core.brokers.angel_one.AngelOne.fetch")
-@patch("core.brokers.angel_one.AngelOne._json_parser")
+@patch("india_stocks_api.brokers.angelone.AngelOne.fetch")
+@patch("india_stocks_api.brokers.angelone.AngelOne._json_parser")
 def test_fetch_tokens_with_valid_cache(mock_json_parser, mock_fetch, mock_token_data):
     cache_data = {"timestamp": datetime.now().isoformat(), "data": mock_token_data}
 
@@ -86,8 +86,8 @@ def test_fetch_tokens_with_valid_cache(mock_json_parser, mock_fetch, mock_token_
     mock_json_parser.assert_not_called()
 
 
-@patch("core.brokers.angel_one.AngelOne.fetch")
-@patch("core.brokers.angel_one.AngelOne._json_parser")
+@patch("india_stocks_api.brokers.angelone.AngelOne.fetch")
+@patch("india_stocks_api.brokers.angelone.AngelOne._json_parser")
 def test_fetch_tokens_with_expired_cache(mock_json_parser, mock_fetch, mock_token_data):
     expired_cache_data = {
         "timestamp": (datetime.now() - timedelta(days=2)).isoformat(),
@@ -107,7 +107,7 @@ def test_fetch_tokens_with_expired_cache(mock_json_parser, mock_fetch, mock_toke
     mock_file.assert_called_with(AngelOne._CACHE_FILE, "w")
 
 
-@patch("core.brokers.angel_one.AngelOne._fetch_tokens")
+@patch("india_stocks_api.brokers.angelone.AngelOne._fetch_tokens")
 def test_create_eq_tokens(mock_fetch_tokens, mock_token_data):
     mock_fetch_tokens.return_value = mock_token_data
 
@@ -137,7 +137,7 @@ def test_create_eq_tokens(mock_fetch_tokens, mock_token_data):
     assert "AMZN" in result[ExchangeCode.BSE]
 
 
-@patch("core.brokers.angel_one.AngelOne._fetch_tokens")
+@patch("india_stocks_api.brokers.angelone.AngelOne._fetch_tokens")
 def test_create_eq_tokens_empty_data(mock_fetch_tokens):
     mock_fetch_tokens.return_value = []
 
@@ -145,7 +145,7 @@ def test_create_eq_tokens_empty_data(mock_fetch_tokens):
         AngelOne.create_eq_tokens()
 
 
-@patch("core.brokers.angel_one.AngelOne._fetch_tokens")
+@patch("india_stocks_api.brokers.angelone.AngelOne._fetch_tokens")
 def test_create_eq_tokens_missing_tick_size(mock_fetch_tokens):
     mock_fetch_tokens.return_value = [
         {"token": "10412", "symbol": "AAPL-EQ", "name": "APPLE", "exch_seg": "NSE"}
@@ -158,7 +158,7 @@ def test_create_eq_tokens_missing_tick_size(mock_fetch_tokens):
         AngelOne.create_eq_tokens()
 
 
-@patch("core.brokers.angel_one.AngelOne._fetch_tokens")
+@patch("india_stocks_api.brokers.angelone.AngelOne._fetch_tokens")
 def test_create_eq_tokens_duplicate_symbols(mock_fetch_tokens):
     duplicate_data = [
         {
@@ -194,7 +194,7 @@ def test_create_eq_tokens_duplicate_symbols(mock_fetch_tokens):
     )  # Should keep the first occurrence
 
 
-@patch("core.brokers.angel_one.AngelOne._fetch_tokens")
+@patch("india_stocks_api.brokers.angelone.AngelOne._fetch_tokens")
 def test_create_eq_tokens_tick_size_conversion(mock_fetch_tokens, mock_token_data):
     mock_fetch_tokens.return_value = mock_token_data
 

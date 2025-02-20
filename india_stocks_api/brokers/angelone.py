@@ -5,8 +5,8 @@ from typing import Any, List
 
 import pandas as pd
 from requests import Response
-from core.brokers.base.base import Broker
-from core.brokers.base.constants import (
+from india_stocks_api.brokers.base.broker import Broker
+from india_stocks_api.brokers.base.constants import (
     CandleStick,
     ExchangeCode,
     Interval,
@@ -24,9 +24,9 @@ from core.brokers.base.constants import (
     Variety,
     WeeklyExpiry,
 )
-from core.brokers.base import TokenDownloadError
-from core.brokers.base.errors import InputError
-from core.utils import chunk_date_range
+from india_stocks_api.brokers.base.errors import TokenDownloadError
+from india_stocks_api.brokers.base.errors import InputError
+from india_stocks_api.utils import chunk_date_range
 
 
 class AngelOne(Broker):

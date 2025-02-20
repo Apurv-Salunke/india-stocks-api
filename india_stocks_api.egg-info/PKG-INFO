@@ -1,0 +1,110 @@
+Metadata-Version: 2.2
+Name: india_stocks_api
+Version: 0.1.0
+Summary: A unified API for Indian stock market brokers
+Author: Apurv Salunke
+Author-email: salunke.apurv7@gmail.com
+License: MIT
+Project-URL: Documentation, https://github.com/Apurv-Salunke/india-stocks-api/wiki
+Project-URL: Source Code, https://github.com/Apurv-Salunke/india-stocks-api
+Classifier: Development Status :: 2 - Pre-Alpha
+Classifier: Intended Audience :: Developers
+Classifier: Intended Audience :: Financial and Insurance Industry
+Classifier: Intended Audience :: Information Technology
+Classifier: Topic :: Software Development :: Build Tools
+Classifier: Topic :: Office/Business :: Financial :: Investment
+Classifier: License :: OSI Approved :: GNU General Public License v3 (GPLv3)
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Operating System :: OS Independent
+Classifier: Environment :: Console
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: requests
+Requires-Dist: pandas
+Requires-Dist: numpy
+Requires-Dist: pyotp
+Provides-Extra: dev
+Requires-Dist: pytest; extra == "dev"
+Requires-Dist: flake8; extra == "dev"
+Provides-Extra: docs
+Requires-Dist: sphinx; extra == "docs"
+Dynamic: author
+Dynamic: author-email
+Dynamic: classifier
+Dynamic: description
+Dynamic: description-content-type
+Dynamic: license
+Dynamic: project-url
+Dynamic: provides-extra
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary
+
+# Indian Stock API
+
+## Work in Progress
+
+This project is a work in progress. The API is under active development, and features or functionality may change. Please check back for updates.
+
+## Overview
+
+The Indian Stock API is a Python package designed to interact with stock market data from various Indian stock exchanges. It provides a unified interface to access data from multiple brokers, simplifying integration and data retrieval.
+
+## Features
+
+- Unified API for multiple Indian stock brokers
+- Handles data retrieval and parsing
+- Configurable retry strategies for robust network requests
+- Error handling for common issues
+
+## Configuration
+
+Configuration settings such as retry strategies can be adjusted in the `india_stocks_api/config/network.py` file.
+
+## Running Tests
+
+To run the tests, use pytest:
+
+```bash
+pytest
+```
+
+## Contributing
+
+Contributions are welcome! Please fork the repository and submit a pull request with your changes.
+
+## License
+
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
+## Version
+
+Current version: 0.1.0
+
+## Contact
+
+For any inquiries, please contact [me](salunke.apurv7@gmail.com) or open an issue in the repository.
+
+## Pending Features
+- [ ] Add Caching
+    - [x] Add instruments caching
+    - [ ] Add access token caching
+- [ ] Add more brokers
+    - [x] AngelOne
+    - [ ] Fyers
+    - [ ] ICICI Direct
+    - [ ] 5Paisa
+    - [ ] Upstox
+    - [ ] Kotak Securities
+    - [ ] Finvasia
+    - [ ] IIFL Securities
+    - [ ] Zerodha
+- [ ] Add rate limiting mechanism.
+- [ ] Test coverage over 90%
+- [ ] Create docs
+- [ ] Publish to PyPI

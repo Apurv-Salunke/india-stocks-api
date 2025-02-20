@@ -17,7 +17,7 @@ The Indian Stock API is a Python package designed to interact with stock market 
 
 ## Configuration
 
-Configuration settings such as retry strategies can be adjusted in the `core/config/network.py` file.
+Configuration settings such as retry strategies can be adjusted in the `india_stocks_api/config/network.py` file.
 
 ## Running Tests
 
