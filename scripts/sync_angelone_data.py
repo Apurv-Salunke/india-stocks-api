@@ -34,9 +34,9 @@ def sync_angelone_data(db_path: str = "instruments.db", instrument_types: list =
         logger.info("Initializing instrument service...")
         instrument_service = InstrumentService(db_path)
 
-        # Initialize AngelOne provider
+        # Initialize AngelOne provider with more threads for F&O processing
         logger.info("Initializing AngelOne provider...")
-        provider = AngelOneProvider(instrument_service, "angelone")
+        provider = AngelOneProvider(instrument_service, "angelone", max_workers=16)
 
         # Get initial database stats
         initial_stats = instrument_service.get_database_stats()

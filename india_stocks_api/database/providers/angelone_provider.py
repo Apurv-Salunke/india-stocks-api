@@ -6,6 +6,8 @@ import json
 import os
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import threading
 
 import requests
 
@@ -17,7 +19,7 @@ from ..utils.db_utils import DatabaseUtils
 class AngelOneProvider(BaseProvider):
     """AngelOne data provider implementation"""
 
-    def __init__(self, symbol_db, broker_name: str = "angelone"):
+    def __init__(self, symbol_db, broker_name: str = "angelone", max_workers: int = 8):
         super().__init__(symbol_db, broker_name)
 
         # AngelOne specific configuration
@@ -26,6 +28,10 @@ class AngelOneProvider(BaseProvider):
         }
         self.cache_file = "_cache/angelone_tokens_cache.json"
         self.cache_validity_hours = 24
+        self.max_workers = max_workers
+
+        # Threading lock for database operations
+        self._db_lock = threading.Lock()
 
         # Headers for API requests
         self.headers = {
@@ -385,11 +391,71 @@ class AngelOneProvider(BaseProvider):
         except (ValueError, KeyError):
             return False
 
-    def _store_equity_data(self, equity_data: List[Dict[str, Any]]) -> int:
-        """Store equity data in database"""
+    def _process_batch(self, batch: List[Dict[str, Any]], data_type: str) -> int:
+        """Process a batch of instruments in parallel"""
         stored_count = 0
 
-        for item in equity_data:
+        def process_single_item(item: Dict[str, Any]) -> bool:
+            """Process a single instrument item"""
+            try:
+                if data_type == "equity":
+                    return self._store_single_equity_item(item)
+                elif data_type == "fno":
+                    return self._store_single_fno_item(item)
+                elif data_type == "commodity":
+                    return self._store_single_commodity_item(item)
+                elif data_type == "currency":
+                    return self._store_single_currency_item(item)
+                return False
+            except Exception as e:
+                self.logger.error(
+                    f"Error processing {data_type} item {item.get('standardized_symbol', 'unknown')}: {e}"
+                )
+                return False
+
+        # Process batch in parallel
+        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+            future_to_item = {
+                executor.submit(process_single_item, item): item for item in batch
+            }
+
+            for future in as_completed(future_to_item):
+                if future.result():
+                    stored_count += 1
+
+        return stored_count
+
+    def _store_equity_data(self, equity_data: List[Dict[str, Any]]) -> int:
+        """Store equity data in database using threading"""
+        self.logger.info(
+            f"Storing {len(equity_data)} equity instruments using {self.max_workers} threads..."
+        )
+
+        # Split data into batches for better performance
+        batch_size = max(100, len(equity_data) // self.max_workers)
+        batches = [
+            equity_data[i : i + batch_size]
+            for i in range(0, len(equity_data), batch_size)
+        ]
+
+        total_stored = 0
+        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+            future_to_batch = {
+                executor.submit(self._process_batch, batch, "equity"): batch
+                for batch in batches
+            }
+
+            for future in as_completed(future_to_batch):
+                batch_stored = future.result()
+                total_stored += batch_stored
+                self.logger.info(f"Processed batch: {batch_stored} instruments stored")
+
+        self.logger.info(f"Total equity instruments stored: {total_stored}")
+        return total_stored
+
+    def _store_single_equity_item(self, item: Dict[str, Any]) -> bool:
+        """Store a single equity instrument item (thread-safe)"""
+        with self._db_lock:
             try:
                 # Get exchange and category IDs
                 exchange_id = DatabaseUtils.get_exchange_id(
@@ -401,7 +467,7 @@ class AngelOneProvider(BaseProvider):
                     self.logger.warning(
                         f"Could not find exchange or category for {item['standardized_symbol']}"
                     )
-                    continue
+                    return False
 
                 # Check if instrument already exists
                 instrument_id = DatabaseUtils.get_instrument_id(
@@ -434,20 +500,46 @@ class AngelOneProvider(BaseProvider):
                     "lot_size": item["lot_size"],
                 }
                 self.db.add_broker_instrument(broker_instrument_data)
-                stored_count += 1
+                return True
 
             except Exception as e:
                 self.logger.error(
                     f"Error storing equity instrument {item.get('standardized_symbol', 'unknown')}: {e}"
                 )
-
-        return stored_count
+                return False
 
     def _store_fno_data(self, fno_data: List[Dict[str, Any]]) -> int:
-        """Store F&O data in database"""
-        stored_count = 0
+        """Store F&O data in database using threading"""
+        self.logger.info(
+            f"Storing {len(fno_data)} F&O instruments using {self.max_workers} threads..."
+        )
 
-        for item in fno_data:
+        # Split data into batches for better performance
+        batch_size = max(100, len(fno_data) // self.max_workers)
+        batches = [
+            fno_data[i : i + batch_size] for i in range(0, len(fno_data), batch_size)
+        ]
+
+        total_stored = 0
+        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+            future_to_batch = {
+                executor.submit(self._process_batch, batch, "fno"): batch
+                for batch in batches
+            }
+
+            for future in as_completed(future_to_batch):
+                batch_stored = future.result()
+                total_stored += batch_stored
+                self.logger.info(
+                    f"Processed F&O batch: {batch_stored} instruments stored"
+                )
+
+        self.logger.info(f"Total F&O instruments stored: {total_stored}")
+        return total_stored
+
+    def _store_single_fno_item(self, item: Dict[str, Any]) -> bool:
+        """Store a single F&O instrument item (thread-safe)"""
+        with self._db_lock:
             try:
                 # Determine category (FUTURES or OPTIONS)
                 category_code = "FUT" if not item.get("option_type") else "OPT"
@@ -462,7 +554,7 @@ class AngelOneProvider(BaseProvider):
                     self.logger.warning(
                         f"Could not find exchange or category for {item['standardized_symbol']}"
                     )
-                    continue
+                    return False
 
                 # Check if instrument already exists
                 instrument_id = DatabaseUtils.get_instrument_id(
@@ -497,14 +589,13 @@ class AngelOneProvider(BaseProvider):
                     "option_type": item.get("option_type"),
                 }
                 self.db.add_broker_instrument(broker_instrument_data)
-                stored_count += 1
+                return True
 
             except Exception as e:
                 self.logger.error(
                     f"Error storing F&O instrument {item.get('standardized_symbol', 'unknown')}: {e}"
                 )
-
-        return stored_count
+                return False
 
     def _store_commodity_data(self, commodity_data: List[Dict[str, Any]]) -> int:
         """Store commodity data in database"""

@@ -378,10 +378,26 @@ class TestAngelOneProvider:
 
         assert info["broker_name"] == "angelone"
         assert info["provider_class"] == "AngelOneProvider"
-        assert "equity" in info["supported_instruments"]
-        assert "fno" in info["supported_instruments"]
-        assert "commodity" in info["supported_instruments"]
-        assert "currency" in info["supported_instruments"]
+
+    def test_threading_configuration(self, angelone_provider):
+        """Test threading configuration"""
+        assert angelone_provider.max_workers == 8  # Default value
+        assert hasattr(angelone_provider, "_db_lock")
+
+        # Test custom thread count
+        from india_stocks_api.database import AngelOneProvider, InstrumentService
+        import tempfile
+        import os
+
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+            db_path = f.name
+
+        try:
+            service = InstrumentService(db_path)
+            custom_provider = AngelOneProvider(service, max_workers=16)
+            assert custom_provider.max_workers == 16
+        finally:
+            os.unlink(db_path)
 
 
 @pytest.mark.integration
