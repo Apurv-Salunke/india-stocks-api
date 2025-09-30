@@ -27,7 +27,13 @@ def test_db_path():
 def instrument_service(test_db_path):
     """Create instrument service with test database"""
     from india_stocks_api.database import InstrumentService
+    from india_stocks_api.database.migrations import MigrationManager
 
+    # Ensure the test DB is created and migrated before constructing the service
+    mgr = MigrationManager(test_db_path)
+    if not Path(test_db_path).exists():
+        mgr.create_database()
+    mgr.run_all_migrations()
     return InstrumentService(test_db_path)
 
 

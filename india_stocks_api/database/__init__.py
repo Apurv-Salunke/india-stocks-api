@@ -15,7 +15,7 @@ from .services.instrument_service import InstrumentService
 from .models.enums import Exchange, InstrumentCategory, OptionType, CommodityType
 from .models.instrument import Instrument
 from .models.broker_instrument import BrokerInstrument
-from .providers import AngelOneProvider
+from .providers import AngelOneTokensManager
 
 __all__ = [
     "InstrumentService",
@@ -25,7 +25,7 @@ __all__ = [
     "CommodityType",
     "Instrument",
     "BrokerInstrument",
-    "AngelOneProvider",
+    "AngelOneTokensManager",
 ]
 
 __version__ = "0.1.0"

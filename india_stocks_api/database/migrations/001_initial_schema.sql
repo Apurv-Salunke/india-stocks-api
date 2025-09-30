@@ -148,10 +148,7 @@ INSERT OR IGNORE INTO exchanges (exchange_code, exchange_name, country, currency
 ('BSE', 'Bombay Stock Exchange', 'INDIA', 'INR', 'Asia/Kolkata'),
 ('MCX', 'Multi Commodity Exchange', 'INDIA', 'INR', 'Asia/Kolkata'),
 ('NCDEX', 'National Commodity & Derivatives Exchange', 'INDIA', 'INR', 'Asia/Kolkata'),
-('ICEX', 'Indian Commodity Exchange', 'INDIA', 'INR', 'Asia/Kolkata'),
-('CDS', 'NSE Currency Derivatives', 'INDIA', 'INR', 'Asia/Kolkata'),
-('BCD', 'BSE Currency Derivatives', 'INDIA', 'INR', 'Asia/Kolkata'),
-('USE', 'United Stock Exchange', 'INDIA', 'INR', 'Asia/Kolkata');
+('ICEX', 'Indian Commodity Exchange', 'INDIA', 'INR', 'Asia/Kolkata');
 
 -- Insert reference data for instrument categories
 INSERT OR IGNORE INTO instrument_categories (category_code, category_name, description) VALUES

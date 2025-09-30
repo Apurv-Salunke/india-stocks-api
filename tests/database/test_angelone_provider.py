@@ -5,12 +5,12 @@ Test cases for AngelOne provider
 import pytest
 from unittest.mock import Mock, patch
 
-from india_stocks_api.database import InstrumentService, AngelOneProvider
+from india_stocks_api.database import InstrumentService, AngelOneTokensManager
 from india_stocks_api.database.models.enums import OptionType
 
 
-class TestAngelOneProvider:
-    """Test AngelOneProvider functionality"""
+class TestAngelOneTokensManager:
+    """Test AngelOneTokensManager functionality"""
 
     @pytest.fixture
     def mock_instrument_service(self):
@@ -21,8 +21,8 @@ class TestAngelOneProvider:
 
     @pytest.fixture
     def angelone_provider(self, mock_instrument_service):
-        """Create AngelOne provider instance"""
-        return AngelOneProvider(mock_instrument_service, "angelone")
+        """Create AngelOne tokens manager instance"""
+        return AngelOneTokensManager(mock_instrument_service, "angelone")
 
     def test_provider_initialization(self, angelone_provider):
         """Test provider initialization"""
@@ -377,7 +377,7 @@ class TestAngelOneProvider:
         info = angelone_provider.get_provider_info()
 
         assert info["broker_name"] == "angelone"
-        assert info["provider_class"] == "AngelOneProvider"
+        assert info["provider_class"] == "AngelOneTokensManager"
 
     def test_threading_configuration(self, angelone_provider):
         """Test threading configuration"""
@@ -385,7 +385,7 @@ class TestAngelOneProvider:
         assert hasattr(angelone_provider, "_db_lock")
 
         # Test custom thread count
-        from india_stocks_api.database import AngelOneProvider, InstrumentService
+        from india_stocks_api.database import AngelOneTokensManager, InstrumentService
         import tempfile
         import os
 
@@ -394,14 +394,14 @@ class TestAngelOneProvider:
 
         try:
             service = InstrumentService(db_path)
-            custom_provider = AngelOneProvider(service, max_workers=16)
+            custom_provider = AngelOneTokensManager(service, max_workers=16)
             assert custom_provider.max_workers == 16
         finally:
             os.unlink(db_path)
 
 
 @pytest.mark.integration
-class TestAngelOneProviderIntegration:
+class TestAngelOneTokensManagerIntegration:
     """Integration tests for AngelOne provider (requires network)"""
 
     @pytest.fixture
@@ -412,7 +412,7 @@ class TestAngelOneProviderIntegration:
     @pytest.fixture
     def angelone_provider(self, instrument_service):
         """Create AngelOne provider with real service"""
-        return AngelOneProvider(instrument_service, "angelone")
+        return AngelOneTokensManager(instrument_service, "angelone")
 
     @pytest.mark.slow
     def test_real_data_fetching(self, angelone_provider):

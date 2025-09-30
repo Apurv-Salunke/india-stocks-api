@@ -13,8 +13,6 @@ class Exchange(Enum):
     MCX = "MCX"  # Multi Commodity Exchange
     NCDEX = "NCDEX"  # National Commodity & Derivatives Exchange
     ICEX = "ICEX"  # Indian Commodity Exchange
-    BSE_CDS = "BSE_CDS"  # BSE Currency Derivatives
-    USE = "USE"  # United Stock Exchange (for currency)
 
 
 class InstrumentCategory(Enum):

@@ -5,7 +5,8 @@ Database migration manager
 import sqlite3
 import os
 from pathlib import Path
-from typing import List
+from typing import List, Optional
+from contextlib import contextmanager
 import logging
 
 logger = logging.getLogger(__name__)
@@ -18,10 +19,58 @@ class MigrationManager:
         self.db_path = db_path
         self.migrations_dir = Path(__file__).parent
 
+    @contextmanager
+    def _connect(self):
+        """SQLite connection with safe PRAGMAs and busy timeout."""
+        conn = sqlite3.connect(self.db_path, timeout=10)
+        try:
+            # Reasonable defaults for robustness
+            conn.execute("PRAGMA foreign_keys = ON")
+            conn.execute("PRAGMA journal_mode = WAL")
+            conn.execute("PRAGMA synchronous = NORMAL")
+            conn.execute("PRAGMA busy_timeout = 5000")
+            yield conn
+        finally:
+            conn.close()
+
+    def _ensure_version_table(self, conn: Optional[sqlite3.Connection] = None) -> None:
+        """Ensure schema_version table exists before querying versions.
+
+        If a connection is provided, use it (and do not commit here).
+        Otherwise, create a short-lived connection and commit.
+        """
+        try:
+            if conn is None:
+                with self._connect() as _conn:
+                    _conn.execute(
+                        """
+                        CREATE TABLE IF NOT EXISTS schema_version (
+                            version INTEGER PRIMARY KEY,
+                            applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            description TEXT
+                        )
+                        """
+                    )
+                    _conn.commit()
+            else:
+                conn.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS schema_version (
+                        version INTEGER PRIMARY KEY,
+                        applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        description TEXT
+                    )
+                    """
+                )
+        except sqlite3.Error as e:
+            logger.error(f"Error ensuring schema_version table: {e}")
+            raise
+
     def get_current_version(self) -> int:
         """Get current database version"""
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            self._ensure_version_table()
+            with self._connect() as conn:
                 cursor = conn.execute("SELECT MAX(version) FROM schema_version")
                 result = cursor.fetchone()
                 return result[0] if result and result[0] is not None else 0
@@ -48,6 +97,41 @@ class MigrationManager:
 
         return migration_files
 
+    def _record_version(
+        self, conn: sqlite3.Connection, version: int, description: Optional[str] = None
+    ) -> None:
+        """Record a migration version if not already recorded."""
+        desc = description or "Applied via MigrationManager"
+        conn.execute(
+            "INSERT OR IGNORE INTO schema_version (version, description) VALUES (?, ?)",
+            (version, desc),
+        )
+
+    def _parse_version_from_filename(self, migration_file: str) -> Optional[int]:
+        try:
+            return int(Path(migration_file).stem.split("_")[0])
+        except (ValueError, IndexError):
+            return None
+
+    @contextmanager
+    def _acquire_lock(self):
+        """Simple process-level lock using an IMMEDIATE transaction.
+
+        SQLite allows BEGIN IMMEDIATE to acquire a reserved lock preventing
+        concurrent writers. This reduces migration race risk across processes.
+        """
+        with self._connect() as conn:
+            try:
+                conn.execute("BEGIN IMMEDIATE")
+                yield conn
+                conn.commit()
+            except Exception:
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+                raise
+
     def run_migration(self, migration_file: str) -> bool:
         """Run a specific migration file"""
         migration_path = self.migrations_dir / migration_file
@@ -57,14 +141,23 @@ class MigrationManager:
             return False
 
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with self._acquire_lock() as conn:
+                # Ensure version table exists inside the locked transaction using same connection
+                self._ensure_version_table(conn)
+
                 # Read and execute migration file
                 with open(migration_path, "r") as f:
                     migration_sql = f.read()
 
-                # Execute migration
+                # Execute migration within the same transaction
                 conn.executescript(migration_sql)
-                conn.commit()
+
+                # Ensure version is recorded even if SQL file didn't insert it
+                version = self._parse_version_from_filename(migration_file)
+                if version is not None:
+                    self._record_version(
+                        conn, version, description=f"Applied {migration_file}"
+                    )
 
                 logger.info(f"Successfully applied migration: {migration_file}")
                 return True
@@ -92,6 +185,11 @@ class MigrationManager:
                 return False
 
         logger.info("All migrations completed successfully")
+        # Best-effort WAL checkpoint to truncate -wal/-shm after migrations
+        try:
+            self.checkpoint("TRUNCATE")
+        except Exception as e:
+            logger.warning(f"WAL checkpoint after migrations failed: {e}")
         return True
 
     def create_database(self) -> bool:
@@ -102,7 +200,14 @@ class MigrationManager:
             db_dir.mkdir(parents=True, exist_ok=True)
 
             # Run initial migration
-            return self.run_migration("001_initial_schema.sql")
+            ok = self.run_migration("001_initial_schema.sql")
+            if ok:
+                # Best-effort checkpoint after initial creation
+                try:
+                    self.checkpoint("TRUNCATE")
+                except Exception as e:
+                    logger.warning(f"WAL checkpoint after create failed: {e}")
+            return ok
 
         except Exception as e:
             logger.error(f"Error creating database: {e}")
@@ -126,7 +231,7 @@ class MigrationManager:
     def get_database_info(self) -> dict:
         """Get database information"""
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with self._connect() as conn:
                 cursor = conn.execute(
                     "SELECT name FROM sqlite_master WHERE type='table'"
                 )
@@ -149,3 +254,12 @@ class MigrationManager:
                 "error": str(e),
                 "database_exists": os.path.exists(self.db_path),
             }
+
+    def checkpoint(self, mode: str = "TRUNCATE") -> None:
+        """Run a WAL checkpoint. mode can be PASSIVE, FULL, RESTART, or TRUNCATE."""
+        mode = (mode or "TRUNCATE").upper()
+        if mode not in {"PASSIVE", "FULL", "RESTART", "TRUNCATE"}:
+            raise ValueError("Invalid checkpoint mode")
+        with self._connect() as conn:
+            conn.execute(f"PRAGMA wal_checkpoint({mode})")
+            conn.commit()

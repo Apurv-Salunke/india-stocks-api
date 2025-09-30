@@ -11,7 +11,7 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from india_stocks_api.database import InstrumentService, AngelOneProvider  # noqa: E402
+from india_stocks_api.database import InstrumentService, AngelOneTokensManager  # noqa: E402
 
 # Configure logging
 logging.basicConfig(
@@ -40,7 +40,7 @@ def sync_angelone_data(db_path: str = "instruments.db", instrument_types: list =
 
         # Initialize AngelOne provider with more threads for F&O processing
         logger.info("Initializing AngelOne provider...")
-        provider = AngelOneProvider(instrument_service, "angelone", max_workers=16)
+        provider = AngelOneTokensManager(instrument_service, "angelone", max_workers=16)
 
         # Get initial database stats
         initial_stats = instrument_service.get_database_stats()
@@ -110,7 +110,7 @@ def test_angelone_provider(db_path: str = "test_angelone.db"):
     try:
         # Initialize services
         instrument_service = InstrumentService(db_path)
-        provider = AngelOneProvider(instrument_service, "angelone")
+        provider = AngelOneTokensManager(instrument_service, "angelone")
 
         # Test fetching data (without storing)
         logger.info("Testing data fetching...")

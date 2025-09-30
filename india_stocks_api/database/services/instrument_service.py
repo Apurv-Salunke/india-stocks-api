@@ -8,8 +8,8 @@ from pathlib import Path
 import logging
 
 from ..models.enums import Exchange, InstrumentCategory
-from ..migrations import MigrationManager
 from ...utils.cache_utils import get_database_path
+from ..migrations import MigrationManager
 
 logger = logging.getLogger(__name__)
 
@@ -29,27 +29,77 @@ class InstrumentService:
         self._init_database()
 
     def _init_database(self):
-        """Initialize database with schema"""
+        """Initialize database connection and verify schema"""
         try:
-            migration_manager = MigrationManager(str(self.db_path))
-
+            # Create and migrate database if it doesn't exist (supports custom paths)
             if not self.db_path.exists():
-                self.logger.info("Creating new database...")
+                self.logger.info("Database not found, creating with initial schema...")
+                migration_manager = MigrationManager(str(self.db_path))
+                if not migration_manager.create_database():
+                    raise RuntimeError("Failed to create database schema")
+                migration_manager.run_all_migrations()
+
+            # Verify database has required tables; if not, create/migrate and verify again
+            try:
+                self._verify_database_schema()
+            except RuntimeError:
+                self.logger.info(
+                    "Database schema missing, applying initial schema and migrations..."
+                )
+                migration_manager = MigrationManager(str(self.db_path))
                 migration_manager.create_database()
-
-                # Run any pending migrations after initial creation
-                self.logger.info("Running pending migrations...")
                 migration_manager.run_all_migrations()
+                # Verify again after applying schema
+                self._verify_database_schema()
 
-                # Auto-populate with AngelOne data on first creation
+            # Auto-populate with AngelOne data if database is empty
+            if self._is_database_empty():
+                self.logger.info(
+                    "Database is empty, auto-populating with AngelOne data..."
+                )
                 self._auto_populate_data()
-            else:
-                self.logger.info("Running pending migrations...")
-                migration_manager.run_all_migrations()
 
         except Exception as e:
             self.logger.error(f"Error initializing database: {e}")
             raise
+
+    def _verify_database_schema(self):
+        """Verify database has required tables"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                )
+                tables = [row[0] for row in cursor.fetchall()]
+
+                required_tables = [
+                    "exchanges",
+                    "instruments",
+                    "broker_instruments",
+                    "schema_version",
+                ]
+                missing_tables = [
+                    table for table in required_tables if table not in tables
+                ]
+
+                if missing_tables:
+                    raise RuntimeError(
+                        f"Database schema incomplete. Missing tables: {missing_tables}. "
+                        "Please ensure migrations have been applied."
+                    )
+
+        except sqlite3.Error as e:
+            raise RuntimeError(f"Error verifying database schema: {e}")
+
+    def _is_database_empty(self) -> bool:
+        """Check if database is empty (no instruments)"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.execute("SELECT COUNT(*) FROM instruments")
+                count = cursor.fetchone()[0]
+                return count == 0
+        except sqlite3.Error:
+            return True  # Assume empty if we can't check
 
     def _auto_populate_data(self):
         """Auto-populate database with AngelOne data on first creation"""
@@ -57,10 +107,10 @@ class InstrumentService:
             print("🚀 Auto-populating database with AngelOne instrument data...")
             print("⏳ This may take a few minutes for the first time...")
 
-            from ..providers.angelone_provider import AngelOneProvider
+            from ..providers.angelone_provider import AngelOneTokensManager
 
             # Initialize AngelOne provider with this service instance
-            provider = AngelOneProvider(symbol_db=self, max_workers=8)
+            provider = AngelOneTokensManager(symbol_db=self, max_workers=8)
 
             # Fetch and store equity data (most commonly used)
             equity_data = provider.fetch_equity_data()

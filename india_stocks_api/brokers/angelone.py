@@ -337,6 +337,96 @@ class AngelOne(Broker):
         }
 
     @classmethod
+    def resolve_commodity_instrument(
+        cls, symbol: str, exchange: str, db_path: str = None
+    ) -> dict:
+        """
+        Resolve commodity instrument using the new database system.
+
+        Parameters:
+            symbol (str): Standardized commodity symbol
+            exchange (str): Exchange code ("MCX" or "NCDEX")
+            db_path (str): Path to the database file
+
+        Returns:
+            dict: Instrument data with broker-specific token and symbol
+        """
+        service = cls._init_database(db_path)
+
+        # Map exchange string to enum
+        exchange_enum = Exchange.MCX if exchange.upper() == "MCX" else Exchange.NCDEX
+
+        # Resolve instrument using database
+        instrument_data = service.resolve_instrument(
+            standardized_symbol=symbol.upper(),
+            broker_name="angelone",
+            exchange=exchange_enum,
+            category=InstrumentCategory.COMMODITY,
+        )
+
+        if not instrument_data:
+            # Fallback to legacy system if database lookup fails
+            raise KeyError(
+                f"Commodity instrument {symbol} not found in database or legacy system"
+            )
+
+        # Return database result in legacy format for compatibility
+        return {
+            "broker_token": instrument_data["broker_token"],
+            "broker_symbol": instrument_data["broker_symbol"],
+            "tick_size": instrument_data["tick_size"],
+            "lot_size": instrument_data["lot_size"],
+            "expiry_date": instrument_data.get("expiry_date"),
+            "strike_price": instrument_data.get("strike_price"),
+            "option_type": instrument_data.get("option_type"),
+        }
+
+    @classmethod
+    def resolve_currency_instrument(
+        cls, symbol: str, exchange: str, db_path: str = None
+    ) -> dict:
+        """
+        Resolve currency instrument using the new database system.
+
+        Parameters:
+            symbol (str): Standardized currency symbol
+            exchange (str): Exchange code ("NSE" or "BSE")
+            db_path (str): Path to the database file
+
+        Returns:
+            dict: Instrument data with broker-specific token and symbol
+        """
+        service = cls._init_database(db_path)
+
+        # Map exchange string to enum
+        exchange_enum = Exchange.NSE if exchange.upper() == "NSE" else Exchange.BSE
+
+        # Resolve instrument using database
+        instrument_data = service.resolve_instrument(
+            standardized_symbol=symbol.upper(),
+            broker_name="angelone",
+            exchange=exchange_enum,
+            category=InstrumentCategory.CURRENCY,
+        )
+
+        if not instrument_data:
+            # Fallback to legacy system if database lookup fails
+            raise KeyError(
+                f"Currency instrument {symbol} not found in database or legacy system"
+            )
+
+        # Return database result in legacy format for compatibility
+        return {
+            "broker_token": instrument_data["broker_token"],
+            "broker_symbol": instrument_data["broker_symbol"],
+            "tick_size": instrument_data["tick_size"],
+            "lot_size": instrument_data["lot_size"],
+            "expiry_date": instrument_data.get("expiry_date"),
+            "strike_price": instrument_data.get("strike_price"),
+            "option_type": instrument_data.get("option_type"),
+        }
+
+    @classmethod
     def _read_cache(cls):
         """
         Reads the cache file if it exists.
