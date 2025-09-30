@@ -27,6 +27,8 @@ from india_stocks_api.brokers.base.constants import (
 from india_stocks_api.brokers.base.errors import TokenDownloadError
 from india_stocks_api.brokers.base.errors import InputError
 from india_stocks_api.utils import chunk_date_range
+from india_stocks_api.database import InstrumentService, Exchange, InstrumentCategory
+from india_stocks_api.utils.cache_utils import get_cache_file_path
 
 
 class AngelOne(Broker):
@@ -48,7 +50,9 @@ class AngelOne(Broker):
     ]
     id = "angelone"
     # Cache File for storing tokens master data
-    _CACHE_FILE = "_cache/angelone_tokens_cache.json"
+    _CACHE_FILE = get_cache_file_path("angelone_tokens_cache.json")
+    # Database integration
+    _instrument_service = None
     # Base URLs
     base_urls = {
         "api_doc": "https://smartapi.angelbroking.com/docs",
@@ -201,6 +205,226 @@ class AngelOne(Broker):
 
         cls._write_cache(data)
         return data
+
+    @classmethod
+    def _init_database(cls, db_path: str = None) -> InstrumentService:
+        """
+        Initialize the instrument database service with lazy loading.
+
+        Parameters:
+            db_path (str, optional): Path to the SQLite database file.
+                                   Uses cache directory if None.
+
+        Returns:
+            InstrumentService: Initialized database service
+        """
+        if cls._instrument_service is None:
+            print("🔧 Initializing instrument database (first time setup)...")
+            cls._instrument_service = InstrumentService(db_path)
+            print("✅ Instrument database initialized successfully")
+        return cls._instrument_service
+
+    @classmethod
+    def resolve_equity_instrument(
+        cls, symbol: str, exchange: str, db_path: str = None
+    ) -> dict:
+        """
+        Resolve equity instrument using the new database system.
+
+        Parameters:
+            symbol (str): Standardized symbol (e.g., "RELIANCE")
+            exchange (str): Exchange code ("NSE" or "BSE")
+            db_path (str): Path to the database file
+
+        Returns:
+            dict: Instrument data with broker-specific token and symbol
+
+        Raises:
+            KeyError: If instrument not found in database
+        """
+        service = cls._init_database(db_path)
+
+        # Map exchange string to enum
+        exchange_enum = Exchange.NSE if exchange.upper() == "NSE" else Exchange.BSE
+
+        # Resolve instrument using database
+        instrument_data = service.resolve_instrument(
+            standardized_symbol=symbol.upper(),
+            broker_name="angelone",
+            exchange=exchange_enum,
+            category=InstrumentCategory.EQUITY,
+        )
+
+        if not instrument_data:
+            # Fallback to legacy system if database lookup fails
+            if not cls.eq_tokens:
+                cls.create_eq_tokens()
+
+            exchange_code = cls._key_mapper(cls.req_exchange, exchange, "exchange")
+            detail = cls._eq_mapper(cls.eq_tokens[exchange_code], symbol)
+
+            return {
+                "broker_token": str(detail["Token"]),
+                "broker_symbol": detail["Symbol"],
+                "tick_size": detail.get("TickSize", 0.05),
+                "lot_size": detail.get("LotSize", 1),
+            }
+
+        # Return database result in legacy format for compatibility
+        return {
+            "broker_token": instrument_data["broker_token"],
+            "broker_symbol": instrument_data["broker_symbol"],
+            "tick_size": instrument_data["tick_size"],
+            "lot_size": instrument_data["lot_size"],
+        }
+
+    @classmethod
+    def resolve_fno_instrument(
+        cls, symbol: str, exchange: str, db_path: str = None
+    ) -> dict:
+        """
+        Resolve F&O instrument using the new database system.
+
+        Parameters:
+            symbol (str): Standardized F&O symbol
+            exchange (str): Exchange code ("NSE" or "BSE")
+            db_path (str): Path to the database file
+
+        Returns:
+            dict: Instrument data with broker-specific token and symbol
+        """
+        service = cls._init_database(db_path)
+
+        # Map exchange string to enum
+        exchange_enum = Exchange.NSE if exchange.upper() == "NSE" else Exchange.BSE
+
+        # Try to resolve as FUTURES first
+        instrument_data = service.resolve_instrument(
+            standardized_symbol=symbol.upper(),
+            broker_name="angelone",
+            exchange=exchange_enum,
+            category=InstrumentCategory.FUTURES,
+        )
+
+        # If not found as FUTURES, try OPTIONS
+        if not instrument_data:
+            instrument_data = service.resolve_instrument(
+                standardized_symbol=symbol.upper(),
+                broker_name="angelone",
+                exchange=exchange_enum,
+                category=InstrumentCategory.OPTIONS,
+            )
+
+        if not instrument_data:
+            # Fallback to legacy system if database lookup fails
+            if not cls.fno_tokens:
+                cls.create_fno_tokens()
+
+            # Legacy F&O resolution logic would go here
+            raise KeyError(
+                f"F&O instrument {symbol} not found in database or legacy system"
+            )
+
+        # Return database result in legacy format for compatibility
+        return {
+            "broker_token": instrument_data["broker_token"],
+            "broker_symbol": instrument_data["broker_symbol"],
+            "tick_size": instrument_data["tick_size"],
+            "lot_size": instrument_data["lot_size"],
+            "expiry_date": instrument_data.get("expiry_date"),
+            "strike_price": instrument_data.get("strike_price"),
+            "option_type": instrument_data.get("option_type"),
+        }
+
+    @classmethod
+    def resolve_commodity_instrument(
+        cls, symbol: str, exchange: str, db_path: str = None
+    ) -> dict:
+        """
+        Resolve commodity instrument using the new database system.
+
+        Parameters:
+            symbol (str): Standardized commodity symbol
+            exchange (str): Exchange code ("MCX" or "NCDEX")
+            db_path (str): Path to the database file
+
+        Returns:
+            dict: Instrument data with broker-specific token and symbol
+        """
+        service = cls._init_database(db_path)
+
+        # Map exchange string to enum
+        exchange_enum = Exchange.MCX if exchange.upper() == "MCX" else Exchange.NCDEX
+
+        # Resolve instrument using database
+        instrument_data = service.resolve_instrument(
+            standardized_symbol=symbol.upper(),
+            broker_name="angelone",
+            exchange=exchange_enum,
+            category=InstrumentCategory.COMMODITY,
+        )
+
+        if not instrument_data:
+            # Fallback to legacy system if database lookup fails
+            raise KeyError(
+                f"Commodity instrument {symbol} not found in database or legacy system"
+            )
+
+        # Return database result in legacy format for compatibility
+        return {
+            "broker_token": instrument_data["broker_token"],
+            "broker_symbol": instrument_data["broker_symbol"],
+            "tick_size": instrument_data["tick_size"],
+            "lot_size": instrument_data["lot_size"],
+            "expiry_date": instrument_data.get("expiry_date"),
+            "strike_price": instrument_data.get("strike_price"),
+            "option_type": instrument_data.get("option_type"),
+        }
+
+    @classmethod
+    def resolve_currency_instrument(
+        cls, symbol: str, exchange: str, db_path: str = None
+    ) -> dict:
+        """
+        Resolve currency instrument using the new database system.
+
+        Parameters:
+            symbol (str): Standardized currency symbol
+            exchange (str): Exchange code ("NSE" or "BSE")
+            db_path (str): Path to the database file
+
+        Returns:
+            dict: Instrument data with broker-specific token and symbol
+        """
+        service = cls._init_database(db_path)
+
+        # Map exchange string to enum
+        exchange_enum = Exchange.NSE if exchange.upper() == "NSE" else Exchange.BSE
+
+        # Resolve instrument using database
+        instrument_data = service.resolve_instrument(
+            standardized_symbol=symbol.upper(),
+            broker_name="angelone",
+            exchange=exchange_enum,
+            category=InstrumentCategory.CURRENCY,
+        )
+
+        if not instrument_data:
+            # Fallback to legacy system if database lookup fails
+            raise KeyError(
+                f"Currency instrument {symbol} not found in database or legacy system"
+            )
+
+        # Return database result in legacy format for compatibility
+        return {
+            "broker_token": instrument_data["broker_token"],
+            "broker_symbol": instrument_data["broker_symbol"],
+            "tick_size": instrument_data["tick_size"],
+            "lot_size": instrument_data["lot_size"],
+            "expiry_date": instrument_data.get("expiry_date"),
+            "strike_price": instrument_data.get("strike_price"),
+            "option_type": instrument_data.get("option_type"),
+        }
 
     @classmethod
     def _read_cache(cls):
@@ -1184,13 +1408,20 @@ class AngelOne(Broker):
         Returns:
             dict: fenix Unified Order Response.
         """
-        if not cls.eq_tokens:
-            cls.create_eq_tokens()
+        # Try to use new database system first
+        try:
+            detail = cls.resolve_equity_instrument(symbol, exchange)
+            token = detail["broker_token"]
+            symbol = detail["broker_symbol"]
+        except KeyError:
+            # Fallback to legacy system if database lookup fails
+            if not cls.eq_tokens:
+                cls.create_eq_tokens()
 
-        exchange = cls._key_mapper(cls.req_exchange, exchange, "exchange")
-        detail = cls._eq_mapper(cls.eq_tokens[exchange], symbol)
-        token = detail["Token"]
-        symbol = detail["Symbol"]
+            exchange = cls._key_mapper(cls.req_exchange, exchange, "exchange")
+            detail = cls._eq_mapper(cls.eq_tokens[exchange], symbol)
+            token = detail["Token"]
+            symbol = detail["Symbol"]
 
         if not price and trigger:
             order_type = OrderType.SLM
@@ -2320,19 +2551,28 @@ class AngelOne(Broker):
         Returns:
             list[dict]: Unified Candle Data Response.
         """
-        if not cls.eq_tokens:
-            cls.create_eq_tokens()
-        if exchange not in cls.eq_tokens:
-            raise ValueError(
-                f"Exchange {exchange} not supported. Please use NSE or BSE."
-            )
+        # Try to use new database system first
+        try:
+            detail = cls.resolve_equity_instrument(symbol, exchange)
+            token = str(detail["broker_token"])
+            symbol = detail["broker_symbol"]
+            exchange = cls._key_mapper(cls.req_exchange, exchange, "exchange")
+        except KeyError:
+            # Fallback to legacy system if database lookup fails
+            if not cls.eq_tokens:
+                cls.create_eq_tokens()
+            if exchange not in cls.eq_tokens:
+                raise ValueError(
+                    f"Exchange {exchange} not supported. Please use NSE or BSE."
+                )
 
-        exchange = cls._key_mapper(cls.req_exchange, exchange, "exchange")
+            exchange = cls._key_mapper(cls.req_exchange, exchange, "exchange")
+            detail = cls._eq_mapper(cls.eq_tokens[exchange], symbol)
+
+            token = str(detail["Token"])
+            symbol = detail["Symbol"]
+
         interval = cls._key_mapper(cls.req_interval, interval, "interval")
-        detail = cls._eq_mapper(cls.eq_tokens[exchange], symbol)
-
-        token = str(detail["Token"])
-        symbol = detail["Symbol"]
 
         json_data = {
             "exchange": exchange,
