@@ -155,6 +155,7 @@ INSERT OR IGNORE INTO instrument_categories (category_code, category_name, descr
 ('EQ', 'Equity', 'Equity stocks and shares'),
 ('FUT', 'Futures', 'Future contracts'),
 ('OPT', 'Options', 'Option contracts'),
+('INDEX', 'Index', 'Market indices like NIFTY, SENSEX, etc.'),
 ('COM', 'Commodity', 'Commodity instruments'),
 ('CUR', 'Currency', 'Currency instruments'),
 ('DEBT', 'Debt', 'Debt instruments and bonds'),

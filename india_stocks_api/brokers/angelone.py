@@ -42,7 +42,6 @@ class AngelOne(Broker):
 
     indices = {}
     eq_tokens = {}
-    fno_tokens = {}
     token_params = [
         "user_id",
         "pin",
@@ -125,7 +124,7 @@ class AngelOne(Broker):
         Interval.FIFTEEN_MINUTE: "FIFTEEN_MINUTE",
         Interval.THIRTY_MINUTE: "THIRTY_MINUTE",
         Interval.ONE_HOUR: "ONE_HOUR",
-        Interval.ONE_DAY: "ONE_HOUR",
+        Interval.ONE_DAY: "ONE_DAY",
     }
 
     # Response Parameters Dictionaries
@@ -246,15 +245,26 @@ class AngelOne(Broker):
         service = cls._init_database(db_path)
 
         # Map exchange string to enum
-        exchange_enum = Exchange.NSE if exchange.upper() == "NSE" else Exchange.BSE
+        exchange_enum = (
+            Exchange.NSE if exchange.upper() == Exchange.NSE else Exchange.BSE
+        )
 
-        # Resolve instrument using database
+        # Resolve instrument using database - try EQUITY first
         instrument_data = service.resolve_instrument(
             standardized_symbol=symbol.upper(),
             broker_name="angelone",
             exchange=exchange_enum,
             category=InstrumentCategory.EQUITY,
         )
+
+        # If not found as EQUITY, try INDEX
+        if not instrument_data:
+            instrument_data = service.resolve_instrument(
+                standardized_symbol=symbol.upper(),
+                broker_name="angelone",
+                exchange=exchange_enum,
+                category=InstrumentCategory.INDEX,
+            )
 
         if not instrument_data:
             # Fallback to legacy system if database lookup fails
@@ -270,6 +280,47 @@ class AngelOne(Broker):
                 "tick_size": detail.get("TickSize", 0.05),
                 "lot_size": detail.get("LotSize", 1),
             }
+
+        # Return database result in legacy format for compatibility
+        return {
+            "broker_token": instrument_data["broker_token"],
+            "broker_symbol": instrument_data["broker_symbol"],
+            "tick_size": instrument_data["tick_size"],
+            "lot_size": instrument_data["lot_size"],
+        }
+
+    @classmethod
+    def resolve_index_instrument(
+        cls, symbol: str, exchange: str, db_path: str = None
+    ) -> dict:
+        """
+        Resolve index instrument using the database system.
+
+        Parameters:
+            symbol (str): Standardized index symbol (e.g., "NIFTY 50", "SENSEX")
+            exchange (str): Exchange code ("NSE" or "BSE")
+            db_path (str): Path to the database file
+
+        Returns:
+            dict: Instrument data with broker-specific token and symbol
+        """
+        service = cls._init_database(db_path)
+
+        # Map exchange string to enum
+        exchange_enum = (
+            Exchange.NSE if exchange.upper() == Exchange.NSE else Exchange.BSE
+        )
+
+        # Resolve as INDEX
+        instrument_data = service.resolve_instrument(
+            standardized_symbol=symbol.upper(),
+            broker_name="angelone",
+            exchange=exchange_enum,
+            category=InstrumentCategory.INDEX,
+        )
+
+        if not instrument_data:
+            raise KeyError(f"Index {symbol} not found in database")
 
         # Return database result in legacy format for compatibility
         return {
@@ -297,7 +348,9 @@ class AngelOne(Broker):
         service = cls._init_database(db_path)
 
         # Map exchange string to enum
-        exchange_enum = Exchange.NSE if exchange.upper() == "NSE" else Exchange.BSE
+        exchange_enum = (
+            Exchange.NSE if exchange.upper() == Exchange.NSE else Exchange.BSE
+        )
 
         # Try to resolve as FUTURES first
         instrument_data = service.resolve_instrument(
@@ -317,14 +370,8 @@ class AngelOne(Broker):
             )
 
         if not instrument_data:
-            # Fallback to legacy system if database lookup fails
-            if not cls.fno_tokens:
-                cls.create_fno_tokens()
-
-            # Legacy F&O resolution logic would go here
-            raise KeyError(
-                f"F&O instrument {symbol} not found in database or legacy system"
-            )
+            # Database lookup failed
+            raise KeyError(f"F&O instrument {symbol} not found in database")
 
         # Return database result in legacy format for compatibility
         return {
@@ -355,7 +402,9 @@ class AngelOne(Broker):
         service = cls._init_database(db_path)
 
         # Map exchange string to enum
-        exchange_enum = Exchange.MCX if exchange.upper() == "MCX" else Exchange.NCDEX
+        exchange_enum = (
+            Exchange.MCX if exchange.upper() == Exchange.MCX else Exchange.NCDEX
+        )
 
         # Resolve instrument using database
         instrument_data = service.resolve_instrument(
@@ -400,7 +449,9 @@ class AngelOne(Broker):
         service = cls._init_database(db_path)
 
         # Map exchange string to enum
-        exchange_enum = Exchange.NSE if exchange.upper() == "NSE" else Exchange.BSE
+        exchange_enum = (
+            Exchange.NSE if exchange.upper() == Exchange.NSE else Exchange.BSE
+        )
 
         # Resolve instrument using database
         instrument_data = service.resolve_instrument(
@@ -455,7 +506,21 @@ class AngelOne(Broker):
         Checks if the cache is still valid (less than one day old).
         """
         cache_time = datetime.fromisoformat(cache_data["timestamp"])
-        return datetime.now() - cache_time < timedelta(days=1)
+        current_time = datetime.now()
+
+        # Handle timezone-aware vs naive datetime comparison
+        if cache_time.tzinfo is not None and current_time.tzinfo is None:
+            # Cache is timezone-aware, current is naive - make current timezone-aware
+            import pytz
+
+            current_time = pytz.timezone("Asia/Kolkata").localize(current_time)
+        elif cache_time.tzinfo is None and current_time.tzinfo is not None:
+            # Cache is naive, current is timezone-aware - make cache timezone-aware
+            import pytz
+
+            cache_time = pytz.timezone("Asia/Kolkata").localize(cache_time)
+
+        return current_time - cache_time < timedelta(days=1)
 
     @classmethod
     def create_eq_tokens(cls) -> dict:
@@ -568,97 +633,6 @@ class AngelOne(Broker):
         cls.indices = indices
 
         return indices
-
-    @classmethod
-    def create_fno_tokens(cls) -> dict:
-        """
-        Downloads Token Data for the FNO Segment for the 3 latest Weekly Expiries.
-        Stores them in the AngelOne.fno_tokens Dictionary.
-
-        Raises:
-            TokenDownloadError: Any Error Occurred is raised through this Error Type.
-        """
-        try:
-            json_list = cls._fetch_tokens()
-            if not json_list:
-                raise TokenDownloadError("No data fetched from AngelOne API.")
-
-            df = pd.DataFrame(json_list)
-            print("Data fetching complete.")
-
-            if "tick_size" not in df.columns:
-                raise TokenDownloadError(
-                    "Required 'tick_size' column not found in fetched data."
-                )
-
-            df.rename(
-                {
-                    "token": "Token",
-                    "name": "Root",
-                    "expiry": "Expiry",
-                    "symbol": "Symbol",
-                    "tick_size": "TickSize",
-                    "lotsize": "LotSize",
-                    "strike": "StrikePrice",
-                    "exch_seg": "Exchange",
-                },
-                axis=1,
-                inplace=True,
-            )
-
-            df_nfo = df[
-                (
-                    (df["Root"] == "BANKNIFTY")
-                    | (df["Root"] == "NIFTY")
-                    | (df["Root"] == "FINNIFTY")
-                    | (df["Root"] == "MIDCPNIFTY")
-                )
-                & (df["Exchange"] == ExchangeCode.NFO)
-                & (df["instrumenttype"] == "OPTIDX")
-            ]
-
-            df_bfo = df[
-                ((df["Root"] == "SENSEX") | (df["Root"] == "BANKEX"))
-                & (df["Exchange"] == ExchangeCode.BFO)
-                & (df["instrumenttype"] == "OPTIDX")
-            ]
-
-            df = cls.concatenate_dataframes([df_nfo, df_bfo])
-
-            df["Option"] = df["Symbol"].str.extract(r"(CE|PE)")
-
-            df["StrikePrice"] = df["StrikePrice"].astype(float)
-            df["StrikePrice"] = (df["StrikePrice"] // 100).astype(str)
-
-            df["TickSize"] = df["TickSize"].astype(float)
-            df["TickSize"] = df["TickSize"] / 100
-
-            df["Token"] = df["Token"].astype(int)
-
-            df = df[
-                [
-                    "Token",
-                    "Symbol",
-                    "Expiry",
-                    "Option",
-                    "StrikePrice",
-                    "LotSize",
-                    "Root",
-                    "TickSize",
-                    "Exchange",
-                ]
-            ]
-
-            df["Expiry"] = cls.pd_datetime(df["Expiry"]).dt.date.astype(str)
-
-            expiry_data = cls.jsonify_expiry(data_frame=df)
-
-            cls.fno_tokens = expiry_data
-
-            return expiry_data
-
-        except Exception as exc:
-            raise TokenDownloadError({"Error": exc.args}) from exc
 
     @classmethod
     def generate_headers(
@@ -945,7 +919,7 @@ class AngelOne(Broker):
         Place an Order.
 
         Parameters:
-            token_dict (dict): a dictionary with details of the Ticker. Obtianed from eq_tokens or fno_tokens.
+            token_dict (dict): a dictionary with details of the Ticker. Obtained from eq_tokens.
             quantity (int): Order quantity.
             side (str): Order Side: BUY, SELL.
             product (str, optional): Order product.
@@ -1050,7 +1024,7 @@ class AngelOne(Broker):
         Place Market Order.
 
         Parameters:
-            token_dict (dict): a dictionary with details of the Ticker. Obtianed from eq_tokens or fno_tokens.
+            token_dict (dict): a dictionary with details of the Ticker. Obtained from eq_tokens.
             quantity (int): Order quantity.
             side (str): Order Side: BUY, SELL.
             unique_id (str): Unique user order_id.
@@ -1133,7 +1107,7 @@ class AngelOne(Broker):
         Place Limit Order.
 
         Parameters:
-            token_dict (dict): a dictionary with details of the Ticker. Obtianed from eq_tokens or fno_tokens.
+            token_dict (dict): a dictionary with details of the Ticker. Obtained from eq_tokens.
             price (float): Order price.
             quantity (int): Order quantity.
             side (str): Order Side: BUY, SELL.
@@ -1220,7 +1194,7 @@ class AngelOne(Broker):
         Place Stoploss Order.
 
         Parameters:
-            token_dict (dict): a dictionary with details of the Ticker. Obtianed from eq_tokens or fno_tokens.
+            token_dict (dict): a dictionary with details of the Ticker. Obtained from eq_tokens.
             price (float): Order price.
             trigger (float): order trigger price.
             quantity (int): Order quantity.
@@ -1307,7 +1281,7 @@ class AngelOne(Broker):
         Place Stoploss-Market Order.
 
         Parameters:
-            token_dict (dict): a dictionary with details of the Ticker. Obtianed from eq_tokens or fno_tokens.
+            token_dict (dict): a dictionary with details of the Ticker. Obtained from eq_tokens.
             trigger (float): order trigger price.
             quantity (int): Order quantity.
             side (str): Order Side: BUY, SELL.
@@ -1773,17 +1747,32 @@ class AngelOne(Broker):
         Returns:
             dict: fenix Unified Order Response.
         """
-        if not cls.fno_tokens:
-            cls.create_fno_tokens()
+        # Use database system for instrument resolution
+        service = cls._init_database()
 
-        detail = cls.fno_tokens[expiry][root][option]
-        detail = detail.get(strike_price, None)
+        # Map exchange string to enum
+        exchange_enum = (
+            Exchange.NSE if exchange.upper() == Exchange.NSE else Exchange.BSE
+        )
 
-        if not detail:
-            raise KeyError(f"StrikePrice: {strike_price} Does not Exist")
+        # Resolve the specific option instrument
+        instrument_data = service.resolve_instrument(
+            standardized_symbol=root.upper(),
+            broker_name="angelone",
+            exchange=exchange_enum,
+            category=InstrumentCategory.OPTIONS,
+            expiry_date=expiry,
+            strike_price=float(strike_price),
+            option_type=option,
+        )
 
-        token = detail["Token"]
-        symbol = detail["Symbol"]
+        if not instrument_data:
+            raise KeyError(
+                f"Option {root} {expiry} {strike_price} {option} not found in database"
+            )
+
+        token = instrument_data["broker_token"]
+        symbol = instrument_data["broker_symbol"]
 
         if not price and trigger:
             order_type = OrderType.SLM
@@ -1868,17 +1857,32 @@ class AngelOne(Broker):
         Returns:
             dict: fenix Unified Order Response.
         """
-        if not cls.fno_tokens:
-            cls.create_fno_tokens()
+        # Use database system for instrument resolution
+        service = cls._init_database()
 
-        detail = cls.fno_tokens[expiry][root][option]
-        detail = detail.get(strike_price, None)
+        # Map exchange string to enum
+        exchange_enum = (
+            Exchange.NSE if exchange.upper() == Exchange.NSE else Exchange.BSE
+        )
 
-        if not detail:
-            raise KeyError(f"StrikePrice: {strike_price} Does not Exist")
+        # Resolve the specific option instrument
+        instrument_data = service.resolve_instrument(
+            standardized_symbol=root.upper(),
+            broker_name="angelone",
+            exchange=exchange_enum,
+            category=InstrumentCategory.OPTIONS,
+            expiry_date=expiry,
+            strike_price=float(strike_price),
+            option_type=option,
+        )
 
-        symbol = detail["Symbol"]
-        token = detail["Token"]
+        if not instrument_data:
+            raise KeyError(
+                f"Option {root} {expiry} {strike_price} {option} not found in database"
+            )
+
+        symbol = instrument_data["broker_symbol"]
+        token = instrument_data["broker_token"]
 
         json_data = {
             "symboltoken": token,
@@ -1946,17 +1950,39 @@ class AngelOne(Broker):
         Returns:
             dict: fenix Unified Order Response.
         """
-        if not cls.fno_tokens:
-            cls.fno_tokens()
+        # Use database system for instrument resolution
+        service = cls._init_database()
 
-        detail = cls.fno_tokens[expiry][root][option]
-        detail = detail.get(strike_price, None)
+        # Map exchange string to enum
+        exchange_enum = (
+            Exchange.NSE if exchange.upper() == Exchange.NSE else Exchange.BSE
+        )
 
-        if not detail:
-            raise KeyError(f"StrikePrice: {strike_price} Does not Exist")
+        # Resolve the specific option instrument
+        instrument_data = service.resolve_instrument(
+            standardized_symbol=root.upper(),
+            broker_name="angelone",
+            exchange=exchange_enum,
+            category=InstrumentCategory.OPTIONS,
+            expiry_date=expiry,
+            strike_price=float(strike_price),
+            option_type=option,
+        )
 
-        symbol = detail["Symbol"]
-        token = detail["Token"]
+        if not instrument_data:
+            raise KeyError(
+                f"Option {root} {expiry} {strike_price} {option} not found in database"
+            )
+
+        detail = {
+            "broker_token": instrument_data["broker_token"],
+            "broker_symbol": instrument_data["broker_symbol"],
+            "tick_size": instrument_data["tick_size"],
+            "lot_size": instrument_data["lot_size"],
+        }
+
+        symbol = detail["broker_symbol"]
+        token = detail["broker_token"]
 
         json_data = {
             "symboltoken": token,
@@ -2026,17 +2052,39 @@ class AngelOne(Broker):
         Returns:
             dict: fenix Unified Order Response.
         """
-        if not cls.fno_tokens:
-            cls.create_fno_tokens()
+        # Use database system for instrument resolution
+        service = cls._init_database()
 
-        detail = cls.fno_tokens[expiry][root][option]
-        detail = detail.get(strike_price, None)
+        # Map exchange string to enum
+        exchange_enum = (
+            Exchange.NSE if exchange.upper() == Exchange.NSE else Exchange.BSE
+        )
 
-        if not detail:
-            raise KeyError(f"StrikePrice: {strike_price} Does not Exist")
+        # Resolve the specific option instrument
+        instrument_data = service.resolve_instrument(
+            standardized_symbol=root.upper(),
+            broker_name="angelone",
+            exchange=exchange_enum,
+            category=InstrumentCategory.OPTIONS,
+            expiry_date=expiry,
+            strike_price=float(strike_price),
+            option_type=option,
+        )
 
-        symbol = detail["Symbol"]
-        token = detail["Token"]
+        if not instrument_data:
+            raise KeyError(
+                f"Option {root} {expiry} {strike_price} {option} not found in database"
+            )
+
+        detail = {
+            "broker_token": instrument_data["broker_token"],
+            "broker_symbol": instrument_data["broker_symbol"],
+            "tick_size": instrument_data["tick_size"],
+            "lot_size": instrument_data["lot_size"],
+        }
+
+        symbol = detail["broker_symbol"]
+        token = detail["broker_token"]
 
         json_data = {
             "symboltoken": token,
@@ -2104,17 +2152,39 @@ class AngelOne(Broker):
         Returns:
             dict: fenix Unified Order Response.
         """
-        if not cls.fno_tokens:
-            cls.create_fno_tokens()
+        # Use database system for instrument resolution
+        service = cls._init_database()
 
-        detail = cls.fno_tokens[expiry][root][option]
-        detail = detail.get(strike_price, None)
+        # Map exchange string to enum
+        exchange_enum = (
+            Exchange.NSE if exchange.upper() == Exchange.NSE else Exchange.BSE
+        )
 
-        if not detail:
-            raise KeyError(f"StrikePrice: {strike_price} Does not Exist")
+        # Resolve the specific option instrument
+        instrument_data = service.resolve_instrument(
+            standardized_symbol=root.upper(),
+            broker_name="angelone",
+            exchange=exchange_enum,
+            category=InstrumentCategory.OPTIONS,
+            expiry_date=expiry,
+            strike_price=float(strike_price),
+            option_type=option,
+        )
 
-        symbol = detail["Symbol"]
-        token = detail["Token"]
+        if not instrument_data:
+            raise KeyError(
+                f"Option {root} {expiry} {strike_price} {option} not found in database"
+            )
+
+        detail = {
+            "broker_token": instrument_data["broker_token"],
+            "broker_symbol": instrument_data["broker_symbol"],
+            "tick_size": instrument_data["tick_size"],
+            "lot_size": instrument_data["lot_size"],
+        }
+
+        symbol = detail["broker_symbol"]
+        token = detail["broker_token"]
 
         json_data = {
             "symboltoken": token,
@@ -2512,6 +2582,10 @@ class AngelOne(Broker):
                 - CandleStick.VOLUME: the trading volume of the candle
                 - CandleStick.OI: set to None by default, but can be set to the open interest of the candle
         """
+        # Handle None or empty candles_list
+        if not candles_list:
+            return []
+
         candle_data = []
         for candle in candles_list:
             parsed_candle = {
@@ -2593,6 +2667,116 @@ class AngelOne(Broker):
         return cls._candlestick_json_parser(candles_list=info["data"])
 
     @classmethod
+    @chunk_date_range(max_days=2)
+    def get_candle_data_futures(
+        cls,
+        symbol: str,
+        exchange: str,
+        interval: str,
+        from_date: datetime,
+        to_date: datetime,
+        headers: dict,
+    ) -> list[dict]:
+        """
+        Fetch Candle Data for Futures.
+        Parameters:
+            symbol (str): symbol
+            exchange (str): exchange to fetch candle data from.
+            interval (str): interval to fetch candle data for.
+            from_date (datetime): from date to fetch candle data for.
+            to_date (datetime): to date to fetch candle data for.
+            headers (dict): request headers.
+        Returns:
+            list[dict]: Unified Candle Data Response.
+        """
+        # Use database system for instrument resolution
+        detail = cls.resolve_fno_instrument(symbol, exchange)
+        token = str(detail["broker_token"])
+        symbol = detail["broker_symbol"]
+
+        # Map NSE/BSE to their F&O exchanges (NFO/BFO)
+        if exchange.upper() == "NSE":
+            exchange = ExchangeCode.NFO
+        elif exchange.upper() == "BSE":
+            exchange = ExchangeCode.BFO
+
+        exchange = cls._key_mapper(cls.req_exchange, exchange, "exchange")
+
+        interval = cls._key_mapper(cls.req_interval, interval, "interval")
+
+        json_data = {
+            "exchange": exchange,
+            "symboltoken": token,
+            "interval": interval,
+            "fromdate": cls.datetime_format(from_date, "%Y-%m-%d %H:%M"),
+            "todate": cls.datetime_format(to_date, "%Y-%m-%d %H:%M"),
+        }
+
+        response = cls.fetch(
+            method="POST",
+            url=cls.urls["candle_data"],
+            json=json_data,
+            headers=headers["headers"],
+        )
+        info = cls._json_parser(response)
+        return cls._candlestick_json_parser(candles_list=info["data"])
+
+    @classmethod
+    @chunk_date_range(max_days=2)
+    def get_candle_data_options(
+        cls,
+        symbol: str,
+        exchange: str,
+        interval: str,
+        from_date: datetime,
+        to_date: datetime,
+        headers: dict,
+    ) -> list[dict]:
+        """
+        Fetch Candle Data for Options.
+        Parameters:
+            symbol (str): symbol
+            exchange (str): exchange to fetch candle data from.
+            interval (str): interval to fetch candle data for.
+            from_date (datetime): from date to fetch candle data for.
+            to_date (datetime): to date to fetch candle data for.
+            headers (dict): request headers.
+        Returns:
+            list[dict]: Unified Candle Data Response.
+        """
+        # Use database system for instrument resolution
+        detail = cls.resolve_fno_instrument(symbol, exchange)
+        token = str(detail["broker_token"])
+        symbol = detail["broker_symbol"]
+
+        # Map NSE/BSE to their F&O exchanges (NFO/BFO)
+        if exchange.upper() == "NSE":
+            exchange = ExchangeCode.NFO
+        elif exchange.upper() == "BSE":
+            exchange = ExchangeCode.BFO
+
+        exchange = cls._key_mapper(cls.req_exchange, exchange, "exchange")
+
+        interval = cls._key_mapper(cls.req_interval, interval, "interval")
+
+        json_data = {
+            "exchange": exchange,
+            "symboltoken": token,
+            "interval": interval,
+            "fromdate": cls.datetime_format(from_date, "%Y-%m-%d %H:%M"),
+            "todate": cls.datetime_format(to_date, "%Y-%m-%d %H:%M"),
+        }
+
+        response = cls.fetch(
+            method="POST",
+            url=cls.urls["candle_data"],
+            json=json_data,
+            headers=headers["headers"],
+        )
+        info = cls._json_parser(response)
+        return cls._candlestick_json_parser(candles_list=info["data"])
+
+    @classmethod
     def get_candle_data(
         cls,
         segment: Segment,
@@ -2605,6 +2789,24 @@ class AngelOne(Broker):
     ):
         if segment == Segment.EQ:
             return cls.get_candle_data_eq(
+                symbol=symbol,
+                exchange=exchange,
+                interval=interval,
+                from_date=from_date,
+                to_date=to_date,
+                headers=headers,
+            )
+        elif segment == Segment.FUT:
+            return cls.get_candle_data_futures(
+                symbol=symbol,
+                exchange=exchange,
+                interval=interval,
+                from_date=from_date,
+                to_date=to_date,
+                headers=headers,
+            )
+        elif segment == Segment.OPT:
+            return cls.get_candle_data_options(
                 symbol=symbol,
                 exchange=exchange,
                 interval=interval,

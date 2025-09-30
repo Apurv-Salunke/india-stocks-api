@@ -168,6 +168,7 @@ class InstrumentCategory:
     EQUITY = "EQ"  # Equity stocks
     FUTURES = "FUT"  # Futures contracts
     OPTIONS = "OPT"  # Options contracts
+    INDEX = "INDEX"  # Market indices
     COMMODITY = "COM"  # Commodity instruments
     CURRENCY = "CUR"  # Currency instruments
     DEBT = "DEBT"  # Debt instruments

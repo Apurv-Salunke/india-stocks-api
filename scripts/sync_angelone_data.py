@@ -24,7 +24,7 @@ def sync_angelone_data(db_path: str = "instruments.db", instrument_types: list =
     """Sync AngelOne data to the instrument database"""
 
     if instrument_types is None:
-        instrument_types = ["equity", "fno", "commodity", "currency"]
+        instrument_types = ["equity", "fno", "commodity", "currency", "index"]
 
     logger.info(f"Starting AngelOne data sync to database: {db_path}")
     logger.info(f"Instrument types to sync: {instrument_types}")
@@ -72,6 +72,11 @@ def sync_angelone_data(db_path: str = "instruments.db", instrument_types: list =
             logger.info("Syncing currency instruments...")
             results["currency"] = provider.sync_currency_instruments()
             logger.info(f"Synced {results['currency']} currency instruments")
+
+        if "index" in instrument_types:
+            logger.info("Syncing index instruments...")
+            results["index"] = provider.sync_index_instruments()
+            logger.info(f"Synced {results['index']} index instruments")
 
         # Get final database stats
         final_stats = instrument_service.get_database_stats()
@@ -164,8 +169,8 @@ def main():
     parser.add_argument(
         "--types",
         nargs="+",
-        choices=["equity", "fno", "commodity", "currency"],
-        default=["equity", "fno", "commodity", "currency"],
+        choices=["equity", "fno", "commodity", "currency", "index"],
+        default=["equity", "fno", "commodity", "currency", "index"],
         help="Instrument types to sync (default: all)",
     )
 

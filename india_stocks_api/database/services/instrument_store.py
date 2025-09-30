@@ -467,6 +467,95 @@ class InstrumentStore:
                 self.logger.error(f"Error in bulk currency upsert: {e}")
                 return 0
 
+    def upsert_indices(self, rows: List[Dict[str, Any]]) -> int:
+        """Bulk upsert index instruments"""
+        if not rows:
+            return 0
+
+        with self._db_lock:
+            try:
+                with self._connect() as conn:
+                    conn.execute("BEGIN IMMEDIATE TRANSACTION")
+
+                    # Pre-fetch exchange and category IDs
+                    exchange_ids = {}
+                    for item in rows:
+                        exchange_code = item["exchange_code"]
+                        if exchange_code not in exchange_ids:
+                            exchange_ids[exchange_code] = DatabaseUtils.get_exchange_id(
+                                exchange_code, str(self.db_path)
+                            )
+
+                    category_id = DatabaseUtils.get_category_id(
+                        "INDEX", str(self.db_path)
+                    )
+
+                    if not category_id:
+                        self.logger.error("INDEX category not found in database")
+                        return 0
+
+                    # Bulk insert instruments
+                    instrument_sql = """
+                    INSERT OR IGNORE INTO instruments
+                    (standardized_symbol, instrument_name, exchange_id, category_id,
+                     is_active, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    """
+
+                    instrument_data = []
+                    for item in rows:
+                        exchange_id = exchange_ids.get(item["exchange_code"])
+
+                        if not category_id or not exchange_id:
+                            continue
+
+                        instrument_data.append(
+                            (
+                                item["standardized_symbol"],
+                                item["instrument_name"],
+                                exchange_id,
+                                category_id,
+                            )
+                        )
+
+                    if instrument_data:
+                        # Insert instruments one by one to get IDs
+                        instrument_ids = []
+                        for item_data in instrument_data:
+                            cursor = conn.execute(instrument_sql, item_data)
+                            instrument_ids.append(cursor.lastrowid)
+
+                        # Bulk insert broker instruments
+                        broker_sql = """
+                        INSERT OR REPLACE INTO broker_instruments
+                        (instrument_id, broker_name, broker_symbol, broker_token, tick_size, lot_size,
+                         created_at, updated_at)
+                        VALUES (?, 'angelone', ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                        """
+
+                        broker_data = []
+                        for i, item in enumerate(rows):
+                            if i < len(instrument_ids):
+                                broker_data.append(
+                                    (
+                                        instrument_ids[i],
+                                        item["broker_symbol"],
+                                        item["broker_token"],
+                                        item.get("tick_size", 0.05),
+                                        item.get("lot_size", 1),
+                                    )
+                                )
+
+                        if broker_data:
+                            conn.executemany(broker_sql, broker_data)
+
+                    conn.commit()
+                    return len(instrument_data)
+
+            except Exception as e:
+                self.logger.error(f"Error in bulk index upsert: {e}")
+                return 0
+
     def resolve_instrument(
         self,
         standardized_symbol: str,

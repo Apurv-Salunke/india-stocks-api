@@ -45,7 +45,11 @@ def chunk_date_range(max_days: int = 5):
                     **kwargs,
                 )
                 all_candles.extend(candles)
-                current_start = current_end + timedelta(minutes=1)  # Avoid overlap
+                # Avoid overlap - handle timezone-aware datetimes
+                if current_end.tzinfo is not None:
+                    current_start = current_end + timedelta(minutes=1)
+                else:
+                    current_start = current_end + timedelta(minutes=1)
 
             return all_candles
 

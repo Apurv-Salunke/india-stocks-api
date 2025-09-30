@@ -111,6 +111,15 @@ class BaseProvider(ABC):
             self.logger.error(f"Error syncing currency instruments: {e}")
             return 0
 
+    def sync_index_instruments(self) -> int:
+        """Sync index instruments (default implementation)"""
+        try:
+            index_data = self.fetch_index_data()
+            return self._store_index_data(index_data)
+        except Exception as e:
+            self.logger.error(f"Error syncing index instruments: {e}")
+            return 0
+
     def _store_equity_data(self, equity_data: List[Dict[str, Any]]) -> int:
         """Store equity data in database using InstrumentStore"""
         if len(equity_data) == 0:
@@ -174,6 +183,22 @@ class BaseProvider(ABC):
             return total_stored
         except Exception as e:
             self.logger.error(f"Error storing currency data: {e}")
+            return 0
+
+    def _store_index_data(self, index_data: List[Dict[str, Any]]) -> int:
+        """Store index data in database using InstrumentStore"""
+        if len(index_data) == 0:
+            print("ℹ️  No index instruments to store")
+            return 0
+
+        print(f"💾 Storing {len(index_data):,} index instruments...")
+
+        try:
+            total_stored = self._instrument_store.upsert_indices(index_data)
+            print(f"✅ Stored {total_stored:,} index instruments successfully")
+            return total_stored
+        except Exception as e:
+            self.logger.error(f"Error storing index data: {e}")
             return 0
 
     # Cache management methods

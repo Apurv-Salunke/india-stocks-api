@@ -223,6 +223,50 @@ class AngelOneTokensManager(BaseProvider):
             self.logger.error(f"Error fetching currency data: {e}")
             return []
 
+    def fetch_index_data(self, force_refresh: bool = False) -> List[Dict[str, Any]]:
+        """Fetch index instruments data from AngelOne"""
+        print("🔍 Fetching index instruments from AngelOne...")
+
+        try:
+            raw_data = self._fetch_market_data(force_refresh=force_refresh)
+
+            index_data = []
+            with tqdm(
+                total=len(raw_data),
+                desc="📊 Processing index instruments",
+                unit="instr",
+                ncols=80,
+                bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
+            ) as pbar:
+                for item in raw_data:
+                    if self._is_index_instrument(item):
+                        # Indices use their 'name' field as the standardized symbol
+                        standardized_symbol = item.get("name", "").upper()
+                        mapped_exchange = self._map_segment_to_exchange(
+                            item["exch_seg"]
+                        )
+                        index_info = {
+                            "standardized_symbol": standardized_symbol,
+                            "instrument_name": item.get("name", ""),
+                            "exchange_code": mapped_exchange,
+                            "broker_symbol": item.get("name", ""),
+                            "broker_token": str(item["token"]),
+                            "tick_size": float(
+                                item.get("tick_size", 0.05)
+                            ),  # Default for indices
+                            "lot_size": 1,  # Indices have lot size 1
+                            "instrument_type": item.get("instrumenttype", ""),
+                        }
+                        index_data.append(index_info)
+                    pbar.update(1)
+
+            print(f"✅ Found {len(index_data):,} index instruments")
+            return index_data
+
+        except Exception as e:
+            self.logger.error(f"Error fetching index data: {e}")
+            return []
+
     def _fetch_market_data(self, force_refresh: bool = False) -> List[Dict[str, Any]]:
         """Fetch raw market data from AngelOne API"""
         # Check cache first (unless force refresh is requested)
@@ -320,6 +364,22 @@ class AngelOneTokensManager(BaseProvider):
             # Currency futures and options
             if instrument_type in ["FUTCUR", "OPTCUR"]:
                 return True
+
+        return False
+
+    def _is_index_instrument(self, item: Dict[str, Any]) -> bool:
+        """Check if item is an index instrument"""
+        exchange = item.get("exch_seg", "")
+        instrument_type = item.get("instrumenttype", "")
+
+        # Index instruments have AMXIDX or similar types
+        if instrument_type == "AMXIDX":
+            return True
+
+        # Some indices might be in NSE/BSE with token starting with 999
+        token = str(item.get("token", ""))
+        if exchange in ["NSE", "BSE"] and token.startswith("999"):
+            return True
 
         return False
 

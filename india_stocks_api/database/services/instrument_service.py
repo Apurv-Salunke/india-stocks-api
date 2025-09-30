@@ -168,7 +168,7 @@ class InstrumentService:
                 AND bi.is_tradeable = 1
             """
 
-            params = [standardized_symbol, broker_name, exchange.value, category.value]
+            params = [standardized_symbol, broker_name, exchange, category]
 
             # Add derivative-specific filters
             if expiry_date:
@@ -218,11 +218,11 @@ class InstrumentService:
 
             if exchange:
                 search_query += " AND e.exchange_code = ?"
-                params.append(exchange.value)
+                params.append(exchange)
 
             if category:
                 search_query += " AND ic.category_code = ?"
-                params.append(category.value)
+                params.append(category)
 
             search_query += " ORDER BY i.standardized_symbol LIMIT ?"
             params.append(limit)
@@ -280,7 +280,7 @@ class InstrumentService:
                 AND bi.is_tradeable = 1
                 ORDER BY i.standardized_symbol
             """,
-                (commodity_type, broker_name, exchange.value),
+                (commodity_type, broker_name, exchange),
             )
 
             return [dict(row) for row in cursor.fetchall()]
