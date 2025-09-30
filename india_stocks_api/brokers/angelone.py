@@ -248,9 +248,11 @@ class AngelOne(Broker):
         service = cls._init_database(db_path)
 
         # Map exchange string to enum
-        exchange_enum = (
-            Exchange.NSE if exchange.upper() == Exchange.NSE else Exchange.BSE
-        )
+        exchange_map = {
+            "NSE": Exchange.NSE,
+            "BSE": Exchange.BSE,
+        }
+        exchange_enum = exchange_map.get(exchange.upper(), Exchange.NSE)
 
         # Resolve instrument using database - try EQUITY first
         instrument_data = service.resolve_instrument(
@@ -310,9 +312,11 @@ class AngelOne(Broker):
         service = cls._init_database(db_path)
 
         # Map exchange string to enum
-        exchange_enum = (
-            Exchange.NSE if exchange.upper() == Exchange.NSE else Exchange.BSE
-        )
+        exchange_map = {
+            "NSE": Exchange.NSE,
+            "BSE": Exchange.BSE,
+        }
+        exchange_enum = exchange_map.get(exchange.upper(), Exchange.NSE)
 
         # Resolve as INDEX
         instrument_data = service.resolve_instrument(
@@ -467,9 +471,11 @@ class AngelOne(Broker):
         service = cls._init_database(db_path)
 
         # Map exchange string to enum
-        exchange_enum = (
-            Exchange.NSE if exchange.upper() == Exchange.NSE else Exchange.BSE
-        )
+        exchange_map = {
+            "NSE": Exchange.NSE,
+            "BSE": Exchange.BSE,
+        }
+        exchange_enum = exchange_map.get(exchange.upper(), Exchange.NSE)
 
         # Resolve instrument using database
         instrument_data = service.resolve_instrument(
@@ -1769,9 +1775,11 @@ class AngelOne(Broker):
         service = cls._init_database()
 
         # Map exchange string to enum
-        exchange_enum = (
-            Exchange.NSE if exchange.upper() == Exchange.NSE else Exchange.BSE
-        )
+        exchange_map = {
+            "NSE": Exchange.NSE,
+            "BSE": Exchange.BSE,
+        }
+        exchange_enum = exchange_map.get(exchange.upper(), Exchange.NSE)
 
         # Resolve the specific option instrument
         instrument_data = service.resolve_instrument(
@@ -1879,9 +1887,11 @@ class AngelOne(Broker):
         service = cls._init_database()
 
         # Map exchange string to enum
-        exchange_enum = (
-            Exchange.NSE if exchange.upper() == Exchange.NSE else Exchange.BSE
-        )
+        exchange_map = {
+            "NSE": Exchange.NSE,
+            "BSE": Exchange.BSE,
+        }
+        exchange_enum = exchange_map.get(exchange.upper(), Exchange.NSE)
 
         # Resolve the specific option instrument
         instrument_data = service.resolve_instrument(
@@ -1972,9 +1982,11 @@ class AngelOne(Broker):
         service = cls._init_database()
 
         # Map exchange string to enum
-        exchange_enum = (
-            Exchange.NSE if exchange.upper() == Exchange.NSE else Exchange.BSE
-        )
+        exchange_map = {
+            "NSE": Exchange.NSE,
+            "BSE": Exchange.BSE,
+        }
+        exchange_enum = exchange_map.get(exchange.upper(), Exchange.NSE)
 
         # Resolve the specific option instrument
         instrument_data = service.resolve_instrument(
@@ -2074,9 +2086,11 @@ class AngelOne(Broker):
         service = cls._init_database()
 
         # Map exchange string to enum
-        exchange_enum = (
-            Exchange.NSE if exchange.upper() == Exchange.NSE else Exchange.BSE
-        )
+        exchange_map = {
+            "NSE": Exchange.NSE,
+            "BSE": Exchange.BSE,
+        }
+        exchange_enum = exchange_map.get(exchange.upper(), Exchange.NSE)
 
         # Resolve the specific option instrument
         instrument_data = service.resolve_instrument(
@@ -2174,9 +2188,11 @@ class AngelOne(Broker):
         service = cls._init_database()
 
         # Map exchange string to enum
-        exchange_enum = (
-            Exchange.NSE if exchange.upper() == Exchange.NSE else Exchange.BSE
-        )
+        exchange_map = {
+            "NSE": Exchange.NSE,
+            "BSE": Exchange.BSE,
+        }
+        exchange_enum = exchange_map.get(exchange.upper(), Exchange.NSE)
 
         # Resolve the specific option instrument
         instrument_data = service.resolve_instrument(
