@@ -107,19 +107,111 @@ zerodha.login(
 ### Fetch Candles (OHLCV Data)
 
 ```python
-# Get 1-minute candles for RELIANCE
-candles = angelone.get_candles(
+from india_stocks_api.brokers.angelone import AngelOne
+from india_stocks_api.brokers.base.constants import Segment
+from datetime import datetime, timedelta
+import pytz
+
+# Initialize broker
+angelone = AngelOne()
+headers = angelone.generate_headers({
+    "user_id": "YOUR_CLIENT_ID",
+    "pin": "YOUR_PIN",
+    "totpstr": "YOUR_TOTP_SECRET",
+    "api_key": "YOUR_API_KEY"
+})
+
+# Setup timezone and dates
+ist = pytz.timezone('Asia/Kolkata')
+from_date = ist.localize(datetime.now() - timedelta(days=5))
+to_date = ist.localize(datetime.now())
+
+# 1. Equity Candles - Use standard symbols
+candles = angelone.get_candle_data(
+    segment=Segment.EQ,
     symbol="RELIANCE",
     exchange="NSE",
-    interval="1minute",
-    from_date="2024-01-01",
-    to_date="2024-01-31"
+    interval="1m",  # 1m, 3m, 5m, 10m, 15m, 30m, 1h, 1d
+    from_date=from_date,
+    to_date=to_date,
+    headers=headers
 )
 
-print(f"Got {len(candles)} candles")
+print(f"Got {len(candles)} candles for RELIANCE")
 for candle in candles[-5:]:  # Last 5 candles
-    print(f"Date: {candle['date']}, Open: {candle['open']}, High: {candle['high']}, Low: {candle['low']}, Close: {candle['close']}, Volume: {candle['volume']}")
+    print(f"{candle['datetime']}: O={candle['open']}, H={candle['high']}, "
+          f"L={candle['low']}, C={candle['close']}, V={candle['volume']:,}")
+
+# 2. Index Candles - Track market indices
+nifty_candles = angelone.get_candle_data(
+    segment=Segment.EQ,
+    symbol="NIFTY",  # Use short form: NIFTY, BANKNIFTY, SENSEX
+    exchange="NSE",
+    interval="1d",
+    from_date=from_date,
+    to_date=to_date,
+    headers=headers
+)
+
+# 3. Futures Candles - Full contract name required
+futures_candles = angelone.get_candle_data(
+    segment=Segment.FUT,
+    symbol="NIFTY28OCT25FUT",  # Full contract name with expiry
+    exchange="NSE",
+    interval="1h",
+    from_date=from_date,
+    to_date=to_date,
+    headers=headers
+)
+
+# 4. Commodity Candles - Gold, Silver, Crude Oil, etc.
+commodity_candles = angelone.get_candle_data(
+    segment=Segment.FUT,
+    symbol="SILVERM28NOV25FUT",  # Silver Mini contract
+    exchange="MCX",
+    interval="1d",
+    from_date=from_date,
+    to_date=to_date,
+    headers=headers
+)
+print(f"Silver: Rs.{commodity_candles[-1]['close']:,.2f}/kg")
+
+# 5. Direct Method Calls
+equity_candles = angelone.get_candle_data_eq(
+    symbol="TCS",
+    exchange="NSE",
+    interval="5m",
+    from_date=from_date,
+    to_date=to_date,
+    headers=headers
+)
+
+fno_candles = angelone.get_candle_data_futures(
+    symbol="BANKNIFTY28OCT25FUT",
+    exchange="NSE",
+    interval="15m",
+    from_date=from_date,
+    to_date=to_date,
+    headers=headers
+)
 ```
+
+**Available Intervals:**
+- `"1m"` - 1 minute
+- `"3m"` - 3 minutes
+- `"5m"` - 5 minutes
+- `"10m"` - 10 minutes
+- `"15m"` - 15 minutes
+- `"30m"` - 30 minutes
+- `"1h"` - 1 hour
+- `"1d"` - 1 day
+
+**Supported Instruments:**
+- **Equity**: 14,664 stocks (RELIANCE, TCS, INFY, etc.)
+- **Indices**: 121 indices (NIFTY, BANKNIFTY, SENSEX, FINNIFTY, etc.)
+- **Futures**: 1,292 contracts (equity & index futures)
+- **Options**: 65,304 contracts (all strikes and expiries)
+- **Commodities**: 222 contracts (SILVERM, GOLDGUINEA, etc.)
 
 ### Place Orders
 
@@ -191,40 +283,106 @@ print(f"Total P&L: {pnl['total_pnl']}")
 ### Futures & Options Trading
 
 ```python
-# Buy BANKNIFTY future
-fno_order = angelone.place_order(
-    symbol="BANKNIFTY28OCT25FUT",
+from india_stocks_api.brokers.angelone import AngelOne
+from india_stocks_api.brokers.base.constants import Segment
+from datetime import datetime, timedelta
+import pytz
+
+angelone = AngelOne()
+headers = angelone.generate_headers({...})
+
+ist = pytz.timezone('Asia/Kolkata')
+from_date = ist.localize(datetime.now() - timedelta(days=5))
+to_date = ist.localize(datetime.now())
+
+# Futures Candles - Index Futures
+nifty_futures = angelone.get_candle_data(
+    segment=Segment.FUT,
+    symbol="NIFTY28OCT25FUT",  # Full contract name required
     exchange="NSE",
-    transaction_type="BUY",
-    quantity=25,  # Lot size
-    order_type="MARKET",
-    product="MIS"
+    interval="5m",
+    from_date=from_date,
+    to_date=to_date,
+    headers=headers
 )
 
-# Buy BANKNIFTY option
-option_order = angelone.place_order(
-    symbol="BANKNIFTY28OCT2545000CE",
+# Futures Candles - Stock Futures
+reliance_futures = angelone.get_candle_data(
+    segment=Segment.FUT,
+    symbol="RELIANCE28NOV25FUT",
     exchange="NSE",
-    transaction_type="BUY",
-    quantity=25,
-    order_type="LIMIT",
-    price=150.00,
-    product="MIS"
+    interval="15m",
+    from_date=from_date,
+    to_date=to_date,
+    headers=headers
+)
+
+# Options Candles - Requires full contract name
+option_candles = angelone.get_candle_data(
+    segment=Segment.OPT,
+    symbol="BANKNIFTY28OCT2554000CE",  # Full option contract name
+    exchange="NSE",
+    interval="1h",
+    from_date=from_date,
+    to_date=to_date,
+    headers=headers
 )
 ```
 
 ### Commodity Trading
 
 ```python
-# Buy GOLD commodity
-gold_order = angelone.place_order(
-    symbol="GOLD",
+# Commodity Candles - Gold, Silver, Crude Oil
+gold_candles = angelone.get_candle_data(
+    segment=Segment.FUT,
+    symbol="GOLDGUINEA30SEP25FUT",
     exchange="MCX",
-    transaction_type="BUY",
-    quantity=1,  # 1 kg
-    order_type="MARKET",
-    product="INTRADAY"
+    interval="1h",
+    from_date=from_date,
+    to_date=to_date,
+    headers=headers
 )
+
+silver_candles = angelone.get_candle_data(
+    segment=Segment.FUT,
+    symbol="SILVERM28NOV25FUT",
+    exchange="MCX",
+    interval="1d",
+    from_date=from_date,
+    to_date=to_date,
+    headers=headers
+)
+
+print(f"Silver closing price: Rs.{silver_candles[-1]['close']:,.2f}/kg")
+print(f"Gold closing price: Rs.{gold_candles[-1]['close']:,.2f}")
+```
+
+### Index Candles
+
+```python
+# Major Indices - Use short symbol names
+indices = {
+    'NIFTY': 'NSE',
+    'BANKNIFTY': 'NSE',
+    'FINNIFTY': 'NSE',
+    'MIDCPNIFTY': 'NSE',
+    'SENSEX': 'BSE',
+}
+
+for index_symbol, exchange in indices.items():
+    candles = angelone.get_candle_data(
+        segment=Segment.EQ,  # Indices use EQ segment
+        symbol=index_symbol,
+        exchange=exchange,
+        interval="1d",
+        from_date=from_date,
+        to_date=to_date,
+        headers=headers
+    )
+    if candles:
+        change = candles[-1]['close'] - candles[0]['open']
+        change_pct = (change / candles[0]['open']) * 100
+        print(f"{index_symbol:15}: {change:+,.2f} ({change_pct:+.2f}%)")
 ```
 
 ### Algorithmic Trading Example

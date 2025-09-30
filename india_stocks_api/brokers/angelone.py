@@ -81,7 +81,10 @@ class AngelOne(Broker):
         ExchangeCode.NSE: "NSE",
         ExchangeCode.BSE: "BSE",
         ExchangeCode.NFO: "NFO",
+        ExchangeCode.BFO: "BFO",
         ExchangeCode.MCX: "MCX",
+        ExchangeCode.NCDEX: "NCDEX",
+        ExchangeCode.ICEX: "ICEX",
     }
 
     req_side = {
@@ -336,10 +339,11 @@ class AngelOne(Broker):
     ) -> dict:
         """
         Resolve F&O instrument using the new database system.
+        Supports equity derivatives (NSE/BSE) and commodities (MCX/NCDEX).
 
         Parameters:
             symbol (str): Standardized F&O symbol
-            exchange (str): Exchange code ("NSE" or "BSE")
+            exchange (str): Exchange code ("NSE", "BSE", "MCX", "NCDEX")
             db_path (str): Path to the database file
 
         Returns:
@@ -348,9 +352,14 @@ class AngelOne(Broker):
         service = cls._init_database(db_path)
 
         # Map exchange string to enum
-        exchange_enum = (
-            Exchange.NSE if exchange.upper() == Exchange.NSE else Exchange.BSE
-        )
+        exchange_map = {
+            "NSE": Exchange.NSE,
+            "BSE": Exchange.BSE,
+            "MCX": Exchange.MCX,
+            "NCDEX": Exchange.NCDEX,
+            "ICEX": Exchange.ICEX,
+        }
+        exchange_enum = exchange_map.get(exchange.upper(), exchange.upper())
 
         # Try to resolve as FUTURES first
         instrument_data = service.resolve_instrument(
@@ -369,9 +378,18 @@ class AngelOne(Broker):
                 category=InstrumentCategory.OPTIONS,
             )
 
+        # If still not found and it's a commodity exchange, try COMMODITY category
+        if not instrument_data and exchange.upper() in ["MCX", "NCDEX", "ICEX"]:
+            instrument_data = service.resolve_instrument(
+                standardized_symbol=symbol.upper(),
+                broker_name="angelone",
+                exchange=exchange_enum,
+                category=InstrumentCategory.COMMODITY,
+            )
+
         if not instrument_data:
             # Database lookup failed
-            raise KeyError(f"F&O instrument {symbol} not found in database")
+            raise KeyError(f"F&O/Commodity instrument {symbol} not found in database")
 
         # Return database result in legacy format for compatibility
         return {
@@ -2694,11 +2712,17 @@ class AngelOne(Broker):
         token = str(detail["broker_token"])
         symbol = detail["broker_symbol"]
 
-        # Map NSE/BSE to their F&O exchanges (NFO/BFO)
-        if exchange.upper() == "NSE":
+        # Map NSE/BSE to their F&O exchanges (NFO/BFO), keep commodity exchanges as-is
+        if exchange.upper() == Exchange.NSE:
             exchange = ExchangeCode.NFO
-        elif exchange.upper() == "BSE":
+        elif exchange.upper() == Exchange.BSE:
             exchange = ExchangeCode.BFO
+        elif exchange.upper() == Exchange.MCX:
+            exchange = ExchangeCode.MCX
+        elif exchange.upper() == Exchange.NCDEX:
+            exchange = ExchangeCode.NCDEX
+        elif exchange.upper() == Exchange.ICEX:
+            exchange = ExchangeCode.ICEX
 
         exchange = cls._key_mapper(cls.req_exchange, exchange, "exchange")
 
@@ -2749,11 +2773,17 @@ class AngelOne(Broker):
         token = str(detail["broker_token"])
         symbol = detail["broker_symbol"]
 
-        # Map NSE/BSE to their F&O exchanges (NFO/BFO)
-        if exchange.upper() == "NSE":
+        # Map NSE/BSE to their F&O exchanges (NFO/BFO), keep commodity exchanges as-is
+        if exchange.upper() == Exchange.NSE:
             exchange = ExchangeCode.NFO
-        elif exchange.upper() == "BSE":
+        elif exchange.upper() == Exchange.BSE:
             exchange = ExchangeCode.BFO
+        elif exchange.upper() == Exchange.MCX:
+            exchange = ExchangeCode.MCX
+        elif exchange.upper() == Exchange.NCDEX:
+            exchange = ExchangeCode.NCDEX
+        elif exchange.upper() == Exchange.ICEX:
+            exchange = ExchangeCode.ICEX
 
         exchange = cls._key_mapper(cls.req_exchange, exchange, "exchange")
 

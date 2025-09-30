@@ -141,7 +141,9 @@ class ExchangeCode:
     NCO = "NCO"  # NSE Commodities
     BCO = "BCO"  # BSE Commodities
     BCD = "BCD"  # BSE Currency Derivatives
-    MCX = "MCX"  # Multi Commodity Exchange F&O
+    MCX = "MCX"  # Multi Commodity Exchange
+    NCDEX = "NCDEX"  # National Commodity & Derivatives Exchange
+    ICEX = "ICEX"  # Indian Commodity Exchange
     CDS = "CDS"  # Currency Derivatives Segment
 
 
