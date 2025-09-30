@@ -36,6 +36,9 @@ class InstrumentService:
             if not self.db_path.exists():
                 self.logger.info("Creating new database...")
                 migration_manager.create_database()
+
+                # Auto-populate with AngelOne data on first creation
+                self._auto_populate_data()
             else:
                 self.logger.info("Running pending migrations...")
                 migration_manager.run_all_migrations()
@@ -43,6 +46,40 @@ class InstrumentService:
         except Exception as e:
             self.logger.error(f"Error initializing database: {e}")
             raise
+
+    def _auto_populate_data(self):
+        """Auto-populate database with AngelOne data on first creation"""
+        try:
+            print("🚀 Auto-populating database with AngelOne instrument data...")
+            print("⏳ This may take a few minutes for the first time...")
+
+            from ..providers.angelone_provider import AngelOneProvider
+
+            # Initialize AngelOne provider with this service instance
+            provider = AngelOneProvider(symbol_db=self, max_workers=8)
+
+            # Fetch and store equity data (most commonly used)
+            equity_data = provider.fetch_equity_data()
+            if equity_data:
+                stored_count = provider._store_equity_data(equity_data)
+                print(f"✅ Auto-populated {stored_count:,} equity instruments")
+
+            # Optionally fetch F&O data (can be slow, so make it optional)
+            try:
+                fno_data = provider.fetch_fno_data()
+                if fno_data:
+                    stored_count = provider._store_fno_data(fno_data)
+                    print(f"✅ Auto-populated {stored_count:,} F&O instruments")
+            except Exception as e:
+                print(f"⚠️  F&O data population skipped: {e}")
+                print("💡 You can manually sync F&O data later if needed")
+
+            print("🎉 Database auto-population completed!")
+
+        except Exception as e:
+            print(f"⚠️  Auto-population failed: {e}")
+            print("💡 You can manually sync data later using sync scripts")
+            # Don't raise the error - let the database work without data
 
     def resolve_instrument(
         self,
