@@ -30,9 +30,13 @@ def sync_angelone_data(db_path: str = "instruments.db", instrument_types: list =
     logger.info(f"Instrument types to sync: {instrument_types}")
 
     try:
-        # Initialize instrument service
+        # Initialize instrument service (uses cache directory by default)
         logger.info("Initializing instrument service...")
-        instrument_service = InstrumentService(db_path)
+        if db_path == "instruments.db":
+            # Use default cache directory if default path is specified
+            instrument_service = InstrumentService()
+        else:
+            instrument_service = InstrumentService(db_path)
 
         # Initialize AngelOne provider with more threads for F&O processing
         logger.info("Initializing AngelOne provider...")

@@ -28,6 +28,7 @@ from india_stocks_api.brokers.base.errors import TokenDownloadError
 from india_stocks_api.brokers.base.errors import InputError
 from india_stocks_api.utils import chunk_date_range
 from india_stocks_api.database import InstrumentService, Exchange, InstrumentCategory
+from india_stocks_api.utils.cache_utils import get_cache_file_path
 
 
 class AngelOne(Broker):
@@ -49,7 +50,7 @@ class AngelOne(Broker):
     ]
     id = "angelone"
     # Cache File for storing tokens master data
-    _CACHE_FILE = "_cache/angelone_tokens_cache.json"
+    _CACHE_FILE = get_cache_file_path("angelone_tokens_cache.json")
     # Database integration
     _instrument_service = None
     # Base URLs
@@ -206,23 +207,26 @@ class AngelOne(Broker):
         return data
 
     @classmethod
-    def _init_database(cls, db_path: str = "instruments.db") -> InstrumentService:
+    def _init_database(cls, db_path: str = None) -> InstrumentService:
         """
-        Initialize the instrument database service.
+        Initialize the instrument database service with lazy loading.
 
         Parameters:
-            db_path (str): Path to the SQLite database file
+            db_path (str, optional): Path to the SQLite database file.
+                                   Uses cache directory if None.
 
         Returns:
             InstrumentService: Initialized database service
         """
         if cls._instrument_service is None:
+            print("🔧 Initializing instrument database (first time setup)...")
             cls._instrument_service = InstrumentService(db_path)
+            print("✅ Instrument database initialized successfully")
         return cls._instrument_service
 
     @classmethod
     def resolve_equity_instrument(
-        cls, symbol: str, exchange: str, db_path: str = "instruments.db"
+        cls, symbol: str, exchange: str, db_path: str = None
     ) -> dict:
         """
         Resolve equity instrument using the new database system.
@@ -276,7 +280,7 @@ class AngelOne(Broker):
 
     @classmethod
     def resolve_fno_instrument(
-        cls, symbol: str, exchange: str, db_path: str = "instruments.db"
+        cls, symbol: str, exchange: str, db_path: str = None
     ) -> dict:
         """
         Resolve F&O instrument using the new database system.

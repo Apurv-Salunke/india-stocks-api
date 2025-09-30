@@ -9,6 +9,7 @@ import logging
 
 from ..models.enums import Exchange, InstrumentCategory
 from ..migrations import MigrationManager
+from ...utils.cache_utils import get_database_path
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +17,11 @@ logger = logging.getLogger(__name__)
 class InstrumentService:
     """Main service for instrument database operations"""
 
-    def __init__(self, db_path: str = "instruments.db"):
+    def __init__(self, db_path: Optional[str] = None):
+        # Use default cache database path if not specified
+        if db_path is None:
+            db_path = get_database_path()
+
         self.db_path = Path(db_path)
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 

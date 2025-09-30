@@ -10,10 +10,12 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 
 import requests
+from tqdm import tqdm
 
 from .base_provider import BaseProvider
 from ..models.enums import OptionType
 from ..utils.db_utils import DatabaseUtils
+from ...utils.cache_utils import get_cache_file_path
 
 
 class AngelOneProvider(BaseProvider):
@@ -26,7 +28,7 @@ class AngelOneProvider(BaseProvider):
         self.base_urls = {
             "market_data": "https://margincalculator.angelbroking.com/OpenAPI_File/files/OpenAPIScripMaster.json"
         }
-        self.cache_file = "_cache/angelone_tokens_cache.json"
+        self.cache_file = get_cache_file_path("angelone_tokens_cache.json")
         self.cache_validity_hours = 24
         self.max_workers = max_workers
 
@@ -52,36 +54,46 @@ class AngelOneProvider(BaseProvider):
 
     def fetch_equity_data(self) -> List[Dict[str, Any]]:
         """Fetch equity instruments data from AngelOne"""
-        self.logger.info("Fetching equity data from AngelOne...")
+        print("🔍 Fetching equity instruments from AngelOne...")
 
         try:
             # Fetch raw data
             raw_data = self._fetch_market_data()
 
-            # Filter for equity instruments
+            # Filter for equity instruments with progress bar
             equity_data = []
-            for item in raw_data:
-                if self._is_equity_instrument(item):
-                    standardized_symbol = self._standardize_symbol(
-                        item["symbol"], item["exch_seg"]
-                    )
-                    mapped_exchange = self._map_segment_to_exchange(item["exch_seg"])
-                    equity_info = {
-                        "standardized_symbol": standardized_symbol,
-                        "instrument_name": item.get("name", ""),
-                        "exchange_code": mapped_exchange,
-                        "broker_symbol": item["symbol"],
-                        "broker_token": str(item["token"]),
-                        "tick_size": float(item.get("tick_size", 0)) / 100,
-                        "lot_size": int(item.get("lotsize", 1)),
-                        "isin": item.get("isin", ""),
-                        "sector": item.get("sector", ""),
-                        "industry": item.get("industry", ""),
-                        "instrument_type": item.get("instrumenttype", ""),
-                    }
-                    equity_data.append(equity_info)
+            with tqdm(
+                total=len(raw_data),
+                desc="📊 Processing equity instruments",
+                unit="instr",
+                ncols=80,
+                bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
+            ) as pbar:
+                for item in raw_data:
+                    if self._is_equity_instrument(item):
+                        standardized_symbol = self._standardize_symbol(
+                            item["symbol"], item["exch_seg"]
+                        )
+                        mapped_exchange = self._map_segment_to_exchange(
+                            item["exch_seg"]
+                        )
+                        equity_info = {
+                            "standardized_symbol": standardized_symbol,
+                            "instrument_name": item.get("name", ""),
+                            "exchange_code": mapped_exchange,
+                            "broker_symbol": item["symbol"],
+                            "broker_token": str(item["token"]),
+                            "tick_size": float(item.get("tick_size", 0)) / 100,
+                            "lot_size": int(item.get("lotsize", 1)),
+                            "isin": item.get("isin", ""),
+                            "sector": item.get("sector", ""),
+                            "industry": item.get("industry", ""),
+                            "instrument_type": item.get("instrumenttype", ""),
+                        }
+                        equity_data.append(equity_info)
+                    pbar.update(1)
 
-            self.logger.info(f"Fetched {len(equity_data)} equity instruments")
+            print(f"✅ Found {len(equity_data):,} equity instruments")
             return equity_data
 
         except Exception as e:
@@ -90,38 +102,48 @@ class AngelOneProvider(BaseProvider):
 
     def fetch_fno_data(self) -> List[Dict[str, Any]]:
         """Fetch F&O instruments data from AngelOne"""
-        self.logger.info("Fetching F&O data from AngelOne...")
+        print("🔍 Fetching F&O instruments from AngelOne...")
 
         try:
             raw_data = self._fetch_market_data()
 
             fno_data = []
-            for item in raw_data:
-                if self._is_fno_instrument(item):
-                    standardized_symbol = self._standardize_symbol(
-                        item["symbol"], item["exch_seg"]
-                    )
-                    mapped_exchange = self._map_segment_to_exchange(item["exch_seg"])
-                    fno_info = {
-                        "standardized_symbol": standardized_symbol,
-                        "instrument_name": item.get("name", ""),
-                        "exchange_code": mapped_exchange,
-                        "broker_symbol": item["symbol"],
-                        "broker_token": str(item["token"]),
-                        "tick_size": float(item.get("tick_size", 0)) / 100,
-                        "lot_size": int(item.get("lotsize", 1)),
-                        "expiry_date": item.get("expiry", ""),
-                        "strike_price": float(item.get("strike", -1))
-                        if item.get("strike", -1) != -1
-                        else None,
-                        "option_type": self._extract_option_type(item["symbol"]),
-                        "underlying_symbol": item.get("name", ""),
-                        "underlying_type": self._determine_underlying_type(item),
-                        "instrument_type": item.get("instrumenttype", ""),
-                    }
-                    fno_data.append(fno_info)
+            with tqdm(
+                total=len(raw_data),
+                desc="📊 Processing F&O instruments",
+                unit="instr",
+                ncols=80,
+                bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
+            ) as pbar:
+                for item in raw_data:
+                    if self._is_fno_instrument(item):
+                        standardized_symbol = self._standardize_symbol(
+                            item["symbol"], item["exch_seg"]
+                        )
+                        mapped_exchange = self._map_segment_to_exchange(
+                            item["exch_seg"]
+                        )
+                        fno_info = {
+                            "standardized_symbol": standardized_symbol,
+                            "instrument_name": item.get("name", ""),
+                            "exchange_code": mapped_exchange,
+                            "broker_symbol": item["symbol"],
+                            "broker_token": str(item["token"]),
+                            "tick_size": float(item.get("tick_size", 0)) / 100,
+                            "lot_size": int(item.get("lotsize", 1)),
+                            "expiry_date": item.get("expiry", ""),
+                            "strike_price": float(item.get("strike", -1))
+                            if item.get("strike", -1) != -1
+                            else None,
+                            "option_type": self._extract_option_type(item["symbol"]),
+                            "underlying_symbol": item.get("name", ""),
+                            "underlying_type": self._determine_underlying_type(item),
+                            "instrument_type": item.get("instrumenttype", ""),
+                        }
+                        fno_data.append(fno_info)
+                    pbar.update(1)
 
-            self.logger.info(f"Fetched {len(fno_data)} F&O instruments")
+            print(f"✅ Found {len(fno_data):,} F&O instruments")
             return fno_data
 
         except Exception as e:
@@ -216,21 +238,29 @@ class AngelOneProvider(BaseProvider):
         # Check cache first
         cached_data = self._read_cache()
         if cached_data and self._is_cache_valid(cached_data):
-            self.logger.info("Using cached AngelOne data")
+            print("📋 Using cached AngelOne data")
             return cached_data["data"]
 
-        self.logger.info("Fetching fresh data from AngelOne API...")
+        print("🌐 Fetching fresh data from AngelOne API...")
 
         try:
-            response = requests.get(
-                self.base_urls["market_data"], headers=self.headers, timeout=30
-            )
-            response.raise_for_status()
+            with tqdm(
+                total=1,
+                desc="🌐 Downloading market data",
+                unit="MB",
+                ncols=80,
+                bar_format="{l_bar}{bar}| {elapsed}",
+            ) as pbar:
+                response = requests.get(
+                    self.base_urls["market_data"], headers=self.headers, timeout=30
+                )
+                response.raise_for_status()
+                pbar.update(1)
 
             data = response.json()
             self._write_cache(data)
 
-            self.logger.info(f"Fetched {len(data)} instruments from AngelOne")
+            print(f"✅ Downloaded {len(data):,} instruments from AngelOne")
             return data
 
         except requests.RequestException as e:
@@ -427,8 +457,12 @@ class AngelOneProvider(BaseProvider):
 
     def _store_equity_data(self, equity_data: List[Dict[str, Any]]) -> int:
         """Store equity data in database using threading"""
-        self.logger.info(
-            f"Storing {len(equity_data)} equity instruments using {self.max_workers} threads..."
+        if len(equity_data) == 0:
+            print("ℹ️  No equity instruments to store")
+            return 0
+
+        print(
+            f"💾 Storing {len(equity_data):,} equity instruments using {self.max_workers} threads..."
         )
 
         # Split data into batches for better performance
@@ -445,12 +479,23 @@ class AngelOneProvider(BaseProvider):
                 for batch in batches
             }
 
-            for future in as_completed(future_to_batch):
-                batch_stored = future.result()
-                total_stored += batch_stored
-                self.logger.info(f"Processed batch: {batch_stored} instruments stored")
+            # Show progress for batch processing
+            with tqdm(
+                total=len(batches),
+                desc="💾 Storing equity batches",
+                unit="batch",
+                ncols=80,
+                bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
+            ) as pbar:
+                for future in as_completed(future_to_batch):
+                    batch_stored = future.result()
+                    total_stored += batch_stored
+                    self.logger.debug(
+                        f"Processed batch: {batch_stored} instruments stored"
+                    )
+                    pbar.update(1)
 
-        self.logger.info(f"Total equity instruments stored: {total_stored}")
+        print(f"✅ Stored {total_stored:,} equity instruments successfully")
         return total_stored
 
     def _store_single_equity_item(self, item: Dict[str, Any]) -> bool:
@@ -510,9 +555,14 @@ class AngelOneProvider(BaseProvider):
 
     def _store_fno_data(self, fno_data: List[Dict[str, Any]]) -> int:
         """Store F&O data in database using threading"""
-        self.logger.info(
-            f"Storing {len(fno_data)} F&O instruments using {self.max_workers} threads..."
+        if len(fno_data) == 0:
+            print("ℹ️  No F&O instruments to store")
+            return 0
+
+        print(
+            f"💾 Storing {len(fno_data):,} F&O instruments using {self.max_workers} threads..."
         )
+        print("⏳ This may take a few minutes for large datasets...")
 
         # Split data into batches for better performance
         batch_size = max(100, len(fno_data) // self.max_workers)
@@ -527,14 +577,23 @@ class AngelOneProvider(BaseProvider):
                 for batch in batches
             }
 
-            for future in as_completed(future_to_batch):
-                batch_stored = future.result()
-                total_stored += batch_stored
-                self.logger.info(
-                    f"Processed F&O batch: {batch_stored} instruments stored"
-                )
+            # Show progress for batch processing
+            with tqdm(
+                total=len(batches),
+                desc="💾 Storing F&O batches",
+                unit="batch",
+                ncols=80,
+                bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
+            ) as pbar:
+                for future in as_completed(future_to_batch):
+                    batch_stored = future.result()
+                    total_stored += batch_stored
+                    self.logger.debug(
+                        f"Processed F&O batch: {batch_stored} instruments stored"
+                    )
+                    pbar.update(1)
 
-        self.logger.info(f"Total F&O instruments stored: {total_stored}")
+        print(f"✅ Stored {total_stored:,} F&O instruments successfully")
         return total_stored
 
     def _store_single_fno_item(self, item: Dict[str, Any]) -> bool:

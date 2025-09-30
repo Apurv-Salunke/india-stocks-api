@@ -27,8 +27,10 @@ def test_database_integration():
     """Test AngelOne broker integration with database"""
     logger.info("Testing AngelOne broker integration with new database system...")
 
-    # Test database path
-    db_path = "instruments.db"
+    # Test database path (uses cache directory by default)
+    from india_stocks_api.utils.cache_utils import get_database_path
+
+    db_path = get_database_path()
 
     if not os.path.exists(db_path):
         logger.error(
