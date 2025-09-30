@@ -37,6 +37,10 @@ class InstrumentService:
                 self.logger.info("Creating new database...")
                 migration_manager.create_database()
 
+                # Run any pending migrations after initial creation
+                self.logger.info("Running pending migrations...")
+                migration_manager.run_all_migrations()
+
                 # Auto-populate with AngelOne data on first creation
                 self._auto_populate_data()
             else:

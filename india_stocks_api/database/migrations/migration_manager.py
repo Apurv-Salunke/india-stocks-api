@@ -35,8 +35,8 @@ class MigrationManager:
         migration_files = []
 
         for file_path in sorted(self.migrations_dir.glob("*.sql")):
-            if file_path.name.startswith("001_"):
-                continue  # Skip the version tracking part
+            if file_path.name == "001_initial_schema.sql":
+                continue  # Skip the initial schema file (handled by create_database)
 
             # Extract version number from filename
             try:

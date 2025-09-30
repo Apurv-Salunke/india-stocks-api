@@ -422,38 +422,233 @@ class AngelOneProvider(BaseProvider):
             return False
 
     def _process_batch(self, batch: List[Dict[str, Any]], data_type: str) -> int:
-        """Process a batch of instruments in parallel"""
+        """Process a batch of instruments using bulk insert (NO nested threading)"""
         stored_count = 0
 
-        def process_single_item(item: Dict[str, Any]) -> bool:
-            """Process a single instrument item"""
-            try:
-                if data_type == "equity":
-                    return self._store_single_equity_item(item)
-                elif data_type == "fno":
-                    return self._store_single_fno_item(item)
-                elif data_type == "commodity":
-                    return self._store_single_commodity_item(item)
-                elif data_type == "currency":
-                    return self._store_single_currency_item(item)
-                return False
-            except Exception as e:
-                self.logger.error(
-                    f"Error processing {data_type} item {item.get('standardized_symbol', 'unknown')}: {e}"
-                )
-                return False
-
-        # Process batch in parallel
-        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-            future_to_item = {
-                executor.submit(process_single_item, item): item for item in batch
-            }
-
-            for future in as_completed(future_to_item):
-                if future.result():
-                    stored_count += 1
+        try:
+            if data_type == "equity":
+                stored_count = self._bulk_store_equity_batch(batch)
+            elif data_type == "fno":
+                stored_count = self._bulk_store_fno_batch(batch)
+            elif data_type == "commodity":
+                stored_count = self._bulk_store_commodity_batch(batch)
+            elif data_type == "currency":
+                stored_count = self._bulk_store_currency_batch(batch)
+        except Exception as e:
+            self.logger.error(f"Error processing {data_type} batch: {e}")
 
         return stored_count
+
+    def _bulk_store_fno_batch(self, batch: List[Dict[str, Any]]) -> int:
+        """Bulk store F&O batch using raw SQL for maximum performance"""
+        if not batch:
+            return 0
+
+        try:
+            import sqlite3
+
+            # Use WAL mode and timeout for better concurrency
+            with sqlite3.connect(str(self.db.db_path), timeout=30.0) as conn:
+                conn.execute("PRAGMA journal_mode=WAL")
+                conn.execute("BEGIN IMMEDIATE TRANSACTION")
+
+                # Pre-fetch exchange and category IDs to avoid repeated lookups
+                exchange_ids = {}
+                category_ids = {}
+
+                for item in batch:
+                    exchange_code = item["exchange_code"]
+                    if exchange_code not in exchange_ids:
+                        exchange_ids[exchange_code] = DatabaseUtils.get_exchange_id(
+                            exchange_code, str(self.db.db_path)
+                        )
+
+                    category_code = "FUT" if not item.get("option_type") else "OPT"
+                    if category_code not in category_ids:
+                        category_ids[category_code] = DatabaseUtils.get_category_id(
+                            category_code, str(self.db.db_path)
+                        )
+
+                # Bulk insert instruments
+                instrument_sql = """
+                INSERT OR REPLACE INTO instruments
+                (standardized_symbol, instrument_name, exchange_id, category_id, subcategory_id,
+                 underlying_symbol, expiry_date, strike_price, option_type, tick_size, lot_size,
+                 is_active, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                """
+
+                instrument_data = []
+                for item in batch:
+                    exchange_id = exchange_ids.get(item["exchange_code"])
+                    category_code = "FUT" if not item.get("option_type") else "OPT"
+                    category_id = category_ids.get(category_code)
+
+                    if not exchange_id or not category_id:
+                        continue
+
+                    instrument_data.append(
+                        (
+                            item["standardized_symbol"],
+                            item["instrument_name"],
+                            exchange_id,
+                            category_id,
+                            None,  # subcategory_id
+                            item.get("underlying_symbol"),
+                            item.get("expiry_date"),
+                            item.get("strike_price"),
+                            item.get("option_type"),
+                            item["tick_size"],
+                            item["lot_size"],
+                        )
+                    )
+
+                if instrument_data:
+                    # Get the current max ID before insertion
+                    cursor = conn.execute(
+                        "SELECT COALESCE(MAX(id), 0) FROM instruments"
+                    )
+                    max_id_before = cursor.fetchone()[0]
+
+                    # Insert instruments
+                    conn.executemany(instrument_sql, instrument_data)
+
+                    # Calculate the first inserted ID
+                    first_id = max_id_before + 1
+
+                    # Bulk insert broker instruments
+                    broker_sql = """
+                    INSERT OR REPLACE INTO broker_instruments
+                    (instrument_id, broker_name, broker_symbol, broker_token, tick_size, lot_size,
+                     created_at, updated_at)
+                    VALUES (?, 'angelone', ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    """
+
+                    broker_data = []
+                    for i, item in enumerate(batch):
+                        if i < len(
+                            instrument_data
+                        ):  # Only for successfully inserted instruments
+                            broker_data.append(
+                                (
+                                    first_id + i,
+                                    item["broker_symbol"],
+                                    item["broker_token"],
+                                    item["tick_size"],
+                                    item["lot_size"],
+                                )
+                            )
+
+                    if broker_data:
+                        conn.executemany(broker_sql, broker_data)
+
+                conn.commit()
+                return len(instrument_data)
+
+        except Exception as e:
+            self.logger.error(f"Error in bulk F&O insert: {e}")
+            return 0
+
+    def _bulk_store_equity_batch(self, batch: List[Dict[str, Any]]) -> int:
+        """Bulk store equity batch using raw SQL for maximum performance"""
+        if not batch:
+            return 0
+
+        try:
+            import sqlite3
+
+            # Use WAL mode and timeout for better concurrency
+            with sqlite3.connect(str(self.db.db_path), timeout=30.0) as conn:
+                conn.execute("PRAGMA journal_mode=WAL")
+                conn.execute("BEGIN IMMEDIATE TRANSACTION")
+
+                # Pre-fetch exchange and category IDs
+                exchange_ids = {}
+                for item in batch:
+                    exchange_code = item["exchange_code"]
+                    if exchange_code not in exchange_ids:
+                        exchange_ids[exchange_code] = DatabaseUtils.get_exchange_id(
+                            exchange_code, str(self.db.db_path)
+                        )
+
+                category_id = DatabaseUtils.get_category_id("EQ", str(self.db.db_path))
+
+                # Bulk insert instruments
+                instrument_sql = """
+                INSERT OR REPLACE INTO instruments
+                (standardized_symbol, instrument_name, exchange_id, category_id, subcategory_id,
+                 underlying_symbol, expiry_date, strike_price, option_type, tick_size, lot_size,
+                 is_active, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                """
+
+                instrument_data = []
+                for item in batch:
+                    exchange_id = exchange_ids.get(item["exchange_code"])
+
+                    if not exchange_id or not category_id:
+                        continue
+
+                    instrument_data.append(
+                        (
+                            item["standardized_symbol"],
+                            item["instrument_name"],
+                            exchange_id,
+                            category_id,
+                            None,  # subcategory_id
+                            None,  # underlying_symbol
+                            None,  # expiry_date
+                            None,  # strike_price
+                            None,  # option_type
+                            item["tick_size"],
+                            item["lot_size"],
+                        )
+                    )
+
+                if instrument_data:
+                    cursor = conn.executemany(instrument_sql, instrument_data)
+
+                    # Get the first inserted ID to calculate range
+                    first_id = cursor.lastrowid - len(instrument_data) + 1
+
+                    # Bulk insert broker instruments
+                    broker_sql = """
+                    INSERT OR REPLACE INTO broker_instruments
+                    (instrument_id, broker_name, broker_symbol, broker_token, tick_size, lot_size,
+                     created_at, updated_at)
+                    VALUES (?, 'angelone', ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    """
+
+                    broker_data = []
+                    for i, item in enumerate(batch):
+                        if i < len(instrument_data):
+                            broker_data.append(
+                                (
+                                    first_id + i,
+                                    item["broker_symbol"],
+                                    item["broker_token"],
+                                    item["tick_size"],
+                                    item["lot_size"],
+                                )
+                            )
+
+                    if broker_data:
+                        conn.executemany(broker_sql, broker_data)
+
+                conn.commit()
+                return len(instrument_data)
+
+        except Exception as e:
+            self.logger.error(f"Error in bulk equity insert: {e}")
+            return 0
+
+    def _bulk_store_commodity_batch(self, batch: List[Dict[str, Any]]) -> int:
+        """Bulk store commodity batch - placeholder"""
+        return 0
+
+    def _bulk_store_currency_batch(self, batch: List[Dict[str, Any]]) -> int:
+        """Bulk store currency batch - placeholder"""
+        return 0
 
     def _store_equity_data(self, equity_data: List[Dict[str, Any]]) -> int:
         """Store equity data in database using threading"""
@@ -465,8 +660,8 @@ class AngelOneProvider(BaseProvider):
             f"💾 Storing {len(equity_data):,} equity instruments using {self.max_workers} threads..."
         )
 
-        # Split data into batches for better performance
-        batch_size = max(100, len(equity_data) // self.max_workers)
+        # Split data into larger batches for better performance (bulk insert)
+        batch_size = max(1000, len(equity_data) // self.max_workers)
         batches = [
             equity_data[i : i + batch_size]
             for i in range(0, len(equity_data), batch_size)
@@ -564,8 +759,8 @@ class AngelOneProvider(BaseProvider):
         )
         print("⏳ This may take a few minutes for large datasets...")
 
-        # Split data into batches for better performance
-        batch_size = max(100, len(fno_data) // self.max_workers)
+        # Split data into larger batches for better performance (bulk insert)
+        batch_size = max(1000, len(fno_data) // self.max_workers)
         batches = [
             fno_data[i : i + batch_size] for i in range(0, len(fno_data), batch_size)
         ]
