@@ -40,7 +40,7 @@ def get_database_path() -> str:
         str: Path to the database file in the cache directory
     """
     cache_dir = get_cache_directory()
-    db_path = cache_dir / "india_stocks_api_instruments.db"
+    db_path = cache_dir / "instruments.db"
     return str(db_path)
 
 
@@ -81,7 +81,7 @@ def clear_cache() -> bool:
         cache_dir = get_cache_directory()
 
         # Remove database file
-        db_path = cache_dir / "india_stocks_api_instruments.db"
+        db_path = cache_dir / "instruments.db"
         if db_path.exists():
             db_path.unlink()
             logger.info(f"Removed database file: {db_path}")
