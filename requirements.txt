@@ -2,3 +2,6 @@ requests
 numpy
 pandas
 pyotp
+pytest>=7.0.0
+pytest-sqlalchemy>=1.5.0
+faker>=18.0.0
