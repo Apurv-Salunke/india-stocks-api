@@ -4,7 +4,7 @@ This library provides a unified interface for trading stocks in India
 through various brokers like Angel One, etc.
 """
 
-__version__ = "0.1.0"
+__version__ = "1.0.0"
 __author__ = "Apurv Salunke"
 __license__ = "MIT"
 

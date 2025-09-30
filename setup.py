@@ -4,7 +4,7 @@ with open("README.md", encoding="utf-8") as f:
     long_description = f.read()
 setup(
     name="india_stocks_api",
-    version="0.1.0",
+    version="1.0.0",
     description="A unified API for Indian stock market brokers",
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -20,13 +20,13 @@ setup(
         "pyotp",
     ],
     classifiers=[
-        "Development Status :: 2 - Pre-Alpha",
+        "Development Status :: 5 - Production/Stable",
         "Intended Audience :: Developers",
         "Intended Audience :: Financial and Insurance Industry",
         "Intended Audience :: Information Technology",
         "Topic :: Software Development :: Build Tools",
         "Topic :: Office/Business :: Financial :: Investment",
-        "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+        "License :: OSI Approved :: MIT License",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",

@@ -35,3 +35,9 @@ pytest.xml
 _cache/
 broker.yaml
 instruments.db
+dist/
+build/
+*.egg-info/
+*.egg
+*.whl
+*.tar.gz
