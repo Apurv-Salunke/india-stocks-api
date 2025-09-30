@@ -1,35 +1,40 @@
 __all__ = [
+    # Core trading constants
     "Side",
-    "Root",
-    "WeeklyExpiry",
-    "Option",
     "OrderType",
-    "ExchangeCode",
     "Product",
     "Validity",
     "Variety",
     "Status",
+    # Exchange and segment constants
+    "Exchange",
+    "ExchangeCode",
+    "Segment",
+    # Instrument constants
+    "InstrumentCategory",
+    "OptionType",
+    "CommodityType",
+    "InstrumentType",
+    # Market data constants
+    "Interval",
+    "CandleStick",
+    # F&O specific constants
+    "Root",
+    "WeeklyExpiry",
+    # Response format constants
     "Order",
     "Position",
     "Profile",
     "UniqueID",
-    "Segment",
-    "Interval",
-    "CandleStick",
 ]
 
 # Standard format for datetime strings
 DATETIME_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
 
 
-class Segment:
-    """
-    Segment Constants.
-    """
-
-    EQ = "EQ"
-    FUT = "FUT"
-    OPT = "OPT"
+# ============================================================================
+# CORE TRADING CONSTANTS
+# ============================================================================
 
 
 class Side:
@@ -41,40 +46,6 @@ class Side:
     SELL = "SELL"
 
 
-class Root:
-    """
-    BANKNIFTY & NIFTY Constants.
-    """
-
-    BNF = "BANKNIFTY"
-    NF = "NIFTY"
-    FNF = "FINNIFTY"
-    MIDCPNF = "MIDCPNIFTY"
-    SENSEX = "SENSEX"
-    BANKEX = "BANKEX"
-
-
-class WeeklyExpiry:
-    """
-    Weekly Expiry Constants.
-    """
-
-    CURRENT = "CURRENT"
-    NEXT = "NEXT"
-    FAR = "FAR"
-    EXPIRY = "Expiry"
-    LOTSIZE = "LotSize"
-
-
-class Option:
-    """
-    Trading Options
-    """
-
-    CE = "CE"
-    PE = "PE"
-
-
 class OrderType:
     """
     Order Type Constants.
@@ -82,24 +53,8 @@ class OrderType:
 
     MARKET = "MARKET"
     LIMIT = "LIMIT"
-    SLM = "SLM"
-    SL = "SL"
-
-
-class ExchangeCode:
-    """
-    Exchange Code Constants.
-    """
-
-    NSE = "NSE"  # NSE Equity
-    NFO = "NFO"  # NSE F&O
-    BSE = "BSE"  # BSE Equity
-    BFO = "BFO"  # BSE F&O
-    NCO = "NCO"  # NSE Commodities
-    BCO = "BCO"  # BSE Commodities
-    BCD = "BCD"  #
-    MCX = "MCX"  # Multi Commodity Exchange F&O
-    CDS = "CDS"  #
+    SLM = "SLM"  # Stop Loss Market
+    SL = "SL"  # Stop Loss
 
 
 class Product:
@@ -107,13 +62,13 @@ class Product:
     Product Type Constants.
     """
 
-    CNC = "CNC"
-    NRML = "NRML"
+    CNC = "CNC"  # Cash and Carry
+    NRML = "NRML"  # Normal/Carry Forward
     MARGIN = "MARGIN"
-    MIS = "MIS"
-    BO = "BO"
-    CO = "CO"
-    SM = "SM"  # SuperMutilple
+    MIS = "MIS"  # Intraday/Margin
+    BO = "BO"  # Bracket Order
+    CO = "CO"  # Cover Order
+    SM = "SM"  # SuperMultiple
 
 
 class Validity:
@@ -122,11 +77,11 @@ class Validity:
     """
 
     DAY = "DAY"
-    IOC = "IOC"
-    GTD = "GTD"
-    GTC = "GTC"
-    FOK = "FOK"
-    TTL = "TTL"
+    IOC = "IOC"  # Immediate or Cancel
+    GTD = "GTD"  # Good Till Date
+    GTC = "GTC"  # Good Till Cancel
+    FOK = "FOK"  # Fill or Kill
+    TTL = "TTL"  # Time to Live
 
 
 class Variety:
@@ -136,9 +91,9 @@ class Variety:
 
     REGULAR = "REGULAR"
     STOPLOSS = "STOPLOSS"
-    AMO = "AMO"
-    BO = "BO"
-    CO = "CO"
+    AMO = "AMO"  # After Market Order
+    BO = "BO"  # Bracket Order
+    CO = "CO"  # Cover Order
     ICEBERG = "ICEBERG"
     AUCTION = "AUCTION"
 
@@ -157,9 +112,183 @@ class Status:
     MODIFIED = "MODIFIED"
 
 
+# ============================================================================
+# EXCHANGE AND SEGMENT CONSTANTS
+# ============================================================================
+
+
+class Exchange:
+    """
+    Indian Stock Exchanges (Database/Model)
+    """
+
+    NSE = "NSE"  # National Stock Exchange
+    BSE = "BSE"  # Bombay Stock Exchange
+    MCX = "MCX"  # Multi Commodity Exchange
+    NCDEX = "NCDEX"  # National Commodity & Derivatives Exchange
+    ICEX = "ICEX"  # Indian Commodity Exchange
+
+
+class ExchangeCode:
+    """
+    Exchange Code Constants (Broker API)
+    """
+
+    NSE = "NSE"  # NSE Equity
+    NFO = "NFO"  # NSE F&O
+    BSE = "BSE"  # BSE Equity
+    BFO = "BFO"  # BSE F&O
+    NCO = "NCO"  # NSE Commodities
+    BCO = "BCO"  # BSE Commodities
+    BCD = "BCD"  # BSE Currency Derivatives
+    MCX = "MCX"  # Multi Commodity Exchange F&O
+    CDS = "CDS"  # Currency Derivatives Segment
+
+
+class Segment:
+    """
+    Trading Segment Constants.
+    """
+
+    EQ = "EQ"  # Equity
+    FUT = "FUT"  # Futures
+    OPT = "OPT"  # Options
+
+
+# ============================================================================
+# INSTRUMENT CONSTANTS
+# ============================================================================
+
+
+class InstrumentCategory:
+    """
+    Instrument Categories
+    """
+
+    EQUITY = "EQ"  # Equity stocks
+    FUTURES = "FUT"  # Futures contracts
+    OPTIONS = "OPT"  # Options contracts
+    COMMODITY = "COM"  # Commodity instruments
+    CURRENCY = "CUR"  # Currency instruments
+    DEBT = "DEBT"  # Debt instruments
+    ETF = "ETF"  # Exchange Traded Funds
+    REIT = "REIT"  # Real Estate Investment Trusts
+    INVIT = "INVIT"  # Infrastructure Investment Trusts
+    MUTUAL_FUND = "MF"  # Mutual Funds
+    BOND = "BOND"  # Bonds
+
+
+class OptionType:
+    """
+    Option Types
+    """
+
+    CALL = "CE"  # Call option
+    PUT = "PE"  # Put option
+
+
+class CommodityType:
+    """
+    Commodity Categories
+    """
+
+    METALS = "METALS"  # Metals (Gold, Silver, etc.)
+    ENERGY = "ENERGY"  # Energy (Crude Oil, Natural Gas, etc.)
+    AGRICULTURE = "AGRICULTURE"  # Agricultural commodities
+    PRECIOUS_METALS = "PRECIOUS_METALS"  # Gold, Silver, Platinum
+    INDUSTRIAL_METALS = "INDUSTRIAL_METALS"  # Copper, Zinc, etc.
+    SOFT_COMMODITIES = "SOFT_COMMODITIES"  # Cotton, Sugar, etc.
+
+
+class InstrumentType:
+    """
+    Detailed Instrument Types
+    """
+
+    STOCK = "STOCK"  # Individual stocks
+    INDEX = "INDEX"  # Market indices
+    FUTURE = "FUTURE"  # Future contracts
+    OPTION = "OPTION"  # Option contracts
+    COMMODITY_FUTURE = "COMMODITY_FUTURE"  # Commodity futures
+    COMMODITY_OPTION = "COMMODITY_OPTION"  # Commodity options
+    CURRENCY_FUTURE = "CURRENCY_FUTURE"  # Currency futures
+    CURRENCY_OPTION = "CURRENCY_OPTION"  # Currency options
+    ETF = "ETF"  # Exchange Traded Funds
+    BOND = "BOND"  # Government/Corporate bonds
+
+
+# ============================================================================
+# MARKET DATA CONSTANTS
+# ============================================================================
+
+
+class Interval:
+    """
+    Time Interval Constants for Historical Data
+    """
+
+    ONE_MINUTE = "1m"
+    THREE_MINUTE = "3m"
+    FIVE_MINUTE = "5m"
+    TEN_MINUTE = "10m"
+    FIFTEEN_MINUTE = "15m"
+    THIRTY_MINUTE = "30m"
+    ONE_HOUR = "1h"
+    ONE_DAY = "1d"
+
+
+class CandleStick:
+    """
+    CandleStick Data Keys
+    """
+
+    DATETIME = "datetime"
+    OPEN = "open"
+    HIGH = "high"
+    LOW = "low"
+    CLOSE = "close"
+    VOLUME = "volume"
+    OI = "oi"  # Open Interest
+
+
+# ============================================================================
+# F&O SPECIFIC CONSTANTS
+# ============================================================================
+
+
+class Root:
+    """
+    F&O Root Symbols
+    """
+
+    BNF = "BANKNIFTY"
+    NF = "NIFTY"
+    FNF = "FINNIFTY"
+    MIDCPNF = "MIDCPNIFTY"
+    SENSEX = "SENSEX"
+    BANKEX = "BANKEX"
+
+
+class WeeklyExpiry:
+    """
+    Weekly Expiry Constants
+    """
+
+    CURRENT = "CURRENT"
+    NEXT = "NEXT"
+    FAR = "FAR"
+    EXPIRY = "Expiry"
+    LOTSIZE = "LotSize"
+
+
+# ============================================================================
+# RESPONSE FORMAT CONSTANTS
+# ============================================================================
+
+
 class Order:
     """
-    Unified Order Response Dicitonary Keys Constants.
+    Unified Order Response Dictionary Keys
     """
 
     ID = "id"
@@ -193,7 +322,7 @@ class Order:
 
 class Position:
     """
-    Unified Account Positions Response Dicitonary Keys Constants.
+    Unified Account Positions Response Dictionary Keys
     """
 
     SYMBOL = "symbol"
@@ -214,7 +343,7 @@ class Position:
 
 class Profile:
     """
-    Unified Account Profile Response Dicitonary Keys Constants.
+    Unified Account Profile Response Dictionary Keys
     """
 
     CLIENTID = "clientId"
@@ -233,7 +362,7 @@ class Profile:
 
 class UniqueID:
     """
-    Default Unique Order ID Constants.
+    Default Unique Order ID Constants
     """
 
     DEFORDER = "FenixOrder"
@@ -241,32 +370,3 @@ class UniqueID:
     LIMITORDER = "LIMITOrder"
     SLORDER = "SLOrder"
     SLMORDER = "SLMOrder"
-
-
-class Interval:
-    """
-    Interval Constants.
-    """
-
-    ONE_MINUTE = "1m"
-    THREE_MINUTE = "3m"
-    FIVE_MINUTE = "5m"
-    TEN_MINUTE = "10m"
-    FIFTEEN_MINUTE = "15m"
-    THIRTY_MINUTE = "30m"
-    ONE_HOUR = "1h"
-    ONE_DAY = "1d"
-
-
-class CandleStick:
-    """
-    CandleStick Constants.
-    """
-
-    DATETIME = "datetime"
-    OPEN = "open"
-    HIGH = "high"
-    LOW = "low"
-    CLOSE = "close"
-    VOLUME = "volume"
-    OI = "oi"

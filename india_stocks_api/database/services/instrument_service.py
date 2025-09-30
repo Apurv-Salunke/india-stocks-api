@@ -7,7 +7,7 @@ from typing import List, Optional, Dict, Any
 from pathlib import Path
 import logging
 
-from ..models.enums import Exchange, InstrumentCategory
+from ...brokers.base.constants import Exchange, InstrumentCategory
 from ...utils.cache_utils import get_database_path
 from ..migrations import MigrationManager
 

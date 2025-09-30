@@ -8,7 +8,7 @@ from typing import List, Dict, Any, Optional
 from pathlib import Path
 import logging
 
-from ..models.enums import Exchange, InstrumentCategory
+from ...brokers.base.constants import Exchange, InstrumentCategory
 from ..utils.db_utils import DatabaseUtils
 
 logger = logging.getLogger(__name__)

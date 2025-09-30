@@ -8,7 +8,12 @@ from .base import BaseModel
 from .exchange import ExchangeModel
 from .instrument import Instrument
 from .broker_instrument import BrokerInstrument
-from .enums import Exchange, InstrumentCategory, OptionType, CommodityType
+from ...brokers.base.constants import (
+    Exchange,
+    InstrumentCategory,
+    OptionType,
+    CommodityType,
+)
 
 __all__ = [
     "BaseModel",

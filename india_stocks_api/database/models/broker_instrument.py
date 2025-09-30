@@ -5,7 +5,7 @@ Broker instrument mapping model for database
 from dataclasses import dataclass
 from typing import Optional
 from datetime import date, datetime
-from .enums import OptionType
+from ...brokers.base.constants import OptionType
 
 
 @dataclass
@@ -56,11 +56,11 @@ class BrokerInstrument:
 
     def is_call_option(self) -> bool:
         """Check if this is a call option"""
-        return self.option_type == OptionType.CALL.value
+        return self.option_type == OptionType.CALL
 
     def is_put_option(self) -> bool:
         """Check if this is a put option"""
-        return self.option_type == OptionType.PUT.value
+        return self.option_type == OptionType.PUT
 
     def is_future(self) -> bool:
         """Check if this is a future instrument"""

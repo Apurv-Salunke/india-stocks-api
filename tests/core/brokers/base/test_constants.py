@@ -11,7 +11,7 @@ from india_stocks_api.brokers.base.constants import (
     Validity,
     Variety,
     WeeklyExpiry,
-    Option,
+    OptionType,
     OrderType,
 )
 
@@ -38,9 +38,9 @@ def test_weekly_expiry_constants():
     assert WeeklyExpiry.LOTSIZE == "LotSize"
 
 
-def test_option_constants():
-    assert Option.CE == "CE"
-    assert Option.PE == "PE"
+def test_option_type_constants():
+    assert OptionType.CALL == "CE"
+    assert OptionType.PUT == "PE"
 
 
 def test_order_type_constants():

@@ -291,7 +291,7 @@ class BaseProvider(ABC):
     # Common utility methods
     def _extract_option_type(self, symbol: str) -> Optional[str]:
         """Extract option type (CE/PE) from symbol"""
-        from ..models.enums import OptionType
+        from ...brokers.base.constants import OptionType
 
         # Check if it's a future first (futures end with FUT)
         if symbol.endswith("FUT"):
@@ -299,9 +299,9 @@ class BaseProvider(ABC):
 
         # Check for option types
         if "CE" in symbol:
-            return OptionType.CALL.value
+            return OptionType.CALL
         elif "PE" in symbol:
-            return OptionType.PUT.value
+            return OptionType.PUT
         return None
 
     def _determine_underlying_type(self, item: Dict[str, Any]) -> str:

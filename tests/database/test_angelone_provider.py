@@ -6,7 +6,7 @@ import pytest
 from unittest.mock import Mock, patch
 
 from india_stocks_api.database import InstrumentService, AngelOneTokensManager
-from india_stocks_api.database.models.enums import OptionType
+from india_stocks_api.brokers.base.constants import OptionType
 
 
 class TestAngelOneTokensManager:
@@ -161,15 +161,11 @@ class TestAngelOneTokensManager:
         """Test option type extraction"""
         # Call option
         call_symbol = "BANKNIFTY2432845000CE"
-        assert (
-            angelone_provider._extract_option_type(call_symbol) == OptionType.CALL.value
-        )
+        assert angelone_provider._extract_option_type(call_symbol) == OptionType.CALL
 
         # Put option
         put_symbol = "BANKNIFTY2432845000PE"
-        assert (
-            angelone_provider._extract_option_type(put_symbol) == OptionType.PUT.value
-        )
+        assert angelone_provider._extract_option_type(put_symbol) == OptionType.PUT
 
         # Non-option
         non_option = "BANKNIFTY24328"
@@ -361,7 +357,7 @@ class TestAngelOneTokensManager:
             assert option_instrument["broker_symbol"] == "BANKNIFTY2432845000CE"
             assert option_instrument["broker_token"] == "43048"
             assert option_instrument["exchange_code"] == "NSE"  # NFO mapped to NSE
-            assert option_instrument["option_type"] == OptionType.CALL.value
+            assert option_instrument["option_type"] == OptionType.CALL
             assert option_instrument["strike_price"] == 45000.0
             assert option_instrument["underlying_type"] == "INDEX"
 

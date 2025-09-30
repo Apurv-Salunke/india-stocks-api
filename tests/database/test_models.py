@@ -204,25 +204,25 @@ class TestEnums:
 
     def test_exchange_enum(self):
         """Test Exchange enum"""
-        assert Exchange.NSE.value == "NSE"
-        assert Exchange.BSE.value == "BSE"
-        assert Exchange.MCX.value == "MCX"
+        assert Exchange.NSE == "NSE"
+        assert Exchange.BSE == "BSE"
+        assert Exchange.MCX == "MCX"
 
     def test_instrument_category_enum(self):
         """Test InstrumentCategory enum"""
-        assert InstrumentCategory.EQUITY.value == "EQ"
-        assert InstrumentCategory.FUTURES.value == "FUT"
-        assert InstrumentCategory.OPTIONS.value == "OPT"
-        assert InstrumentCategory.COMMODITY.value == "COM"
-        assert InstrumentCategory.CURRENCY.value == "CUR"
+        assert InstrumentCategory.EQUITY == "EQ"
+        assert InstrumentCategory.FUTURES == "FUT"
+        assert InstrumentCategory.OPTIONS == "OPT"
+        assert InstrumentCategory.COMMODITY == "COM"
+        assert InstrumentCategory.CURRENCY == "CUR"
 
     def test_option_type_enum(self):
         """Test OptionType enum"""
-        assert OptionType.CALL.value == "CE"
-        assert OptionType.PUT.value == "PE"
+        assert OptionType.CALL == "CE"
+        assert OptionType.PUT == "PE"
 
     def test_commodity_type_enum(self):
         """Test CommodityType enum"""
-        assert CommodityType.METALS.value == "METALS"
-        assert CommodityType.ENERGY.value == "ENERGY"
-        assert CommodityType.AGRICULTURE.value == "AGRICULTURE"
+        assert CommodityType.METALS == "METALS"
+        assert CommodityType.ENERGY == "ENERGY"
+        assert CommodityType.AGRICULTURE == "AGRICULTURE"
