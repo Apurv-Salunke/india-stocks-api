@@ -121,7 +121,9 @@ class AngelOneTokensManager(BaseProvider):
                             "broker_token": str(item["token"]),
                             "tick_size": float(item.get("tick_size", 0)) / 100,
                             "lot_size": int(item.get("lotsize", 1)),
-                            "expiry_date": item.get("expiry", ""),
+                            "expiry_date": self._parse_expiry_date(
+                                item.get("expiry", "")
+                            ),
                             "strike_price": float(item.get("strike", -1))
                             if item.get("strike", -1) != -1
                             else None,
@@ -398,3 +400,52 @@ class AngelOneTokensManager(BaseProvider):
         if exchange == "NSE" and symbol.endswith("-EQ"):
             return symbol[:-3]  # Remove -EQ suffix
         return symbol
+
+    def _parse_expiry_date(self, expiry_str: str) -> str:
+        """Parse expiry date from DDMMMYYYY format to ISO YYYY-MM-DD format
+
+        Args:
+            expiry_str: Expiry date in format like '01OCT2025', '30SEP2025', etc.
+
+        Returns:
+            ISO format date string like '2025-10-01', '2025-09-30', etc.
+            Returns empty string if parsing fails.
+
+        Examples:
+            '01OCT2025' → '2025-10-01'
+            '30SEP2025' → '2025-09-30'
+        """
+        if not expiry_str or len(expiry_str) < 9:
+            return ""
+
+        try:
+            # Month name mapping
+            month_map = {
+                "JAN": "01",
+                "FEB": "02",
+                "MAR": "03",
+                "APR": "04",
+                "MAY": "05",
+                "JUN": "06",
+                "JUL": "07",
+                "AUG": "08",
+                "SEP": "09",
+                "OCT": "10",
+                "NOV": "11",
+                "DEC": "12",
+            }
+
+            # Extract components: DDMMMYYYY
+            day = expiry_str[:2]
+            month_str = expiry_str[2:5].upper()
+            year = expiry_str[5:9]
+
+            # Get month number
+            month = month_map.get(month_str)
+            if not month:
+                return expiry_str  # Return original if can't parse
+
+            # Return ISO format
+            return f"{year}-{month}-{day}"
+        except Exception:
+            return expiry_str  # Return original on any error

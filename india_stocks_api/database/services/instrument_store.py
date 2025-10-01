@@ -198,7 +198,11 @@ class InstrumentStore:
     def _process_fno_batch(
         self, rows: List[Dict[str, Any]], category_id: int, conn
     ) -> int:
-        """Process a batch of F&O instruments with the given category"""
+        """Process a batch of F&O instruments with the given category
+
+        New schema: F&O derivatives are stored ONLY in broker_instruments,
+        linked to their underlying instrument via underlying_instrument_id.
+        """
         if not rows:
             return 0
 
@@ -211,69 +215,63 @@ class InstrumentStore:
                     exchange_code, str(self.db_path)
                 )
 
-        # Bulk insert instruments
-        instrument_sql = """
-        INSERT OR REPLACE INTO instruments
-        (standardized_symbol, instrument_name, exchange_id, category_id, subcategory_id,
-         underlying_symbol, underlying_type, expiry_date, is_active, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-        """
+        # For each derivative, find or resolve its underlying instrument
+        broker_data = []
 
-        instrument_data = []
         for item in rows:
-            exchange_id = exchange_ids.get(item["exchange_code"])
-
-            if not exchange_id or not category_id:
+            underlying_symbol = item.get("underlying_symbol")
+            if not underlying_symbol:
+                self.logger.warning(
+                    f"Skipping {item.get('broker_symbol')}: no underlying_symbol"
+                )
                 continue
 
-            instrument_data.append(
+            # Find the underlying instrument in instruments table
+            # The underlying should already exist (equity, index, or commodity)
+            underlying_query = """
+                SELECT i.id
+                FROM instruments i
+                WHERE i.standardized_symbol = ?
+                LIMIT 1
+            """
+
+            cursor = conn.execute(underlying_query, (underlying_symbol,))
+            underlying_row = cursor.fetchone()
+
+            if not underlying_row:
+                # Underlying doesn't exist - log and skip
+                self.logger.warning(
+                    f"Skipping {item.get('broker_symbol')}: underlying '{underlying_symbol}' not found"
+                )
+                continue
+
+            underlying_instrument_id = underlying_row[0]
+
+            # Add to broker_instruments with underlying_instrument_id
+            broker_data.append(
                 (
-                    item["standardized_symbol"],
-                    item["instrument_name"],
-                    exchange_id,
-                    category_id,
-                    None,  # subcategory_id
-                    item.get("underlying_symbol"),
-                    item.get("underlying_type"),
+                    underlying_instrument_id,  # underlying_instrument_id
+                    item["broker_symbol"],
+                    item["broker_token"],
+                    item["tick_size"],
+                    item["lot_size"],
                     item.get("expiry_date"),
+                    item.get("strike_price"),
+                    item.get("option_type"),
                 )
             )
 
-        if instrument_data:
-            # Insert instruments one by one to get IDs
-            instrument_ids = []
-            for item_data in instrument_data:
-                cursor = conn.execute(instrument_sql, item_data)
-                instrument_ids.append(cursor.lastrowid)
-
-            # Bulk insert broker instruments
+        # Bulk insert into broker_instruments only
+        if broker_data:
             broker_sql = """
             INSERT OR REPLACE INTO broker_instruments
-            (instrument_id, broker_name, broker_symbol, broker_token, tick_size, lot_size,
+            (underlying_instrument_id, broker_name, broker_symbol, broker_token, tick_size, lot_size,
              expiry_date, strike_price, option_type, created_at, updated_at)
             VALUES (?, 'angelone', ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
             """
+            conn.executemany(broker_sql, broker_data)
 
-            broker_data = []
-            for i, item in enumerate(rows):
-                if i < len(instrument_ids):
-                    broker_data.append(
-                        (
-                            instrument_ids[i],
-                            item["broker_symbol"],
-                            item["broker_token"],
-                            item["tick_size"],
-                            item["lot_size"],
-                            item.get("expiry_date"),
-                            item.get("strike_price"),
-                            item.get("option_type"),
-                        )
-                    )
-
-            if broker_data:
-                conn.executemany(broker_sql, broker_data)
-
-        return len(instrument_data)
+        return len(broker_data)
 
     def upsert_commodities(self, rows: List[Dict[str, Any]]) -> int:
         """Bulk upsert commodity instruments"""

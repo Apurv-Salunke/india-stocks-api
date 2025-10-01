@@ -102,7 +102,11 @@ class InstrumentService:
             return True  # Assume empty if we can't check
 
     def _auto_populate_data(self):
-        """Auto-populate database with AngelOne data on first creation"""
+        """Auto-populate database with AngelOne data on first creation
+
+        IMPORTANT: Order matters! Underlyings (equity, indices, commodities) must be
+        populated BEFORE derivatives (F&O) since derivatives link to underlyings.
+        """
         try:
             print("🚀 Auto-populating database with AngelOne instrument data...")
             print("⏳ This may take a few minutes for the first time...")
@@ -112,13 +116,39 @@ class InstrumentService:
             # Initialize AngelOne provider with this service instance
             provider = AngelOneTokensManager(symbol_db=self, max_workers=8)
 
-            # Fetch and store equity data (most commonly used)
+            # Step 1: Populate underlyings (equity, indices, commodities)
+            print(
+                "\n📊 Step 1: Populating underlyings (equity, indices, commodities)..."
+            )
+
+            # Fetch and store equity data
             equity_data = provider.fetch_equity_data()
             if equity_data:
                 stored_count = provider._store_equity_data(equity_data)
                 print(f"✅ Auto-populated {stored_count:,} equity instruments")
 
-            # Optionally fetch F&O data (can be slow, so make it optional)
+            # Fetch and store index data
+            try:
+                index_data = provider.fetch_index_data()
+                if index_data:
+                    stored_count = provider._store_index_data(index_data)
+                    print(f"✅ Auto-populated {stored_count:,} index instruments")
+            except Exception as e:
+                print(f"⚠️  Index data population skipped: {e}")
+
+            # Fetch and store commodity data
+            try:
+                commodity_data = provider.fetch_commodity_data()
+                if commodity_data:
+                    stored_count = provider._store_commodity_data(commodity_data)
+                    print(f"✅ Auto-populated {stored_count:,} commodity instruments")
+            except Exception as e:
+                print(f"⚠️  Commodity data population skipped: {e}")
+
+            # Step 2: Populate derivatives (F&O) - these link to underlyings
+            print(
+                "\n📊 Step 2: Populating derivatives (F&O) - linking to underlyings..."
+            )
             try:
                 fno_data = provider.fetch_fno_data()
                 if fno_data:
@@ -128,7 +158,7 @@ class InstrumentService:
                 print(f"⚠️  F&O data population skipped: {e}")
                 print("💡 You can manually sync F&O data later if needed")
 
-            print("🎉 Database auto-population completed!")
+            print("\n🎉 Database auto-population completed!")
 
         except Exception as e:
             print(f"⚠️  Auto-population failed: {e}")

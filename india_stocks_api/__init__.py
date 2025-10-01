@@ -29,12 +29,12 @@ def _ensure_database_migrated():
         if not Path(db_path).exists():
             logger.info("Creating database with initial schema...")
             migration_manager.create_database()
-        else:
-            # Run any pending migrations
-            pending_migrations = migration_manager.get_pending_migrations()
-            if pending_migrations:
-                logger.info(f"Running {len(pending_migrations)} pending migrations...")
-                migration_manager.run_all_migrations()
+
+        # Always check and run pending migrations (including after fresh creation)
+        pending_migrations = migration_manager.get_pending_migrations()
+        if pending_migrations:
+            logger.info(f"Running {len(pending_migrations)} pending migrations...")
+            migration_manager.run_all_migrations()
 
     except Exception as e:
         logger.error(f"Failed to ensure database migration: {e}")
