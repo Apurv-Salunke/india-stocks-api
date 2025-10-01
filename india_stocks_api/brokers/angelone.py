@@ -342,11 +342,12 @@ class AngelOne(Broker):
         cls, symbol: str, exchange: str, db_path: str = None
     ) -> dict:
         """
-        Resolve F&O instrument using the new database system.
+        Resolve F&O/Commodity instrument using the new database system.
+        Derivatives are stored only in broker_instruments table, not in instruments table.
         Supports equity derivatives (NSE/BSE) and commodities (MCX/NCDEX).
 
         Parameters:
-            symbol (str): Standardized F&O symbol
+            symbol (str): Full derivative symbol (e.g., "NIFTY28OCT25FUT", "SILVERM28NOV25FUT")
             exchange (str): Exchange code ("NSE", "BSE", "MCX", "NCDEX")
             db_path (str): Path to the database file
 
@@ -365,37 +366,19 @@ class AngelOne(Broker):
         }
         exchange_enum = exchange_map.get(exchange.upper(), exchange.upper())
 
-        # Try to resolve as FUTURES first
-        instrument_data = service.resolve_instrument(
-            standardized_symbol=symbol.upper(),
+        # Derivatives are now resolved directly from broker_instruments table
+        # They don't exist in instruments table anymore
+        instrument_data = service.resolve_derivative(
+            broker_symbol=symbol.upper(),
             broker_name="angelone",
             exchange=exchange_enum,
-            category=InstrumentCategory.FUTURES,
         )
-
-        # If not found as FUTURES, try OPTIONS
-        if not instrument_data:
-            instrument_data = service.resolve_instrument(
-                standardized_symbol=symbol.upper(),
-                broker_name="angelone",
-                exchange=exchange_enum,
-                category=InstrumentCategory.OPTIONS,
-            )
-
-        # If still not found and it's a commodity exchange, try COMMODITY category
-        if not instrument_data and exchange.upper() in ["MCX", "NCDEX", "ICEX"]:
-            instrument_data = service.resolve_instrument(
-                standardized_symbol=symbol.upper(),
-                broker_name="angelone",
-                exchange=exchange_enum,
-                category=InstrumentCategory.COMMODITY,
-            )
 
         if not instrument_data:
             # Database lookup failed
             raise KeyError(f"F&O/Commodity instrument {symbol} not found in database")
 
-        # Return database result in legacy format for compatibility
+        # Return in expected format
         return {
             "broker_token": instrument_data["broker_token"],
             "broker_symbol": instrument_data["broker_symbol"],
@@ -404,6 +387,7 @@ class AngelOne(Broker):
             "expiry_date": instrument_data.get("expiry_date"),
             "strike_price": instrument_data.get("strike_price"),
             "option_type": instrument_data.get("option_type"),
+            "underlying_symbol": instrument_data.get("underlying_symbol"),
         }
 
     @classmethod

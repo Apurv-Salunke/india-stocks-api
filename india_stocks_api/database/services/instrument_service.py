@@ -188,6 +188,49 @@ class InstrumentService:
 
             return dict(row) if row else None
 
+    def resolve_derivative(
+        self,
+        broker_symbol: str,
+        broker_name: str,
+        exchange: Exchange,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Resolve derivative (futures/options) directly from broker_instruments table.
+        Derivatives are not in instruments table, only in broker_instruments.
+
+        Parameters:
+            broker_symbol: Full derivative symbol (e.g., "NIFTY28OCT25FUT")
+            broker_name: Broker name (e.g., "angelone")
+            exchange: Exchange code
+
+        Returns:
+            Dict with broker-specific data and underlying info
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+
+            query = """
+                SELECT
+                    bi.broker_symbol, bi.broker_token, bi.broker_instrument_key,
+                    bi.tick_size, bi.lot_size, bi.margin_percentage,
+                    bi.expiry_date, bi.strike_price, bi.option_type,
+                    i_underlying.standardized_symbol as underlying_symbol,
+                    i_underlying.instrument_name as underlying_name,
+                    COALESCE(e.exchange_code, ?) as exchange_code
+                FROM broker_instruments bi
+                LEFT JOIN instruments i_underlying ON bi.underlying_instrument_id = i_underlying.id
+                LEFT JOIN exchanges e ON i_underlying.exchange_id = e.id
+                WHERE bi.broker_symbol = ?
+                AND bi.broker_name = ?
+                AND bi.is_tradeable = 1
+                LIMIT 1
+            """
+
+            cursor = conn.execute(query, [exchange, broker_symbol, broker_name])
+            row = cursor.fetchone()
+
+            return dict(row) if row else None
+
     def search_instruments(
         self,
         query: str,
