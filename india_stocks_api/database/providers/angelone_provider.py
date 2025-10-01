@@ -124,7 +124,7 @@ class AngelOneTokensManager(BaseProvider):
                             "expiry_date": self._parse_expiry_date(
                                 item.get("expiry", "")
                             ),
-                            "strike_price": float(item.get("strike", -1))
+                            "strike_price": float(item.get("strike", -1)) / 100
                             if item.get("strike", -1) != -1
                             else None,
                             "option_type": self._extract_option_type(item["symbol"]),
@@ -165,7 +165,7 @@ class AngelOneTokensManager(BaseProvider):
                         "tick_size": float(item.get("tick_size", 0)) / 100,
                         "lot_size": int(item.get("lotsize", 1)),
                         "expiry_date": item.get("expiry", ""),
-                        "strike_price": float(item.get("strike", -1))
+                        "strike_price": float(item.get("strike", -1)) / 100
                         if item.get("strike", -1) != -1
                         else None,
                         "option_type": self._extract_option_type(item["symbol"]),
@@ -208,7 +208,7 @@ class AngelOneTokensManager(BaseProvider):
                         "tick_size": float(item.get("tick_size", 0)) / 100,
                         "lot_size": int(item.get("lotsize", 1)),
                         "expiry_date": item.get("expiry", ""),
-                        "strike_price": float(item.get("strike", -1))
+                        "strike_price": float(item.get("strike", -1)) / 100
                         if item.get("strike", -1) != -1
                         else None,
                         "option_type": self._extract_option_type(item["symbol"]),

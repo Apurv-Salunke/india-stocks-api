@@ -319,7 +319,7 @@ class TestAngelOneTokensManager:
 
     def test_fetch_fno_data(self, angelone_provider):
         """Test F&O data fetching and processing"""
-        # Mock F&O data
+        # Mock F&O data (strike price in paisa, like real API)
         mock_data = [
             {
                 "token": "43048",
@@ -330,7 +330,7 @@ class TestAngelOneTokensManager:
                 "tick_size": "5.000000",
                 "lotsize": "25",
                 "expiry": "28MAR2024",
-                "strike": "45000.000000",
+                "strike": "4500000.000000",  # In paisa (45000 * 100)
             },
             {
                 "token": "43047",
@@ -358,7 +358,9 @@ class TestAngelOneTokensManager:
             assert option_instrument["broker_token"] == "43048"
             assert option_instrument["exchange_code"] == "NSE"  # NFO mapped to NSE
             assert option_instrument["option_type"] == OptionType.CALL
-            assert option_instrument["strike_price"] == 45000.0
+            assert (
+                option_instrument["strike_price"] == 45000.0
+            )  # Divided by 100 from paisa
             assert option_instrument["underlying_type"] == "INDEX"
 
             # Check future instrument
