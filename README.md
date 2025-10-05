@@ -1,357 +1,325 @@
-# Indian Stock API
+# 🚀 India Stocks API - Unified Broker Interface
 
-## Why This Library Exists
+**A single Python API for 24+ Indian stock brokers**
 
-Trading with Indian brokers is painful. Here are the problems this library solves:
+Built on top of OpenAlgo's battle-tested broker implementations, providing a unified, clean interface for all your trading needs.
 
-### The Problems
-- **Symbol Hell**: Each broker uses different symbols (RELIANCE vs RELIANCE-EQ vs RELIANCE.NS)
-- **Token Management**: You need to manually find and manage broker-specific tokens
-- **Broker Lock-in**: Switching brokers means rewriting your entire trading code
-- **Complex APIs**: Each broker has different API structures and authentication methods
-- **Request/Response Formats**: Different JSON structures, field names, and data formats
-- **Data Inconsistency**: Same instrument, different data formats across brokers
+## ✨ Features
 
-### The Solution
-This library provides a **unified interface** that:
-- **No Symbol Management**: Use standard symbols (RELIANCE, BANKNIFTY) - we handle broker mapping
-- **No Token Hassle**: We automatically resolve broker-specific tokens
-- **Easy Broker Switching**: Change brokers with just one line of code
-- **Consistent API**: Same methods work across all brokers
-- **Standardized Data**: Uniform data format regardless of broker
-- **Unified Request/Response**: Same JSON structure across all brokers
+- 🎯 **Single API** for 24+ brokers - same code works everywhere
+- 🔥 **Production-tested** - uses OpenAlgo's proven implementations
+- 📦 **Easy to use** - simple, Pythonic interface
+- 🚀 **Fast** - HTTP/2 connection pooling, efficient caching
+- 📊 **Complete** - orders, positions, historical data, live quotes
+- 🛡️ **Type-safe** - full type hints support
+- 🔄 **Up-to-date** - easy to sync with OpenAlgo updates
 
-## Overview
-
-The Indian Stock API is a Python package for trading Indian stocks, futures, options, commodities, and currencies. Connect to multiple Indian brokers, fetch real-time data, place orders, and manage your trading account - **without worrying about broker-specific details**.
-
-## Features
-
-- **Unified API** - Same methods work across all brokers
-- **No Symbol Management** - Use standard symbols, we handle broker mapping
-- **No Token Hassle** - Automatic token resolution for all instruments
-- **Easy Broker Switching** - Change brokers with one line of code
-- **Standardized Data** - Uniform request/response format
-- **Login & Authentication** to multiple Indian brokers
-- **Fetch Candles** - OHLCV data for any timeframe
-- **Place Orders** - Buy/Sell stocks, futures, options
-- **Real-time Data** - Live prices and market depth
-- **Portfolio Management** - View positions and P&L
-- **Multiple Brokers** - AngelOne, Zerodha, Upstox, and more
-- **All Exchanges** - NSE, BSE, MCX, NCDEX
-
-## Installation
+## 📦 Installation
 
 ```bash
 pip install india-stocks-api
 ```
 
-## Quick Start
-
-### Easy Broker Switching
+## 🎯 Quick Start
 
 ```python
-from india_stocks_api import brokers
+from india_stocks_api.brokers import Broker
+from datetime import datetime, timedelta
 
-# Start with AngelOne
-broker = brokers.AngelOne()
-broker.login("api_key", "username", "password")
+# Create broker instance (works with any broker!)
+broker = Broker("angelone")
 
-# Your trading code works the same way
-candles = broker.get_candles("RELIANCE", "NSE", "1minute", limit=100)
-order = broker.place_order("RELIANCE", "NSE", "BUY", 10, "MARKET", "INTRADAY")
+# Authenticate
+broker.authenticate({
+    "user_id": "A1234",
+    "pin": "1234",
+    "totp_secret": "BASE32SECRET",
+    "api_key": "your_key"
+})
 
-# Switch to Zerodha? Just change one line!
-broker = brokers.Zerodha()
-broker.login("user_id", "password", "totp")
-
-# Same code works - no changes needed!
-candles = broker.get_candles("RELIANCE", "NSE", "1minute", limit=100)
-order = broker.place_order("RELIANCE", "NSE", "BUY", 10, "MARKET", "INTRADAY")
-```
-
-### No Symbol Management Required
-
-```python
-# Use standard symbols - we handle broker mapping automatically
-symbols = ["RELIANCE", "TCS", "INFY", "BANKNIFTY", "GOLD"]
-
-for symbol in symbols:
-    # Works with any broker - no symbol conversion needed
-    candles = broker.get_candles(symbol, "NSE", "1minute", limit=10)
-    print(f"{symbol}: {candles[-1]['close']}")
-```
-
-### Login to Broker
-
-```python
-from india_stocks_api import brokers
-
-# Login to AngelOne
-angelone = brokers.AngelOne()
-angelone.login(
-    api_key="your_api_key",
-    username="your_username",
-    password="your_password"
-)
-
-# Login to Zerodha
-zerodha = brokers.Zerodha()
-zerodha.login(
-    user_id="your_user_id",
-    password="your_password",
-    totp="your_totp"
-)
-```
-
-### Fetch Candles (OHLCV Data)
-
-```python
-# Get 1-minute candles for RELIANCE
-candles = angelone.get_candles(
+# Place order
+order = broker.place_order(
     symbol="RELIANCE",
     exchange="NSE",
-    interval="1minute",
-    from_date="2024-01-01",
-    to_date="2024-01-31"
-)
-
-print(f"Got {len(candles)} candles")
-for candle in candles[-5:]:  # Last 5 candles
-    print(f"Date: {candle['date']}, Open: {candle['open']}, High: {candle['high']}, Low: {candle['low']}, Close: {candle['close']}, Volume: {candle['volume']}")
-```
-
-### Place Orders
-
-```python
-# Buy 10 shares of RELIANCE
-order = angelone.place_order(
-    symbol="RELIANCE",
-    exchange="NSE",
-    transaction_type="BUY",
+    side="BUY",
     quantity=10,
-    order_type="MARKET",
-    product="INTRADAY"
+    order_type="MARKET"
 )
-
 print(f"Order placed: {order['order_id']}")
 
-# Place limit order
-limit_order = angelone.place_order(
+# Get positions
+positions = broker.get_positions()
+for pos in positions:
+    print(f"{pos['symbol']}: {pos['netqty']}")
+
+# Get historical data
+end = datetime.now()
+start = end - timedelta(days=7)
+candles = broker.get_historical_data("RELIANCE", "NSE", "1h", start, end)
+
+# Get live quotes
+quote = broker.get_quotes("RELIANCE", "NSE")
+print(f"LTP: {quote['ltp']}, Volume: {quote['volume']}")
+```
+
+## 🏦 Supported Brokers (24+)
+
+| Broker | Code | Status |
+|--------|------|--------|
+| **AngelOne** | `angelone` or `angel` | ✅ Ready |
+| **Zerodha** | `zerodha` | ✅ Ready |
+| **Upstox** | `upstox` | ✅ Ready |
+| **Dhan** | `dhan` | ✅ Ready |
+| **Fyers** | `fyers` | ✅ Ready |
+| **Groww** | `groww` | ✅ Ready |
+| **Kotak** | `kotak` | ✅ Ready |
+| **AliceBlue** | `aliceblue` | ✅ Ready |
+| **Flattrade** | `flattrade` | ✅ Ready |
+| **Shoonya** | `shoonya` | ✅ Ready |
+| **5Paisa** | `5paisa` or `fivepaisa` | ✅ Ready |
+| **Firstock** | `firstock` | ✅ Ready |
+| **CompositeEdge** | `compositedge` | ✅ Ready |
+| **DefinEdge** | `definedge` | ✅ Ready |
+| **iBulls** | `ibulls` | ✅ Ready |
+| **IIFL** | `iifl` | ✅ Ready |
+| **IndMoney** | `indmoney` | ✅ Ready |
+| **Paytm** | `paytm` | ✅ Ready |
+| **Pocketful** | `pocketful` | ✅ Ready |
+| **TradJini** | `tradejini` | ✅ Ready |
+| **Wisdom** | `wisdom` | ✅ Ready |
+| **Zebu** | `zebu` | ✅ Ready |
+| **5PaisaXTS** | `fivepaisaxts` | ✅ Ready |
+| **Dhan Sandbox** | `dhan_sandbox` | ✅ Ready |
+
+**Switching brokers?** Just change one line:
+```python
+# broker = Broker("angelone")
+broker = Broker("zerodha")  # That's it! Same API.
+```
+
+## 📚 API Reference
+
+### Authentication
+
+```python
+broker = Broker("angelone")
+
+# Most brokers
+broker.authenticate({
+    "user_id": "your_id",
+    "pin": "your_pin",
+    "totp_secret": "your_secret",
+    "api_key": "your_key"
+})
+
+# Zerodha (uses request token)
+broker.authenticate({
+    "request_token": "request_token_from_redirect",
+    "api_key": "your_key",
+    "api_secret": "your_secret"
+})
+```
+
+### Orders
+
+```python
+# Market order
+order = broker.place_order("RELIANCE", "NSE", "BUY", 10, "MARKET")
+
+# Limit order
+order = broker.place_order(
     symbol="RELIANCE",
     exchange="NSE",
-    transaction_type="SELL",
+    side="BUY",
     quantity=10,
     order_type="LIMIT",
     price=2500.00,
-    product="DELIVERY"
+    product="CNC"  # Delivery
 )
+
+# Stop loss order
+order = broker.place_order(
+    symbol="RELIANCE",
+    exchange="NSE",
+    side="SELL",
+    quantity=10,
+    order_type="SL",
+    price=2400.00,
+    trigger_price=2450.00
+)
+
+# Cancel order
+result = broker.cancel_order(order_id)
+
+# Get order book
+orders = broker.get_order_book()
+
+# Get trade book
+trades = broker.get_trade_book()
 ```
 
-### Get Live Prices
-
-```python
-# Get current price
-price = angelone.get_quote("RELIANCE", "NSE")
-print(f"RELIANCE: {price['last_price']}")
-
-# Get multiple quotes
-quotes = angelone.get_quotes([
-    {"symbol": "RELIANCE", "exchange": "NSE"},
-    {"symbol": "TCS", "exchange": "NSE"},
-    {"symbol": "INFY", "exchange": "NSE"}
-])
-
-for quote in quotes:
-    print(f"{quote['symbol']}: {quote['last_price']}")
-```
-
-### View Portfolio
+### Positions & Holdings
 
 ```python
 # Get positions
-positions = angelone.get_positions()
-print("Current Positions:")
-for position in positions:
-    print(f"{position['symbol']}: {position['quantity']} @ {position['average_price']}")
+positions = broker.get_positions()
+for pos in positions:
+    print(f"{pos['symbol']}: Qty={pos['netqty']}, PnL={pos['pnl']}")
 
 # Get holdings
-holdings = angelone.get_holdings()
-print("Holdings:")
+holdings = broker.get_holdings()
 for holding in holdings:
-    print(f"{holding['symbol']}: {holding['quantity']} shares")
-
-# Get P&L
-pnl = angelone.get_pnl()
-print(f"Total P&L: {pnl['total_pnl']}")
+    print(f"{holding['symbol']}: {holding['quantity']}")
 ```
 
-## Advanced Trading
-
-### Futures & Options Trading
+### Market Data
 
 ```python
-# Buy BANKNIFTY future
-fno_order = angelone.place_order(
-    symbol="BANKNIFTY28OCT25FUT",
+# Historical data
+from datetime import datetime, timedelta
+
+end = datetime.now()
+start = end - timedelta(days=30)
+
+candles = broker.get_historical_data(
+    symbol="RELIANCE",
     exchange="NSE",
-    transaction_type="BUY",
-    quantity=25,  # Lot size
-    order_type="MARKET",
-    product="MIS"
+    interval="1h",  # 1m, 3m, 5m, 15m, 30m, 1h, D
+    from_date=start,
+    to_date=end
 )
 
-# Buy BANKNIFTY option
-option_order = angelone.place_order(
-    symbol="BANKNIFTY28OCT2545000CE",
-    exchange="NSE",
-    transaction_type="BUY",
-    quantity=25,
-    order_type="LIMIT",
-    price=150.00,
-    product="MIS"
+for candle in candles:
+    print(f"{candle['timestamp']}: O={candle['open']}, C={candle['close']}")
+
+# Live quotes
+quote = broker.get_quotes("RELIANCE", "NSE")
+print(f"""
+LTP: {quote['ltp']}
+Open: {quote['open']}
+High: {quote['high']}
+Low: {quote['low']}
+Volume: {quote['volume']}
+""")
+
+# Market depth (L2 data)
+depth = broker.get_market_depth("RELIANCE", "NSE")
+print("Bids:", depth['bids'][:5])  # Top 5 bids
+print("Asks:", depth['asks'][:5])  # Top 5 asks
+```
+
+### Error Handling
+
+```python
+from india_stocks_api.brokers import (
+    Broker,
+    BrokerError,
+    AuthenticationError,
+    OrderError,
+    DataError
 )
-```
 
-### Commodity Trading
-
-```python
-# Buy GOLD commodity
-gold_order = angelone.place_order(
-    symbol="GOLD",
-    exchange="MCX",
-    transaction_type="BUY",
-    quantity=1,  # 1 kg
-    order_type="MARKET",
-    product="INTRADAY"
-)
-```
-
-### Algorithmic Trading Example
-
-```python
-import time
-from datetime import datetime
-
-# Simple moving average strategy
-def trading_strategy():
-    while True:
-        # Get current price
-        price = angelone.get_quote("RELIANCE", "NSE")
-        current_price = price['last_price']
-
-        # Get 20-period SMA
-        candles = angelone.get_candles("RELIANCE", "NSE", "1minute", limit=20)
-        sma_20 = sum(c['close'] for c in candles) / len(candles)
-
-        # Trading logic
-        if current_price > sma_20 * 1.01:  # Price 1% above SMA
-            angelone.place_order("RELIANCE", "NSE", "SELL", 10, "MARKET", "INTRADAY")
-            print(f"Sold RELIANCE at {current_price}")
-        elif current_price < sma_20 * 0.99:  # Price 1% below SMA
-            angelone.place_order("RELIANCE", "NSE", "BUY", 10, "MARKET", "INTRADAY")
-            print(f"Bought RELIANCE at {current_price}")
-
-        time.sleep(60)  # Check every minute
-
-# Run strategy
-trading_strategy()
-```
-
-## Error Handling
-
-```python
 try:
-    order = angelone.place_order("RELIANCE", "NSE", "BUY", 10, "MARKET", "INTRADAY")
-    print(f"Order successful: {order['order_id']}")
-except Exception as e:
+    broker = Broker("angelone")
+    broker.authenticate(credentials)
+    order = broker.place_order("RELIANCE", "NSE", "BUY", 10)
+except AuthenticationError as e:
+    print(f"Auth failed: {e}")
+except OrderError as e:
     print(f"Order failed: {e}")
-    # Handle insufficient funds, invalid symbol, etc.
+except DataError as e:
+    print(f"Data fetch failed: {e}")
+except BrokerError as e:
+    print(f"Broker error: {e}")
 ```
 
-## Supported Brokers
+## 🏗️ Architecture
 
-- **AngelOne** - Full support for all features
-- **Zerodha** - Coming soon
-- **Upstox** - Coming soon
-- **ICICI Direct** - Coming soon
-- **5Paisa** - Coming soon
-
-## Supported Exchanges
-
-- **NSE** - National Stock Exchange
-- **BSE** - Bombay Stock Exchange
-- **MCX** - Multi Commodity Exchange
-- **NCDEX** - National Commodity & Derivatives Exchange
-
-## Common Use Cases
-
-### Day Trading
-```python
-# Quick day trading setup - works with any broker
-broker = brokers.AngelOne()  # or brokers.Zerodha()
-broker.login("api_key", "username", "password")
-
-# Get intraday candles - same code for all brokers
-candles = broker.get_candles("RELIANCE", "NSE", "5minute", limit=100)
-
-# Place quick order - unified API
-order = broker.place_order("RELIANCE", "NSE", "BUY", 10, "MARKET", "INTRADAY")
+```
+india-stocks-api/
+├── brokers/           # 24+ broker implementations (from OpenAlgo)
+│   ├── angel/
+│   ├── zerodha/
+│   ├── upstox/
+│   └── ...
+├── utils/             # Compatibility layer
+│   ├── openalgo_compat.py  # Maps to your database
+│   ├── httpx_client.py     # HTTP client
+│   └── logging.py          # Logging
+└── unified_api.py     # Single unified interface
 ```
 
-### Swing Trading
-```python
-# Swing trading with daily candles - broker agnostic
-daily_candles = broker.get_candles("RELIANCE", "NSE", "1day", limit=50)
+### Design Philosophy
 
-# Place delivery order - same method for all brokers
-order = broker.place_order("RELIANCE", "NSE", "BUY", 100, "LIMIT", "DELIVERY", price=2400)
+1. **Unified Interface** - Same API for all brokers
+2. **Minimal Changes** - Uses OpenAlgo code as-is
+3. **Easy Updates** - Sync with OpenAlgo when they update
+4. **Your Database** - Integrates with your existing data
+5. **Production Ready** - Battle-tested broker implementations
+
+## 🔄 Updating Broker Implementations
+
+When OpenAlgo updates their broker code:
+
+```bash
+# 1. Backup your changes (if any)
+git stash
+
+# 2. Copy updated broker folders from OpenAlgo
+cp -r /path/to/openalgo/broker/* india_stocks_api/brokers/
+
+# 3. Test
+python -m pytest tests/
+
+# 4. Done!
 ```
 
-### Options Trading
-```python
-# Buy call option - standard symbol, we handle broker mapping
-call_order = broker.place_order("BANKNIFTY28OCT2545000CE", "NSE", "BUY", 25, "MARKET", "MIS")
+No need to rewrite everything - just sync the broker folders!
 
-# Buy put option - same API across brokers
-put_order = broker.place_order("BANKNIFTY28OCT2545000PE", "NSE", "BUY", 25, "MARKET", "MIS")
+## 🧪 Testing
+
+```bash
+# Run tests
+pytest tests/
+
+# Test specific broker
+pytest tests/test_angelone.py
+
+# With coverage
+pytest --cov=india_stocks_api tests/
 ```
 
-### Multi-Broker Strategy
-```python
-# Run same strategy across multiple brokers
-brokers_list = [brokers.AngelOne(), brokers.Zerodha()]
+## 📖 Examples
 
-for broker in brokers_list:
-    broker.login("credentials...")
+See [examples/](examples/) directory for more:
+- `unified_api_example.py` - Complete usage examples
+- `angelone_example.py` - AngelOne specific
+- `zerodha_example.py` - Zerodha specific
+- `multi_broker_example.py` - Using multiple brokers
 
-    # Same trading logic works for all brokers
-    candles = broker.get_candles("RELIANCE", "NSE", "1minute", limit=20)
-    if candles[-1]['close'] > candles[-2]['close']:
-        broker.place_order("RELIANCE", "NSE", "BUY", 10, "MARKET", "INTRADAY")
-```
+## 🤝 Contributing
 
-## Documentation
+We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
-### For End Users
-- **[Quick Start Guide](#quick-start)** - Get started in minutes
-- **[API Reference](docs/api-reference.md)** - Complete API documentation with examples
-- **[Migration Guide](docs/migration-guide.md)** - Upgrade instructions and troubleshooting
+## 📄 License
 
-### For Developers
-- **[Architecture Overview](docs/architecture.md)** - System design and components
-- **[Broker Integration Guide](docs/broker-integration-guide.md)** - Add support for new brokers
-- **[Database Schema](docs/database-schema.md)** - Database structure and relationships
-- **[Design Philosophy](docs/philosophy.md)** - Core principles and design decisions
+MIT License - see [LICENSE](LICENSE) for details.
 
-## License
+## 🙏 Credits
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+Built on top of [OpenAlgo](https://github.com/marketcalls/openalgo) by Rajandran R and team.
+Their excellent broker implementations power this unified API.
 
-## Version
+## 📞 Support
 
-Current version: 1.0.0
+- 📧 Email: support@example.com
+- 💬 Discord: [Join our community](https://discord.gg/example)
+- 🐛 Issues: [GitHub Issues](https://github.com/yourusername/india-stocks-api/issues)
 
-## Contact
+## ⭐ Star History
 
-For any inquiries, please contact [me](salunke.apurv7@gmail.com) or open an issue in the repository.
+If you find this useful, please star the repo!
+
+---
+
+**Made with ❤️ for the Indian trading community**
