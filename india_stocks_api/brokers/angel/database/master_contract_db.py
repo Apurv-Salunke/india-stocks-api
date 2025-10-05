@@ -10,11 +10,15 @@ from sqlalchemy.orm import scoped_session, sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 
 # from extensions import socketio  # Import SocketIO - Not needed for our use case
-from utils.logging import get_logger
+from india_stocks_api.utils.logging import get_logger
 from india_stocks_api.config import (
     get_broker_config,
     get_database_url,
     get_cache_directory,
+)
+from india_stocks_api.database import (
+    initialize_broker_database,
+    store_broker_instruments,
 )
 
 logger = get_logger(__name__)
@@ -279,8 +283,12 @@ def master_contract_download():
 
         # token_df = token_df.drop_duplicates(subset='symbol', keep='first')
 
-        delete_symtoken_table()  # Consider the implications of this action
-        copy_from_dataframe(token_df)
+        # Initialize our database and store the data
+        initialize_broker_database()
+
+        # Convert DataFrame to list of dictionaries for our database function
+        instruments_list = token_df.to_dict("records")
+        store_broker_instruments(instruments_list, "angelone")
 
         logger.info("Successfully Downloaded AngelOne symbols")
         return {"status": "success", "message": "Successfully Downloaded"}
