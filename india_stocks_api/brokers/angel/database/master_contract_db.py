@@ -8,13 +8,19 @@ from datetime import datetime
 from sqlalchemy import create_engine, Column, Integer, String, Float, Sequence, Index
 from sqlalchemy.orm import scoped_session, sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
-from extensions import socketio  # Import SocketIO
+
+# from extensions import socketio  # Import SocketIO - Not needed for our use case
 from utils.logging import get_logger
+from india_stocks_api.config import (
+    get_broker_config,
+    get_database_url,
+    get_cache_directory,
+)
 
 logger = get_logger(__name__)
 
-
-DATABASE_URL = os.getenv("DATABASE_URL")  # Replace with your database path
+# Use config instead of hardcoded values
+DATABASE_URL = get_database_url()
 
 engine = create_engine(DATABASE_URL)
 db_session = scoped_session(
@@ -89,7 +95,11 @@ def download_json_angel_data(url, output_path):
     Downloads a JSON file from the specified URL and saves it to the specified path.
     """
     logger.info("Downloading JSON data")
-    response = requests.get(url, timeout=10)  # timeout after 10 seconds
+    from india_stocks_api.config import get_http_settings
+
+    http_settings = get_http_settings()
+    timeout = http_settings["timeout"]
+    response = requests.get(url, timeout=timeout)
     if response.status_code == 200:  # Successful download
         with open(output_path, "wb") as f:
             f.write(response.content)
@@ -253,8 +263,14 @@ def delete_angel_temp_data(output_path):
 
 def master_contract_download():
     logger.info("Downloading Master Contract")
-    url = "https://margincalculator.angelbroking.com/OpenAPI_File/files/OpenAPIScripMaster.json"
-    output_path = "tmp/angel.json"
+
+    # Get AngelOne config
+    angelone_config = get_broker_config("angelone")
+    url = angelone_config["master_contract_url"]
+
+    # Use config for cache directory
+    cache_dir = get_cache_directory()
+    output_path = cache_dir / "angel.json"
     try:
         download_json_angel_data(url, output_path)
         token_df = process_angel_json(output_path)
@@ -266,16 +282,13 @@ def master_contract_download():
         delete_symtoken_table()  # Consider the implications of this action
         copy_from_dataframe(token_df)
 
-        return socketio.emit(
-            "master_contract_download",
-            {"status": "success", "message": "Successfully Downloaded"},
-        )
+        logger.info("Successfully Downloaded AngelOne symbols")
+        return {"status": "success", "message": "Successfully Downloaded"}
 
     except Exception as e:
         logger.info(f"{str(e)}")
-        return socketio.emit(
-            "master_contract_download", {"status": "error", "message": str(e)}
-        )
+        logger.error(f"Failed to download AngelOne symbols: {str(e)}")
+        return {"status": "error", "message": str(e)}
 
 
 def search_symbols(symbol, exchange):
