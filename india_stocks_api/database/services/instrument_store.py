@@ -226,22 +226,48 @@ class InstrumentStore:
                 )
                 continue
 
+            # Get the exchange for the underlying
+            # For derivatives: NFO/BFO/MCX/etc. → underlying is on NSE/BSE/MCX
+            exchange_code = item.get("exchange_code")
+            underlying_exchange_map = {
+                "NFO": "NSE",  # NSE F&O → NSE equity/index
+                "BFO": "BSE",  # BSE F&O → BSE equity/index
+                "MCX": "MCX",  # MCX derivatives → MCX commodity
+                "NCDEX": "NCDEX",  # NCDEX derivatives → NCDEX commodity
+                "ICEX": "ICEX",  # ICEX derivatives → ICEX commodity
+            }
+            underlying_exchange = underlying_exchange_map.get(
+                exchange_code, exchange_code
+            )
+            underlying_exchange_id = exchange_ids.get(underlying_exchange)
+
+            if not underlying_exchange_id:
+                # Try to get the exchange ID if not already cached
+                underlying_exchange_id = DatabaseUtils.get_exchange_id(
+                    underlying_exchange, str(self.db_path)
+                )
+
             # Find the underlying instrument in instruments table
             # The underlying should already exist (equity, index, or commodity)
+            # Filter by BOTH symbol AND exchange to avoid cross-exchange matches
             underlying_query = """
                 SELECT i.id
                 FROM instruments i
                 WHERE i.standardized_symbol = ?
+                AND i.exchange_id = ?
                 LIMIT 1
             """
 
-            cursor = conn.execute(underlying_query, (underlying_symbol,))
+            cursor = conn.execute(
+                underlying_query, (underlying_symbol, underlying_exchange_id)
+            )
             underlying_row = cursor.fetchone()
 
             if not underlying_row:
                 # Underlying doesn't exist - log and skip
                 self.logger.warning(
-                    f"Skipping {item.get('broker_symbol')}: underlying '{underlying_symbol}' not found"
+                    f"Skipping {item.get('broker_symbol')}: underlying '{underlying_symbol}' "
+                    f"not found on exchange '{underlying_exchange}'"
                 )
                 continue
 

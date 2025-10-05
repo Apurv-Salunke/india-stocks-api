@@ -7,6 +7,7 @@ VALUES (5, 'Parse expiry dates to ISO format');
 
 -- Update expiry dates from DDMMMYYYY to YYYY-MM-DD format
 -- Format: 01OCT2025 → 2025-10-01
+-- IDEMPOTENT: Only converts dates NOT already in ISO format
 UPDATE broker_instruments
 SET expiry_date =
     substr(expiry_date, 6, 4) || '-' ||  -- Year (2025)
@@ -27,9 +28,11 @@ SET expiry_date =
     substr('00' || substr(expiry_date, 1, 2), -2, 2)  -- Day (01)
 WHERE expiry_date IS NOT NULL
 AND length(expiry_date) >= 9  -- Only convert DDMMMYYYY format
-AND substr(expiry_date, 3, 3) IN ('JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC');
+AND substr(expiry_date, 3, 3) IN ('JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC')
+AND NOT expiry_date LIKE '____-__-__';  -- Skip already-converted ISO dates (YYYY-MM-DD)
 
 -- Also update instruments table if any expiry dates exist there
+-- IDEMPOTENT: Only converts dates NOT already in ISO format
 UPDATE instruments
 SET expiry_date =
     substr(expiry_date, 6, 4) || '-' ||  -- Year
@@ -50,4 +53,5 @@ SET expiry_date =
     substr('00' || substr(expiry_date, 1, 2), -2, 2)
 WHERE expiry_date IS NOT NULL
 AND length(expiry_date) >= 9
-AND substr(expiry_date, 3, 3) IN ('JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC');
+AND substr(expiry_date, 3, 3) IN ('JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC')
+AND NOT expiry_date LIKE '____-__-__';  -- Skip already-converted ISO dates (YYYY-MM-DD)
