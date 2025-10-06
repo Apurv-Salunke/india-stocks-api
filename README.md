@@ -67,29 +67,15 @@ print(f"LTP: {quote['ltp']}, Volume: {quote['volume']}")
 | Broker | Code | Status | Token Service Tested |
 |--------|------|--------|---------------------|
 | **AngelOne** | `angelone` or `angel` | ✅ Ready | ✅ Tested (135,806 instruments) |
-| **Zerodha** | `zerodha` | ✅ Ready | ⏳ Auth Required |
-| **Upstox** | `upstox` | ✅ Ready | ✅ Tested (96,670 instruments) |
 | **Dhan** | `dhan` | ✅ Ready | ✅ Tested (199,261 instruments) |
+| **Dhan Sandbox** | `dhan_sandbox` | ✅ Ready | ✅ Tested (199,261 instruments) |
+| **5Paisa** | `5paisa` or `fivepaisa` | ✅ Ready | ✅ Tested (157,905 instruments) |
+| **5PaisaXTS** | `fivepaisaxts` | ✅ Ready | ✅ Tested (124,754 instruments) |
 | **Fyers** | `fyers` | ✅ Ready | ✅ Tested (137,430 instruments) |
 | **Groww** | `groww` | ✅ Ready | ✅ Tested (100,203 instruments) |
-| **Kotak** | `kotak` | ✅ Ready | ⏳ Auth Required |
-| **AliceBlue** | `aliceblue` | ✅ Ready | ⏳ Pending |
-| **Flattrade** | `flattrade` | ✅ Ready | ⏳ Pending |
 | **Shoonya** | `shoonya` | ✅ Ready | ✅ Tested (172,112 instruments) |
-| **5Paisa** | `5paisa` or `fivepaisa` | ✅ Ready | ✅ Tested (157,905 instruments) |
-| **Firstock** | `firstock` | ✅ Ready | ⏳ Pending |
-| **CompositeEdge** | `compositedge` | ✅ Ready | ⏳ Pending |
-| **DefinEdge** | `definedge` | ✅ Ready | ⏳ Pending |
-| **iBulls** | `ibulls` | ✅ Ready | ⏳ Pending |
-| **IIFL** | `iifl` | ✅ Ready | ⏳ Pending |
-| **IndMoney** | `indmoney` | ✅ Ready | ⏳ Pending |
-| **Paytm** | `paytm` | ✅ Ready | ⏳ Pending |
-| **Pocketful** | `pocketful` | ✅ Ready | ⏳ Pending |
-| **TradJini** | `tradejini` | ✅ Ready | ⏳ Pending |
-| **Wisdom** | `wisdom` | ✅ Ready | ⏳ Pending |
-| **Zebu** | `zebu` | ✅ Ready | ⏳ Pending |
-| **5PaisaXTS** | `fivepaisaxts` | ✅ Ready | ✅ Tested (124,754 instruments) |
-| **Dhan Sandbox** | `dhan_sandbox` | ✅ Ready | ✅ Tested (199,261 instruments) |
+| **Upstox** | `upstox` | ✅ Ready | ✅ Tested (96,670 instruments) |
+| **Zerodha** | `zerodha` | ✅ Ready | ⏳ Auth Required |
 
 ### Token Service Status Legend:
 - ✅ **Tested** - Token download and storage working
