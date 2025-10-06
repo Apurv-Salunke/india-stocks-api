@@ -5,84 +5,18 @@ import pandas as pd
 import requests
 import gzip
 import shutil
-
-from sqlalchemy import create_engine, Column, Integer, String, Float, Sequence, Index
-from sqlalchemy.orm import scoped_session, sessionmaker
-from sqlalchemy.ext.declarative import declarative_base
-from extensions import socketio  # Import SocketIO
-from utils.logging import get_logger
+from india_stocks_api.utils.logging import get_logger
+from india_stocks_api.config import (
+    get_broker_config,
+    get_database_url,
+    get_cache_directory,
+)
+from india_stocks_api.database import (
+    initialize_broker_database,
+    store_broker_instruments,
+)
 
 logger = get_logger(__name__)
-
-
-DATABASE_URL = os.getenv("DATABASE_URL")  # Replace with your database path
-
-engine = create_engine(DATABASE_URL)
-db_session = scoped_session(
-    sessionmaker(autocommit=False, autoflush=False, bind=engine)
-)
-Base = declarative_base()
-Base.query = db_session.query_property()
-
-
-class SymToken(Base):
-    __tablename__ = "symtoken"
-    id = Column(Integer, Sequence("symtoken_id_seq"), primary_key=True)
-    symbol = Column(String, nullable=False, index=True)  # Single column index
-    brsymbol = Column(String, nullable=False, index=True)  # Single column index
-    name = Column(String)
-    exchange = Column(String, index=True)  # Include this column in a composite index
-    brexchange = Column(String, index=True)
-    token = Column(String, index=True)  # Indexed for performance
-    expiry = Column(String)
-    strike = Column(Float)
-    lotsize = Column(Integer)
-    instrumenttype = Column(String)
-    tick_size = Column(Float)
-
-    # Define a composite index on symbol and exchange columns
-    __table_args__ = (Index("idx_symbol_exchange", "symbol", "exchange"),)
-
-
-def init_db():
-    logger.info("Initializing Master Contract DB")
-    Base.metadata.create_all(bind=engine)
-
-
-def delete_symtoken_table():
-    logger.info("Deleting Symtoken Table")
-    SymToken.query.delete()
-    db_session.commit()
-
-
-def copy_from_dataframe(df):
-    logger.info("Performing Bulk Insert")
-    # Convert DataFrame to a list of dictionaries
-    data_dict = df.to_dict(orient="records")
-
-    # Retrieve existing tokens to filter them out from the insert
-    existing_tokens = {
-        result.token for result in db_session.query(SymToken.token).all()
-    }
-
-    # Filter out data_dict entries with tokens that already exist
-    filtered_data_dict = [
-        row for row in data_dict if row["token"] not in existing_tokens
-    ]
-
-    # Insert in bulk the filtered records
-    try:
-        if filtered_data_dict:  # Proceed only if there's anything to insert
-            db_session.bulk_insert_mappings(SymToken, filtered_data_dict)
-            db_session.commit()
-            logger.info(
-                f"Bulk insert completed successfully with {len(filtered_data_dict)} new records."
-            )
-        else:
-            logger.info("No new records to insert.")
-    except Exception as e:
-        logger.error(f"Error during bulk insert: {e}")
-        db_session.rollback()
 
 
 def download_and_unzip_upstox_data(url, input_path, output_path):
@@ -206,9 +140,16 @@ def delete_upstox_temp_data(input_path, output_path):
 
 def master_contract_download():
     logger.info("Downloading Master Contract")
-    url = "https://assets.upstox.com/market-quote/instruments/exchange/complete.json.gz"
-    input_path = "tmp/temp_upstox.json.gz"
-    output_path = "tmp/upstox.json"
+    
+    # Get Upstox config
+    upstox_config = get_broker_config("upstox")
+    url = upstox_config["master_contract_url"]
+    
+    # Use config for cache directory
+    cache_dir = get_cache_directory()
+    input_path = cache_dir / "temp_upstox.json.gz"
+    output_path = cache_dir / "upstox.json"
+    
     try:
         download_and_unzip_upstox_data(url, input_path, output_path)
         token_df = process_upstox_json(output_path)
@@ -217,22 +158,19 @@ def master_contract_download():
 
         # token_df = token_df.drop_duplicates(subset='symbol', keep='first')
 
-        delete_symtoken_table()  # Consider the implications of this action
-        copy_from_dataframe(token_df)
+        # Initialize our database and store the data
+        initialize_broker_database()
+        
+        # Convert DataFrame to list of dictionaries for our database function
+        instruments_list = token_df.to_dict("records")
+        store_broker_instruments(instruments_list, "upstox")
 
-        return socketio.emit(
-            "master_contract_download",
-            {"status": "success", "message": "Successfully Downloaded"},
-        )
+        logger.info("Successfully Downloaded Upstox symbols")
+        return {"status": "success", "message": "Successfully Downloaded"}
 
     except Exception as e:
         logger.info(f"{str(e)}")
-        return socketio.emit(
-            "master_contract_download", {"status": "error", "message": str(e)}
-        )
+        logger.error(f"Failed to download Upstox symbols: {str(e)}")
+        return {"status": "error", "message": str(e)}
 
 
-def search_symbols(symbol, exchange):
-    return SymToken.query.filter(
-        SymToken.symbol.like(f"%{symbol}%"), SymToken.exchange == exchange
-    ).all()

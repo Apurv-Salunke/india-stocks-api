@@ -64,32 +64,37 @@ print(f"LTP: {quote['ltp']}, Volume: {quote['volume']}")
 
 ## 🏦 Supported Brokers (24+)
 
-| Broker | Code | Status |
-|--------|------|--------|
-| **AngelOne** | `angelone` or `angel` | ✅ Ready |
-| **Zerodha** | `zerodha` | ✅ Ready |
-| **Upstox** | `upstox` | ✅ Ready |
-| **Dhan** | `dhan` | ✅ Ready |
-| **Fyers** | `fyers` | ✅ Ready |
-| **Groww** | `groww` | ✅ Ready |
-| **Kotak** | `kotak` | ✅ Ready |
-| **AliceBlue** | `aliceblue` | ✅ Ready |
-| **Flattrade** | `flattrade` | ✅ Ready |
-| **Shoonya** | `shoonya` | ✅ Ready |
-| **5Paisa** | `5paisa` or `fivepaisa` | ✅ Ready |
-| **Firstock** | `firstock` | ✅ Ready |
-| **CompositeEdge** | `compositedge` | ✅ Ready |
-| **DefinEdge** | `definedge` | ✅ Ready |
-| **iBulls** | `ibulls` | ✅ Ready |
-| **IIFL** | `iifl` | ✅ Ready |
-| **IndMoney** | `indmoney` | ✅ Ready |
-| **Paytm** | `paytm` | ✅ Ready |
-| **Pocketful** | `pocketful` | ✅ Ready |
-| **TradJini** | `tradejini` | ✅ Ready |
-| **Wisdom** | `wisdom` | ✅ Ready |
-| **Zebu** | `zebu` | ✅ Ready |
-| **5PaisaXTS** | `fivepaisaxts` | ✅ Ready |
-| **Dhan Sandbox** | `dhan_sandbox` | ✅ Ready |
+| Broker | Code | Status | Token Service Tested |
+|--------|------|--------|---------------------|
+| **AngelOne** | `angelone` or `angel` | ✅ Ready | ✅ Tested (135,806 instruments) |
+| **Zerodha** | `zerodha` | ✅ Ready | ⏳ Auth Required |
+| **Upstox** | `upstox` | ✅ Ready | ✅ Tested (96,670 instruments) |
+| **Dhan** | `dhan` | ✅ Ready | ⏳ Pending |
+| **Fyers** | `fyers` | ✅ Ready | ⏳ Pending |
+| **Groww** | `groww` | ✅ Ready | ⏳ Pending |
+| **Kotak** | `kotak` | ✅ Ready | ⏳ Auth Required |
+| **AliceBlue** | `aliceblue` | ✅ Ready | ⏳ Pending |
+| **Flattrade** | `flattrade` | ✅ Ready | ⏳ Pending |
+| **Shoonya** | `shoonya` | ✅ Ready | ⏳ Pending |
+| **5Paisa** | `5paisa` or `fivepaisa` | ✅ Ready | ⏳ Pending |
+| **Firstock** | `firstock` | ✅ Ready | ⏳ Pending |
+| **CompositeEdge** | `compositedge` | ✅ Ready | ⏳ Pending |
+| **DefinEdge** | `definedge` | ✅ Ready | ⏳ Pending |
+| **iBulls** | `ibulls` | ✅ Ready | ⏳ Pending |
+| **IIFL** | `iifl` | ✅ Ready | ⏳ Pending |
+| **IndMoney** | `indmoney` | ✅ Ready | ⏳ Pending |
+| **Paytm** | `paytm` | ✅ Ready | ⏳ Pending |
+| **Pocketful** | `pocketful` | ✅ Ready | ⏳ Pending |
+| **TradJini** | `tradejini` | ✅ Ready | ⏳ Pending |
+| **Wisdom** | `wisdom` | ✅ Ready | ⏳ Pending |
+| **Zebu** | `zebu` | ✅ Ready | ⏳ Pending |
+| **5PaisaXTS** | `fivepaisaxts` | ✅ Ready | ⏳ Pending |
+| **Dhan Sandbox** | `dhan_sandbox` | ✅ Ready | ⏳ Pending |
+
+### Token Service Status Legend:
+- ✅ **Tested** - Token download and storage working
+- ⏳ **Auth Required** - Needs authentication credentials to test
+- ⏳ **Pending** - Not yet tested (no auth required)
 
 **Switching brokers?** Just change one line:
 ```python
