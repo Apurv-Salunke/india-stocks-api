@@ -71,7 +71,7 @@ print(f"LTP: {quote['ltp']}, Volume: {quote['volume']}")
 | **Upstox** | `upstox` | ✅ Ready | ✅ Tested (96,670 instruments) |
 | **Dhan** | `dhan` | ✅ Ready | ✅ Tested (199,261 instruments) |
 | **Fyers** | `fyers` | ✅ Ready | ⏳ Pending |
-| **Groww** | `groww` | ✅ Ready | ⏳ Pending |
+| **Groww** | `groww` | ✅ Ready | ✅ Tested (100,203 instruments) |
 | **Kotak** | `kotak` | ✅ Ready | ⏳ Auth Required |
 | **AliceBlue** | `aliceblue` | ✅ Ready | ⏳ Pending |
 | **Flattrade** | `flattrade` | ✅ Ready | ⏳ Pending |

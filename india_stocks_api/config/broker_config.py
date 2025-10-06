@@ -114,6 +114,20 @@ BROKER_CONFIGS = {
             "Accept": "application/json",
         },
     },
+    
+    "groww": {
+        "name": "Groww",
+        "api_base_url": "https://growwapi-assets.groww.in",
+        "auth_url": "https://growwapi-assets.groww.in/auth/login",
+        "market_data_url": "https://growwapi-assets.groww.in/marketdata",
+        "order_url": "https://growwapi-assets.groww.in/orders",
+        "master_contract_url": "https://growwapi-assets.groww.in/instruments/instrument.csv",
+        "required_env_vars": ["BROKER_API_KEY"],
+        "headers": {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+    },
 }
 
 # Supported brokers

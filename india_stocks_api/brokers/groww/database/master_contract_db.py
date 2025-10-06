@@ -3,110 +3,18 @@
 import os
 import pandas as pd
 from io import StringIO
-from utils.httpx_client import get_httpx_client
-
-from sqlalchemy import create_engine, Column, Integer, String, Float, Sequence, Index
-from sqlalchemy.orm import scoped_session, sessionmaker
-from sqlalchemy.ext.declarative import declarative_base
-from extensions import socketio  # Import SocketIO
-from utils.logging import get_logger
+from india_stocks_api.utils.logging import get_logger
+from india_stocks_api.utils.httpx_client import get_http_client
+from india_stocks_api.config import (
+    get_broker_config,
+    get_cache_directory,
+)
+from india_stocks_api.database import (
+    initialize_broker_database,
+    store_broker_instruments,
+)
 
 logger = get_logger(__name__)
-
-
-DATABASE_URL = os.getenv("DATABASE_URL")  # Replace with your database path
-
-engine = create_engine(DATABASE_URL)
-db_session = scoped_session(
-    sessionmaker(autocommit=False, autoflush=False, bind=engine)
-)
-Base = declarative_base()
-Base.query = db_session.query_property()
-
-
-class SymToken(Base):
-    __tablename__ = "symtoken"
-    id = Column(Integer, Sequence("symtoken_id_seq"), primary_key=True)
-    symbol = Column(String, nullable=False, index=True)  # Single column index
-    brsymbol = Column(String, nullable=False, index=True)  # Single column index
-    name = Column(String)
-    exchange = Column(String, index=True)  # Include this column in a composite index
-    brexchange = Column(String, index=True)
-    token = Column(String, index=True)  # Indexed for performance
-    expiry = Column(String)
-    strike = Column(Float)
-    lotsize = Column(Integer)
-    instrumenttype = Column(String)
-    tick_size = Column(Float)
-
-    # Define a composite index on symbol and exchange columns
-    __table_args__ = (Index("idx_symbol_exchange", "symbol", "exchange"),)
-
-
-def init_db():
-    logger.info("Initializing Master Contract DB")
-    Base.metadata.create_all(bind=engine)
-
-
-def delete_symtoken_table():
-    logger.info("Deleting Symtoken Table")
-    SymToken.query.delete()
-    db_session.commit()
-
-
-def copy_from_dataframe(df):
-    logger.info("Performing Bulk Insert")
-    # Convert DataFrame to a list of dictionaries
-    data_dict = df.to_dict(orient="records")
-
-    # Retrieve existing tokens to filter them out from the insert
-    existing_tokens = {
-        result.token for result in db_session.query(SymToken.token).all()
-    }
-
-    # Filter out data_dict entries with tokens that already exist
-    filtered_data_dict = [
-        row for row in data_dict if row["token"] not in existing_tokens
-    ]
-
-    # Insert in bulk the filtered records
-    try:
-        if filtered_data_dict:  # Proceed only if there's anything to insert
-            logger.info(
-                f"Inserting {len(filtered_data_dict)} new records into the database"
-            )
-            # Create a list of SymToken objects from the filtered data
-            symtoken_objects = []
-            for item in filtered_data_dict:
-                symtoken = SymToken(
-                    symbol=item.get("symbol", ""),
-                    brsymbol=item.get("brsymbol", ""),
-                    name=item.get("name", ""),
-                    exchange=item.get("exchange", ""),
-                    brexchange=item.get("brexchange", ""),
-                    token=item.get("token", ""),
-                    expiry=item.get("expiry", ""),
-                    strike=float(item.get("strike", 0)) if item.get("strike") else 0,
-                    lotsize=int(item.get("lotsize", 0)) if item.get("lotsize") else 0,
-                    instrumenttype=item.get("instrumenttype", ""),
-                    tick_size=float(item.get("tick_size", 0))
-                    if item.get("tick_size")
-                    else 0,
-                )
-                symtoken_objects.append(symtoken)
-
-            # Add all objects and commit in one transaction
-            db_session.add_all(symtoken_objects)
-            db_session.commit()
-            logger.info(
-                f"Successfully inserted {len(symtoken_objects)} records into the database"
-            )
-        else:
-            logger.info("No new records to insert")
-    except Exception as e:
-        db_session.rollback()
-        logger.error(f"Error during bulk insert: {e}")
-        raise
 
 
 # Functions for symbol format conversion between OpenAlgo and Groww formats
@@ -359,115 +267,25 @@ def format_groww_to_openalgo_symbol(groww_symbol, exchange):
     return clean_symbol.replace(" ", "")
 
 
-def find_symbol_by_token(token, exchange):
-    """
-    Find symbol in DB by token and exchange
-
-    Args:
-        token (str): Token ID
-        exchange (str): Exchange code
-
-    Returns:
-        str: Symbol in OpenAlgo format, or None if not found
-    """
-    result = (
-        db_session.query(SymToken).filter_by(token=token, exchange=exchange).first()
-    )
-    if result:
-        return result.symbol
-    return None
+# OLD CODE - COMMENTED OUT
+# def find_symbol_by_token(token, exchange):
+#     """
+#     Find symbol in DB by token and exchange
+#     """
+#     result = (
+#         db_session.query(SymToken).filter_by(token=token, exchange=exchange).first()
+#     )
+#     if result:
+#         return result.symbol
+#     return None
 
 
-def find_token_by_symbol(symbol, exchange):
-    """
-    Find token in DB by symbol and exchange
-
-    Args:
-        symbol (str): Symbol in either OpenAlgo or Groww format
-        exchange (str): Exchange code
-
-    Returns:
-        str: Token ID, or None if not found
-    """
-    # First try with the symbol as provided
-    result = (
-        db_session.query(SymToken).filter_by(symbol=symbol, exchange=exchange).first()
-    )
-    if result:
-        return result.token
-
-    # If not found and it's an NFO symbol, try with formatted version
-    if exchange == "NFO":
-        # Try with OpenAlgo format if it was in Groww format
-        openalgo_symbol = format_groww_to_openalgo_symbol(symbol, exchange)
-        if openalgo_symbol != symbol:
-            result = (
-                db_session.query(SymToken)
-                .filter_by(symbol=openalgo_symbol, exchange=exchange)
-                .first()
-            )
-            if result:
-                return result.token
-
-        # Try with Groww format if it was in OpenAlgo format
-        groww_symbol = format_openalgo_to_groww_symbol(symbol, exchange)
-        if groww_symbol != symbol:
-            result = (
-                db_session.query(SymToken)
-                .filter_by(symbol=groww_symbol, exchange=exchange)
-                .first()
-            )
-            if result:
-                return result.token
-
-    # Check the brsymbol field as a fallback
-    result = (
-        db_session.query(SymToken).filter_by(brsymbol=symbol, exchange=exchange).first()
-    )
-    if result:
-        return result.token
-
-    return None
-
-    # Insert in bulk the filtered records
-    try:
-        if filtered_data_dict:  # Proceed only if there's anything to insert
-            # Pre-validate records before insertion
-            invalid_records = []
-            valid_records = []
-
-            for record in filtered_data_dict:
-                # Allow indices ("I") even if symbol is missing
-                if record.get("instrumenttype") == "I":
-                    valid_records.append(record)
-                else:
-                    # Check if symbol exists and is not empty/null
-                    symbol = record.get("symbol")
-                    if not symbol or pd.isna(symbol) or str(symbol).strip() == "":
-                        invalid_records.append(record)
-                        logger.error(f"Schema validation failed for record: {record}")
-                        logger.info("Symbol is missing, empty, or null")
-                    else:
-                        valid_records.append(record)
-
-            if valid_records:
-                db_session.bulk_insert_mappings(SymToken, valid_records)
-                db_session.commit()
-                logger.info(
-                    f"Bulk insert completed successfully with {len(valid_records)} new records."
-                )
-
-            if invalid_records:
-                logger.error(
-                    f"Warning: {len(invalid_records)} records failed schema validation and were skipped."
-                )
-        else:
-            logger.info("No new records to insert.")
-    except Exception as e:
-        logger.error(f"Error during bulk insert: {e}")
-        if hasattr(e, "__cause__"):
-            logger.info(f"Caused by: {e.__cause__}")
-        db_session.rollback()
+# OLD CODE - COMMENTED OUT
+# def find_token_by_symbol(symbol, exchange):
+#     """
+#     Find token in DB by symbol and exchange
+#     """
+#     # ... entire old function commented out
 
 
 def download_groww_instrument_data(output_path):
@@ -483,7 +301,9 @@ def download_groww_instrument_data(output_path):
 
     # File path for the saved CSV
     file_path = os.path.join(output_path, "master.csv")
-    csv_url = "https://growwapi-assets.groww.in/instruments/instrument.csv"
+    # Get Groww config
+    groww_config = get_broker_config("groww")
+    csv_url = groww_config["master_contract_url"]
 
     # Expected headers - Updated to match actual CSV structure
     headers_csv = "exchange,exchange_token,trading_symbol,groww_symbol,name,instrument_type,segment,series,isin,underlying_symbol,underlying_exchange_token,expiry_date,strike_price,lot_size,tick_size,freeze_quantity,is_reserved,buy_allowed,sell_allowed,internal_trading_symbol,is_intraday"
@@ -491,7 +311,7 @@ def download_groww_instrument_data(output_path):
 
     try:
         # Get the shared httpx client with connection pooling
-        client = get_httpx_client()
+        client = get_http_client()
 
         # Make the API request using the shared client
         response = client.get(csv_url)
@@ -826,129 +646,6 @@ def process_groww_data(path):
         logger.error(f"Error processing Groww instrument data: {e}")
         return pd.DataFrame()
 
-    # Map instrument types to OpenAlgo standard types
-    instrument_type_map = {
-        "EQUITY": "EQ",
-        "INDEX": "INDEX",
-        "FUTURE": "FUT",
-        "CALL": "OPT",
-        "PUT": "OPT",
-        "ETF": "EQ",
-        "CURRENCY": "CUR",
-        "COMMODITY": "COM",
-    }
-
-    # Apply instrument type mapping
-    all_instruments["instrumenttype"] = (
-        all_instruments["instrument_type"].map(instrument_type_map).fillna("EQ")
-    )
-
-    # Map exchanges to OpenAlgo standard exchanges
-    exchange_map = {
-        "NSE": "NSE",
-        "BSE": "BSE",
-        "NFO": "NFO",
-        "MCX": "MCX",
-        "CDS": "CDS",
-    }
-
-    # Apply exchange mapping
-    all_instruments["exchange"] = (
-        all_instruments["brexchange"]
-        .map(exchange_map)
-        .fillna(all_instruments["brexchange"])
-    )
-
-    # Special handling for indices
-    # Mark indices based on name patterns or specific flags in the data
-    index_patterns = ["NIFTY", "SENSEX", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY"]
-
-    for pattern in index_patterns:
-        index_mask = all_instruments["symbol"].str.contains(
-            pattern, case=False, na=False
-        )
-        all_instruments.loc[index_mask, "instrumenttype"] = "INDEX"
-        all_instruments.loc[index_mask, "exchange"] = "NSE_INDEX"
-
-    # Format specific fields
-    all_instruments["expiry"] = all_instruments["expiry"].fillna("")
-    all_instruments["strike"] = pd.to_numeric(
-        all_instruments["strike"].fillna(0), errors="coerce"
-    )
-    all_instruments["lotsize"] = pd.to_numeric(
-        all_instruments["lotsize"].fillna(1), errors="coerce"
-    ).astype(int)
-    all_instruments["tick_size"] = pd.to_numeric(
-        all_instruments["tick_size"].fillna(0.05), errors="coerce"
-    )
-
-    # Ensure brsymbol is not empty - use symbol if needed
-    all_instruments.loc[
-        all_instruments["brsymbol"].isna() | (all_instruments["brsymbol"] == ""),
-        "brsymbol",
-    ] = all_instruments.loc[
-        all_instruments["brsymbol"].isna() | (all_instruments["brsymbol"] == ""),
-        "symbol",
-    ]
-
-    # For F&O instruments, format the symbol in OpenAlgo format
-    fo_mask = all_instruments["exchange"] == "NFO"
-    if fo_mask.any():
-        # Format F&O symbols according to OpenAlgo standard
-        def format_fo_symbol(row):
-            if pd.isna(row["expiry"]) or row["expiry"] == "":
-                return row["symbol"]
-
-            # Format expiry date to standard format (e.g., 25MAY23)
-            try:
-                expiry_date = pd.to_datetime(row["expiry"])
-                expiry_str = expiry_date.strftime("%d%b%y").upper()
-            except:
-                expiry_str = row["expiry"]
-
-            # For futures
-            if row["instrumenttype"] == "FUT":
-                return f"{row['symbol']}{expiry_str}FUT"
-
-            # For options
-            elif row["instrumenttype"] == "OPT":
-                strike = str(int(row["strike"])) if not pd.isna(row["strike"]) else "0"
-                option_type = (
-                    "CE"
-                    if "option_type" in row and row["option_type"].upper() == "CE"
-                    else "PE"
-                )
-                return f"{row['symbol']}{expiry_str}{strike}{option_type}"
-
-            return row["symbol"]
-
-        all_instruments.loc[fo_mask, "symbol"] = all_instruments[fo_mask].apply(
-            format_fo_symbol, axis=1
-        )
-
-    # Create final DataFrame with required columns
-    token_df = pd.DataFrame(
-        {
-            "symbol": all_instruments["symbol"],
-            "brsymbol": all_instruments["brsymbol"],
-            "name": all_instruments["name"],
-            "exchange": all_instruments["exchange"],
-            "brexchange": all_instruments["brexchange"],
-            "token": all_instruments["token"],
-            "expiry": all_instruments["expiry"],
-            "strike": all_instruments["strike"],
-            "lotsize": all_instruments["lotsize"],
-            "instrumenttype": all_instruments["instrumenttype"],
-            "tick_size": all_instruments["tick_size"],
-        }
-    )
-
-    # Remove duplicates
-    token_df = token_df.drop_duplicates(subset=["symbol", "exchange"], keep="first")
-
-    logger.info(f"Processed {len(token_df)} Groww instruments")
-    return token_df
-
 
 def delete_groww_temp_data(output_path):
     """Delete only Groww-specific temporary files created during instrument data download"""
@@ -975,13 +672,17 @@ def delete_groww_temp_data(output_path):
 def master_contract_download():
     logger.info("Downloading Master Contract")
 
-    output_path = "tmp"
+    # Use config for cache directory
+    cache_dir = get_cache_directory()
+    output_path = cache_dir / "groww"
+    output_path.mkdir(exist_ok=True)
+    
     try:
         # Step 1: Download the instrument data
         download_groww_instrument_data(output_path)
 
-        # Step 2: Clear existing data
-        delete_symtoken_table()
+        # Step 2: Initialize our database
+        initialize_broker_database()
 
         # Step 3: Process the downloaded data
         token_df = process_groww_data(output_path)
@@ -1038,36 +739,22 @@ def master_contract_download():
                     row["brsymbol"], "NFO"
                 )
 
-        # Step 6: Insert into database
-        logger.info(f"Inserting {len(token_df)} records into database")
-        copy_from_dataframe(token_df)
+        # Step 6: Store in our database
+        logger.info(f"Storing {len(token_df)} records in database")
+        instruments_list = token_df.to_dict("records")
+        store_broker_instruments(instruments_list, "groww")
 
         # Step 7: Cleanup
         delete_groww_temp_data(output_path)
 
-        # Verify data was inserted
-        count = db_session.query(SymToken).count()
-        logger.info(f"Total records in database after insertion: {count}")
-
-        return socketio.emit(
-            "master_contract_download",
-            {
-                "status": "success",
-                "message": f"Successfully downloaded and inserted {count} symbols",
-            },
-        )
+        logger.info("Successfully Downloaded Groww symbols")
+        return {"status": "success", "message": f"Successfully downloaded and stored {len(token_df)} symbols"}
 
     except Exception as e:
         import traceback
 
         logger.error(f"Error in master_contract_download: {e}")
         logger.info(f"{traceback.format_exc()}")
-        return socketio.emit(
-            "master_contract_download", {"status": "error", "message": str(e)}
-        )
+        return {"status": "error", "message": str(e)}
 
 
-def search_symbols(symbol, exchange):
-    return SymToken.query.filter(
-        SymToken.symbol.like(f"%{symbol}%"), SymToken.exchange == exchange
-    ).all()
