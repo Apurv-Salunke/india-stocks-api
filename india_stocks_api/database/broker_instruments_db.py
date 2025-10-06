@@ -8,7 +8,16 @@ from pathlib import Path
 from typing import Optional, Dict, Any, List
 from datetime import datetime
 
-from sqlalchemy import create_engine, Column, Integer, String, Float, Sequence, Index, DateTime
+from sqlalchemy import (
+    create_engine,
+    Column,
+    Integer,
+    String,
+    Float,
+    Sequence,
+    Index,
+    DateTime,
+)
 from sqlalchemy.orm import scoped_session, sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 
@@ -132,78 +141,6 @@ def store_broker_instruments(instruments_data: List[Dict[str, Any]], broker_name
         raise
 
 
-def get_broker_token(
-    standardized_symbol: str, exchange_code: str, broker_name: str
-) -> Optional[str]:
-    """
-    Get broker token for a standardized symbol
-
-    Args:
-        standardized_symbol: Standardized symbol (e.g., "RELIANCE")
-        exchange_code: Exchange code (e.g., "NSE", "BSE")
-        broker_name: Broker name (e.g., "angelone")
-
-    Returns:
-        Broker token as string, or None if not found
-    """
-    instrument = BrokerInstrument.query.filter(
-        BrokerInstrument.standardized_symbol == standardized_symbol,
-        BrokerInstrument.exchange_code == exchange_code,
-        BrokerInstrument.broker_name == broker_name,
-        BrokerInstrument.is_active == 1,
-    ).first()
-
-    return instrument.broker_token if instrument else None
-
-
-def get_broker_symbol(
-    standardized_symbol: str, exchange_code: str, broker_name: str
-) -> Optional[str]:
-    """
-    Get broker-specific symbol for a standardized symbol
-
-    Args:
-        standardized_symbol: Standardized symbol (e.g., "RELIANCE")
-        exchange_code: Exchange code (e.g., "NSE", "BSE")
-        broker_name: Broker name (e.g., "angelone")
-
-    Returns:
-        Broker-specific symbol, or None if not found
-    """
-    instrument = BrokerInstrument.query.filter(
-        BrokerInstrument.standardized_symbol == standardized_symbol,
-        BrokerInstrument.exchange_code == exchange_code,
-        BrokerInstrument.broker_name == broker_name,
-        BrokerInstrument.is_active == 1,
-    ).first()
-
-    return instrument.broker_symbol if instrument else None
-
-
-def get_standardized_symbol(
-    broker_token: str, exchange_code: str, broker_name: str
-) -> Optional[str]:
-    """
-    Get standardized symbol from broker token (reverse lookup)
-
-    Args:
-        broker_token: Broker token
-        exchange_code: Exchange code (e.g., "NSE", "BSE")
-        broker_name: Broker name (e.g., "angelone")
-
-    Returns:
-        Standardized symbol, or None if not found
-    """
-    instrument = BrokerInstrument.query.filter(
-        BrokerInstrument.broker_token == broker_token,
-        BrokerInstrument.exchange_code == exchange_code,
-        BrokerInstrument.broker_name == broker_name,
-        BrokerInstrument.is_active == 1,
-    ).first()
-
-    return instrument.standardized_symbol if instrument else None
-
-
 def get_instrument_details(
     standardized_symbol: str, exchange_code: str, broker_name: str
 ) -> Optional[Dict[str, Any]]:
@@ -320,6 +257,258 @@ def search_instruments(
         )
 
     return results
+
+
+# ============================================================================
+# SYMBOL MAPPING FUNCTIONS (OpenAlgo-style)
+# ============================================================================
+
+
+def get_broker_token(
+    standardized_symbol: str, exchange_code: str, broker_name: str
+) -> Optional[str]:
+    """
+    Get broker-specific token for a standardized symbol (OpenAlgo-style)
+
+    Args:
+        standardized_symbol: Standardized symbol (e.g., "RELIANCE", "BANKNIFTY")
+        exchange_code: Exchange code (e.g., "NSE", "BSE")
+        broker_name: Broker name (e.g., "angelone", "fyers")
+
+    Returns:
+        Broker-specific token or None if not found
+    """
+    try:
+        result = (
+            db_session.query(BrokerInstrument)
+            .filter(
+                BrokerInstrument.standardized_symbol == standardized_symbol,
+                BrokerInstrument.exchange_code == exchange_code,
+                BrokerInstrument.broker_name == broker_name,
+                BrokerInstrument.is_active == 1,
+            )
+            .first()
+        )
+
+        return result.broker_token if result else None
+
+    except Exception as e:
+        logger.error(f"Error getting broker token: {e}")
+        return None
+
+
+def get_broker_symbol(
+    standardized_symbol: str, exchange_code: str, broker_name: str
+) -> Optional[str]:
+    """
+    Get broker-specific symbol for a standardized symbol (OpenAlgo-style)
+
+    Args:
+        standardized_symbol: Standardized symbol (e.g., "RELIANCE", "BANKNIFTY")
+        exchange_code: Exchange code (e.g., "NSE", "BSE")
+        broker_name: Broker name (e.g., "angelone", "fyers")
+
+    Returns:
+        Broker-specific symbol or None if not found
+    """
+    try:
+        result = (
+            db_session.query(BrokerInstrument)
+            .filter(
+                BrokerInstrument.standardized_symbol == standardized_symbol,
+                BrokerInstrument.exchange_code == exchange_code,
+                BrokerInstrument.broker_name == broker_name,
+                BrokerInstrument.is_active == 1,
+            )
+            .first()
+        )
+
+        return result.broker_symbol if result else None
+
+    except Exception as e:
+        logger.error(f"Error getting broker symbol: {e}")
+        return None
+
+
+def get_standardized_symbol(
+    broker_symbol: str, exchange_code: str, broker_name: str
+) -> Optional[str]:
+    """
+    Get standardized symbol from broker-specific symbol (OpenAlgo-style)
+
+    Args:
+        broker_symbol: Broker-specific symbol (e.g., "RELIANCE-EQ", "NSE:RELIANCE-EQ")
+        exchange_code: Exchange code (e.g., "NSE", "BSE")
+        broker_name: Broker name (e.g., "angelone", "fyers")
+
+    Returns:
+        Standardized symbol or None if not found
+    """
+    try:
+        result = (
+            db_session.query(BrokerInstrument)
+            .filter(
+                BrokerInstrument.broker_symbol == broker_symbol,
+                BrokerInstrument.exchange_code == exchange_code,
+                BrokerInstrument.broker_name == broker_name,
+                BrokerInstrument.is_active == 1,
+            )
+            .first()
+        )
+
+        return result.standardized_symbol if result else None
+
+    except Exception as e:
+        logger.error(f"Error getting standardized symbol: {e}")
+        return None
+
+
+def get_broker_exchange_code(
+    standardized_symbol: str, exchange_code: str, broker_name: str
+) -> Optional[str]:
+    """
+    Get broker-specific exchange code for a standardized symbol (OpenAlgo-style)
+
+    Args:
+        standardized_symbol: Standardized symbol (e.g., "RELIANCE", "BANKNIFTY")
+        exchange_code: Exchange code (e.g., "NSE", "BSE")
+        broker_name: Broker name (e.g., "angelone", "fyers")
+
+    Returns:
+        Broker-specific exchange code or None if not found
+    """
+    try:
+        result = (
+            db_session.query(BrokerInstrument)
+            .filter(
+                BrokerInstrument.standardized_symbol == standardized_symbol,
+                BrokerInstrument.exchange_code == exchange_code,
+                BrokerInstrument.broker_name == broker_name,
+                BrokerInstrument.is_active == 1,
+            )
+            .first()
+        )
+
+        return result.broker_exchange_code if result else None
+
+    except Exception as e:
+        logger.error(f"Error getting broker exchange code: {e}")
+        return None
+
+
+def get_symbol_info(
+    standardized_symbol: str, exchange_code: str, broker_name: str
+) -> Optional[Dict[str, Any]]:
+    """
+    Get complete symbol information (OpenAlgo-style)
+
+    Args:
+        standardized_symbol: Standardized symbol (e.g., "RELIANCE", "BANKNIFTY")
+        exchange_code: Exchange code (e.g., "NSE", "BSE")
+        broker_name: Broker name (e.g., "angelone", "fyers")
+
+    Returns:
+        Complete symbol information dictionary or None if not found
+    """
+    try:
+        result = (
+            db_session.query(BrokerInstrument)
+            .filter(
+                BrokerInstrument.standardized_symbol == standardized_symbol,
+                BrokerInstrument.exchange_code == exchange_code,
+                BrokerInstrument.broker_name == broker_name,
+                BrokerInstrument.is_active == 1,
+            )
+            .first()
+        )
+
+        if not result:
+            return None
+
+        return {
+            "id": result.id,
+            "standardized_symbol": result.standardized_symbol,
+            "broker_symbol": result.broker_symbol,
+            "instrument_name": result.instrument_name,
+            "exchange_code": result.exchange_code,
+            "broker_exchange_code": result.broker_exchange_code,
+            "broker_token": result.broker_token,
+            "expiry_date": result.expiry_date,
+            "strike_price": result.strike_price,
+            "lot_size": result.lot_size,
+            "instrument_type": result.instrument_type,
+            "tick_size": result.tick_size,
+            "broker_name": result.broker_name,
+            "is_active": result.is_active,
+            "created_at": result.created_at,
+            "updated_at": result.updated_at,
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting symbol info: {e}")
+        return None
+
+
+def get_all_broker_symbols(
+    standardized_symbol: str, exchange_code: str
+) -> Dict[str, Dict[str, Any]]:
+    """
+    Get broker-specific symbols for a standardized symbol across all brokers
+
+    Args:
+        standardized_symbol: Standardized symbol (e.g., "RELIANCE", "BANKNIFTY")
+        exchange_code: Exchange code (e.g., "NSE", "BSE")
+
+    Returns:
+        Dictionary mapping broker names to their symbol information
+    """
+    try:
+        results = (
+            db_session.query(BrokerInstrument)
+            .filter(
+                BrokerInstrument.standardized_symbol == standardized_symbol,
+                BrokerInstrument.exchange_code == exchange_code,
+                BrokerInstrument.is_active == 1,
+            )
+            .all()
+        )
+
+        broker_mappings = {}
+        for result in results:
+            broker_mappings[result.broker_name] = {
+                "broker_symbol": result.broker_symbol,
+                "broker_token": result.broker_token,
+                "broker_exchange_code": result.broker_exchange_code,
+                "instrument_name": result.instrument_name,
+                "lot_size": result.lot_size,
+                "tick_size": result.tick_size,
+                "instrument_type": result.instrument_type,
+            }
+
+        return broker_mappings
+
+    except Exception as e:
+        logger.error(f"Error getting all broker symbols: {e}")
+        return {}
+
+
+def get_symbol_count() -> int:
+    """
+    Get total count of symbols in the database (OpenAlgo-style)
+
+    Returns:
+        Total number of active instruments
+    """
+    try:
+        return (
+            db_session.query(BrokerInstrument)
+            .filter(BrokerInstrument.is_active == 1)
+            .count()
+        )
+
+    except Exception as e:
+        logger.error(f"Error getting symbol count: {e}")
+        return 0
 
 
 # Initialize database on import
