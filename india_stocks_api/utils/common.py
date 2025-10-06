@@ -3,6 +3,11 @@ File and formatting utilities for India Stocks API
 """
 
 from pathlib import Path
+from datetime import datetime
+import pytz
+
+# India timezone
+IST = pytz.timezone("Asia/Kolkata")
 
 
 def get_cache_directory() -> Path:
@@ -67,3 +72,22 @@ def safe_divide(numerator: float, denominator: float, default: float = 0.0) -> f
         Division result or default value
     """
     return numerator / denominator if denominator != 0 else default
+
+
+def get_india_time() -> datetime:
+    """Get current time in India timezone (IST)"""
+    return datetime.now(IST)
+
+
+def utc_to_ist(utc_datetime: datetime) -> datetime:
+    """Convert UTC datetime to India timezone"""
+    if utc_datetime.tzinfo is None:
+        utc_datetime = pytz.utc.localize(utc_datetime)
+    return utc_datetime.astimezone(IST)
+
+
+def ist_to_utc(ist_datetime: datetime) -> datetime:
+    """Convert India timezone datetime to UTC"""
+    if ist_datetime.tzinfo is None:
+        ist_datetime = IST.localize(ist_datetime)
+    return ist_datetime.astimezone(pytz.UTC)

@@ -1,6 +1,6 @@
 import json
 import os
-from utils.httpx_client import get_httpx_client
+from india_stocks_api.utils.httpx_client import get_http_client
 
 
 def authenticate_broker(clientcode, broker_pin, totp_code):
@@ -11,7 +11,7 @@ def authenticate_broker(clientcode, broker_pin, totp_code):
 
     try:
         # Get the shared httpx client
-        client = get_httpx_client()
+        client = get_http_client()
 
         payload = json.dumps(
             {"clientcode": clientcode, "password": broker_pin, "totp": totp_code}
