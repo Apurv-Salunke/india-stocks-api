@@ -93,7 +93,6 @@ BROKER_CONFIGS = {
             "Accept": "application/json",
         },
     },
-    
     "shoonya": {
         "name": "Shoonya",
         "api_base_url": "https://api.shoonya.com",
@@ -114,7 +113,6 @@ BROKER_CONFIGS = {
             "Accept": "application/json",
         },
     },
-    
     "groww": {
         "name": "Groww",
         "api_base_url": "https://growwapi-assets.groww.in",
@@ -128,7 +126,6 @@ BROKER_CONFIGS = {
             "Accept": "application/json",
         },
     },
-    
     "fivepaisa": {
         "name": "5Paisa",
         "api_base_url": "https://openapi.5paisa.com",
@@ -136,6 +133,19 @@ BROKER_CONFIGS = {
         "market_data_url": "https://openapi.5paisa.com/VendorsAPI/Service1.svc/V1/MarketData",
         "order_url": "https://openapi.5paisa.com/VendorsAPI/Service1.svc/V1/OrderRequest",
         "master_contract_url": "https://openapi.5paisa.com/VendorsAPI/Service1.svc/ScripMaster/segment/all",
+        "required_env_vars": ["BROKER_API_KEY"],
+        "headers": {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+    },
+    "fivepaisaxts": {
+        "name": "5PaisaXTS",
+        "api_base_url": "https://xtsmum.5paisa.com",
+        "auth_url": "https://xtsmum.5paisa.com/apimarketdata/auth/login",
+        "market_data_url": "https://xtsmum.5paisa.com/apimarketdata",
+        "order_url": "https://xtsmum.5paisa.com/interactive",
+        "master_contract_url": "https://xtsmum.5paisa.com/apimarketdata/instruments/master",
         "required_env_vars": ["BROKER_API_KEY"],
         "headers": {
             "Content-Type": "application/json",

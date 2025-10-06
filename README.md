@@ -88,7 +88,7 @@ print(f"LTP: {quote['ltp']}, Volume: {quote['volume']}")
 | **TradJini** | `tradejini` | ✅ Ready | ⏳ Pending |
 | **Wisdom** | `wisdom` | ✅ Ready | ⏳ Pending |
 | **Zebu** | `zebu` | ✅ Ready | ⏳ Pending |
-| **5PaisaXTS** | `fivepaisaxts` | ✅ Ready | ⏳ Pending |
+| **5PaisaXTS** | `fivepaisaxts` | ✅ Ready | ✅ Tested (124,754 instruments) |
 | **Dhan Sandbox** | `dhan_sandbox` | ✅ Ready | ✅ Tested (199,261 instruments) |
 
 ### Token Service Status Legend:

@@ -4,86 +4,18 @@ import os
 import pandas as pd
 import json
 import csv
-
-from sqlalchemy import create_engine, Column, Integer, String, Float, Sequence, Index
-from sqlalchemy.orm import scoped_session, sessionmaker
-from sqlalchemy.ext.declarative import declarative_base
-from extensions import socketio  # Import SocketIO
-from utils.httpx_client import get_httpx_client
-from broker.fivepaisaxts.baseurl import MARKET_DATA_URL
-from utils.logging import get_logger
+from india_stocks_api.utils.logging import get_logger
+from india_stocks_api.utils.httpx_client import get_http_client
+from india_stocks_api.config import (
+    get_broker_config,
+    get_cache_directory,
+)
+from india_stocks_api.database import (
+    initialize_broker_database,
+    store_broker_instruments,
+)
 
 logger = get_logger(__name__)
-
-
-DATABASE_URL = os.getenv("DATABASE_URL")  # Replace with your database path
-
-engine = create_engine(DATABASE_URL)
-db_session = scoped_session(
-    sessionmaker(autocommit=False, autoflush=False, bind=engine)
-)
-Base = declarative_base()
-Base.query = db_session.query_property()
-
-
-class SymToken(Base):
-    __tablename__ = "symtoken"
-    id = Column(Integer, Sequence("symtoken_id_seq"), primary_key=True)
-    symbol = Column(String, nullable=False, index=True)  # Single column index
-    brsymbol = Column(String, nullable=False, index=True)  # Single column index
-    name = Column(String)
-    exchange = Column(String, index=True)  # Include this column in a composite index
-    brexchange = Column(String, index=True)
-    token = Column(String, index=True)  # Indexed for performance
-    expiry = Column(String)
-    strike = Column(Float)
-    lotsize = Column(Integer)
-    instrumenttype = Column(String)
-    tick_size = Column(Float)
-
-    # Define a composite index on symbol and exchange columns
-    __table_args__ = (Index("idx_symbol_exchange", "symbol", "exchange"),)
-
-
-def init_db():
-    logger.info("Initializing Master Contract DB")
-    Base.metadata.create_all(bind=engine)
-
-
-def delete_symtoken_table():
-    logger.info("Deleting Symtoken Table")
-    SymToken.query.delete()
-    db_session.commit()
-
-
-def copy_from_dataframe(df):
-    logger.info("Performing Bulk Insert")
-    # Convert DataFrame to a list of dictionaries
-    data_dict = df.to_dict(orient="records")
-
-    # Retrieve existing tokens to filter them out from the insert
-    existing_tokens = {
-        result.token for result in db_session.query(SymToken.token).all()
-    }
-
-    # Filter out data_dict entries with tokens that already exist
-    filtered_data_dict = [
-        row for row in data_dict if row["token"] not in existing_tokens
-    ]
-
-    # Insert in bulk the filtered records
-    try:
-        if filtered_data_dict:  # Proceed only if there's anything to insert
-            db_session.bulk_insert_mappings(SymToken, filtered_data_dict)
-            db_session.commit()
-            logger.info(
-                f"Bulk insert completed successfully with {len(filtered_data_dict)} new records."
-            )
-        else:
-            logger.info("No new records to insert.")
-    except Exception as e:
-        logger.error(f"Error during bulk insert: {e}")
-        db_session.rollback()
 
 
 def download_csv_compositedge_data(output_path):
@@ -93,14 +25,18 @@ def download_csv_compositedge_data(output_path):
     headers_fo = "ExchangeSegment,ExchangeInstrumentID,InstrumentType,Name,Description,Series,NameWithSeries,InstrumentID,PriceBand.High,PriceBand.Low,FreezeQty,TickSize,LotSize,Multiplier,UnderlyingInstrumentId,UnderlyingIndexName,ContractExpiration,StrikePrice,OptionType,DisplayName, PriceNumerator,PriceDenominator,DetailedDescription\n"
 
     # Get the shared httpx client with connection pooling
-    client = get_httpx_client()
+    client = get_http_client()
     headers = {"Content-Type": "application/json"}
 
     downloaded_files = []
     for segment in exchange_segments:
         payload = json.dumps({"exchangeSegmentList": [segment]})
+        # Get 5PaisaXTS config
+        fivepaisaxts_config = get_broker_config("fivepaisaxts")
+        market_data_url = fivepaisaxts_config["market_data_url"]
+
         response = client.post(
-            f"{MARKET_DATA_URL}/instruments/master", headers=headers, content=payload
+            f"{market_data_url}/instruments/master", headers=headers, content=payload
         )
         if response.status_code != 200:
             raise Exception(
@@ -139,11 +75,15 @@ def fetch_index_list():
     headers = {"Content-Type": "application/json"}
 
     # Get the shared httpx client with connection pooling
-    client = get_httpx_client()
+    client = get_http_client()
     index_data = []
 
     for segment in exchange_segments:
-        url = f"{MARKET_DATA_URL}/instruments/indexlist?exchangeSegment={segment}"
+        # Get 5PaisaXTS config
+        fivepaisaxts_config = get_broker_config("fivepaisaxts")
+        market_data_url = fivepaisaxts_config["market_data_url"]
+
+        url = f"{market_data_url}/instruments/indexlist?exchangeSegment={segment}"
         response = client.get(url, headers=headers)
 
         if response.status_code != 200:
@@ -263,20 +203,20 @@ def process_compositedge_nfo_csv(path):
     )
 
     # Create token_df with the relevant columns
-    token_df = df[["symbol"]].copy()
-    token_df["symbol"] = df["symbol"].values
-    token_df["brsymbol"] = df["Description"].values
-    token_df["name"] = df["Name"].values
+    token_df = pd.DataFrame()
+    token_df["symbol"] = df["symbol"]
+    token_df["brsymbol"] = df["Description"]
+    token_df["name"] = df["Name"]
     token_df["exchange"] = df["ExchangeSegment"].map({"NSEFO": "NFO"})
     token_df["brexchange"] = df["ExchangeSegment"]
-    token_df["token"] = df["ExchangeInstrumentID"].values
+    token_df["token"] = df["ExchangeInstrumentID"]
 
     # Convert 'Expiry Date' to desired format
     token_df["expiry"] = df["ContractExpiration"].dt.strftime("%d-%b-%y").str.upper()
-    token_df["strike"] = df["StrikePrice"].values
-    token_df["lotsize"] = df["LotSize"].values
+    token_df["strike"] = df["StrikePrice"]
+    token_df["lotsize"] = df["LotSize"]
     token_df["instrumenttype"] = df["OptionType"].map({1: "FUT", 3: "CE", 4: "PE"})
-    token_df["tick_size"] = df["TickSize"].values
+    token_df["tick_size"] = df["TickSize"]
 
     return token_df
 
@@ -297,13 +237,26 @@ def process_compositedge_cds_csv(path):
 
     df["StrikePrice"] = pd.to_numeric(df["StrikePrice"], errors="coerce").fillna(1.0)
 
-    df["symbol"] = df.apply(
-        lambda row: f"{row['Name']}"
-        f"{row['ContractExpiration'].strftime('%d%b%y').upper()}"
-        f"{'' if row['OptionType'] == 1 else (str(int(float(row['StrikePrice']))) if float(row['StrikePrice']) == int(float(row['StrikePrice'])) else str(row['StrikePrice'])) if pd.notna(row['StrikePrice']) else ''}"
-        f"{'FUT' if row['OptionType'] == 1 else 'CE' if row['OptionType'] == 3 else 'PE'}",
-        axis=1,
-    )
+    # Generate symbols
+    symbols = []
+    for _, row in df.iterrows():
+        symbol = f"{row['Name']}"
+        symbol += f"{row['ContractExpiration'].strftime('%d%b%y').upper()}"
+        if row["OptionType"] != 1:
+            if pd.notna(row["StrikePrice"]):
+                if float(row["StrikePrice"]) == int(float(row["StrikePrice"])):
+                    symbol += str(int(float(row["StrikePrice"])))
+                else:
+                    symbol += str(row["StrikePrice"])
+        if row["OptionType"] == 1:
+            symbol += "FUT"
+        elif row["OptionType"] == 3:
+            symbol += "CE"
+        else:
+            symbol += "PE"
+        symbols.append(symbol)
+
+    df["symbol"] = symbols
 
     # Generate symbols based on instrument type
     # df['symbol'] = df.apply(lambda x:
@@ -314,18 +267,18 @@ def process_compositedge_cds_csv(path):
     # df = df[df['symbol'].notna()]
 
     # Create token_df with the relevant columns
-    token_df = df[["symbol"]].copy()
-    token_df["symbol"] = df["symbol"].values
-    token_df["brsymbol"] = df["Description"].values
-    token_df["name"] = df["Name"].values
+    token_df = pd.DataFrame()
+    token_df["symbol"] = df["symbol"]
+    token_df["brsymbol"] = df["Description"]
+    token_df["name"] = df["Name"]
     token_df["exchange"] = df["ExchangeSegment"].map({"NSECD": "CDS"})
     token_df["brexchange"] = df["ExchangeSegment"]
-    token_df["token"] = df["ExchangeInstrumentID"].values
+    token_df["token"] = df["ExchangeInstrumentID"]
 
     # Convert 'Expiry Date' to desired format
     token_df["expiry"] = df["ContractExpiration"].dt.strftime("%d-%b-%y").str.upper()
-    token_df["strike"] = df["StrikePrice"].values
-    token_df["lotsize"] = df["LotSize"].values
+    token_df["strike"] = df["StrikePrice"]
+    token_df["lotsize"] = df["LotSize"]
     token_df["instrumenttype"] = token_df["symbol"].apply(
         lambda x: "FUT" if "FUT" in x else ("PE" if "PE" in x else "CE")
     )
@@ -336,7 +289,7 @@ def process_compositedge_cds_csv(path):
     #        3: 'CE',
     #        4: 'PE'
     #    })
-    token_df["tick_size"] = df["TickSize"].values
+    token_df["tick_size"] = df["TickSize"]
 
     return token_df
 
@@ -365,20 +318,20 @@ def process_compositedge_bfo_csv(path):
         axis=1,
     )
 
-    token_df = df[["symbol"]].copy()
-    token_df["symbol"] = df["symbol"].values
-    token_df["brsymbol"] = df["Description"].values
-    token_df["name"] = df["Name"].values
+    token_df = pd.DataFrame()
+    token_df["symbol"] = df["symbol"]
+    token_df["brsymbol"] = df["Description"]
+    token_df["name"] = df["Name"]
     token_df["exchange"] = df["ExchangeSegment"].map({"BSEFO": "BFO"})
     token_df["brexchange"] = df["ExchangeSegment"]
-    token_df["token"] = df["ExchangeInstrumentID"].values
+    token_df["token"] = df["ExchangeInstrumentID"]
 
     # Convert 'Expiry Date' to desired format
     token_df["expiry"] = df["ContractExpiration"].dt.strftime("%d-%b-%y").str.upper()
-    token_df["strike"] = df["StrikePrice"].values
-    token_df["lotsize"] = df["LotSize"].values
+    token_df["strike"] = df["StrikePrice"]
+    token_df["lotsize"] = df["LotSize"]
     token_df["instrumenttype"] = df["OptionType"].map({1: "FUT", 3: "CE", 4: "PE"})
-    token_df["tick_size"] = df["TickSize"].values
+    token_df["tick_size"] = df["TickSize"]
 
     return token_df
 
@@ -407,20 +360,20 @@ def process_compositedge_mcx_csv(path):
     )
 
     # Create token_df with the relevant columns
-    token_df = df[["symbol"]].copy()
-    token_df["symbol"] = df["symbol"].values
-    token_df["brsymbol"] = df["Description"].values
-    token_df["name"] = df["Name"].values
+    token_df = pd.DataFrame()
+    token_df["symbol"] = df["symbol"]
+    token_df["brsymbol"] = df["Description"]
+    token_df["name"] = df["Name"]
     token_df["exchange"] = df["ExchangeSegment"].map({"MCXFO": "MCX"})
     token_df["brexchange"] = df["ExchangeSegment"]
-    token_df["token"] = df["ExchangeInstrumentID"].values
+    token_df["token"] = df["ExchangeInstrumentID"]
 
     # Convert 'Expiry Date' to desired format
     token_df["expiry"] = df["ContractExpiration"].dt.strftime("%d-%b-%y").str.upper()
-    token_df["strike"] = df["StrikePrice"].values
-    token_df["lotsize"] = df["LotSize"].values
+    token_df["strike"] = df["StrikePrice"]
+    token_df["lotsize"] = df["LotSize"]
     token_df["instrumenttype"] = df["OptionType"].map({1: "FUT", 3: "CE", 4: "PE"})
-    token_df["tick_size"] = df["TickSize"].values
+    token_df["tick_size"] = df["TickSize"]
 
     return token_df
 
@@ -470,44 +423,54 @@ def delete_compositedge_temp_data(output_path):
 def master_contract_download():
     logger.info("Downloading Master Contract")
 
-    output_path = "tmp"
+    # Use config for cache directory
+    cache_dir = get_cache_directory()
+    output_path = cache_dir / "fivepaisaxts"
+    output_path.mkdir(exist_ok=True)
+
     try:
         download_csv_compositedge_data(output_path)
-        delete_symtoken_table()
+
+        # Initialize our database
+        initialize_broker_database()
+
+        # Process exchange data and store in our database
+        all_instruments = []
+
+        # Process each exchange and collect all instruments
         token_df = process_compositedge_nse_csv(output_path)
-        copy_from_dataframe(token_df)
+        all_instruments.extend(token_df.to_dict("records"))
+
         token_df = process_compositedge_bse_csv(output_path)
-        copy_from_dataframe(token_df)
+        all_instruments.extend(token_df.to_dict("records"))
+
         token_df = process_compositedge_nfo_csv(output_path)
-        copy_from_dataframe(token_df)
+        all_instruments.extend(token_df.to_dict("records"))
+
         token_df = process_compositedge_cds_csv(output_path)
-        copy_from_dataframe(token_df)
+        all_instruments.extend(token_df.to_dict("records"))
+
         token_df = process_compositedge_mcx_csv(output_path)
-        copy_from_dataframe(token_df)
+        all_instruments.extend(token_df.to_dict("records"))
+
         token_df = process_compositedge_bfo_csv(output_path)
-        copy_from_dataframe(token_df)
+        all_instruments.extend(token_df.to_dict("records"))
 
         # Fetch and Process Index Data
         index_data = fetch_index_list()
         if index_data:
             index_df = process_index_data(index_data)
-            copy_from_dataframe(index_df)
+            all_instruments.extend(index_df.to_dict("records"))
+
+        # Store all instruments in our database
+        store_broker_instruments(all_instruments, "fivepaisaxts")
 
         delete_compositedge_temp_data(output_path)
 
-        return socketio.emit(
-            "master_contract_download",
-            {"status": "success", "message": "Successfully Downloaded"},
-        )
+        logger.info("Successfully Downloaded 5PaisaXTS symbols")
+        return {"status": "success", "message": "Successfully Downloaded"}
 
     except Exception as e:
         logger.info(f"{str(e)}")
-        return socketio.emit(
-            "master_contract_download", {"status": "error", "message": str(e)}
-        )
-
-
-def search_symbols(symbol, exchange):
-    return SymToken.query.filter(
-        SymToken.symbol.like(f"%{symbol}%"), SymToken.exchange == exchange
-    ).all()
+        logger.error(f"Failed to download 5PaisaXTS symbols: {str(e)}")
+        return {"status": "error", "message": str(e)}
