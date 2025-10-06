@@ -152,6 +152,27 @@ BROKER_CONFIGS = {
             "Accept": "application/json",
         },
     },
+    
+    "fyers": {
+        "name": "Fyers",
+        "api_base_url": "https://api.fyers.in",
+        "auth_url": "https://api.fyers.in/vagator/v2/send_login_otp",
+        "market_data_url": "https://api.fyers.in/data-rest/v2",
+        "order_url": "https://api.fyers.in/api/v2",
+        "master_contract_urls": {
+            "NSE_CD": "https://public.fyers.in/sym_details/NSE_CD.csv",
+            "NSE_FO": "https://public.fyers.in/sym_details/NSE_FO.csv",
+            "NSE_CM": "https://public.fyers.in/sym_details/NSE_CM.csv",
+            "BSE_CM": "https://public.fyers.in/sym_details/BSE_CM.csv",
+            "BSE_FO": "https://public.fyers.in/sym_details/BSE_FO.csv",
+            "MCX_COM": "https://public.fyers.in/sym_details/MCX_COM.csv",
+        },
+        "required_env_vars": ["BROKER_API_KEY"],
+        "headers": {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+    },
 }
 
 # Supported brokers

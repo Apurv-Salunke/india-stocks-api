@@ -70,7 +70,7 @@ print(f"LTP: {quote['ltp']}, Volume: {quote['volume']}")
 | **Zerodha** | `zerodha` | ✅ Ready | ⏳ Auth Required |
 | **Upstox** | `upstox` | ✅ Ready | ✅ Tested (96,670 instruments) |
 | **Dhan** | `dhan` | ✅ Ready | ✅ Tested (199,261 instruments) |
-| **Fyers** | `fyers` | ✅ Ready | ⏳ Pending |
+| **Fyers** | `fyers` | ✅ Ready | ✅ Tested (137,430 instruments) |
 | **Groww** | `groww` | ✅ Ready | ✅ Tested (100,203 instruments) |
 | **Kotak** | `kotak` | ✅ Ready | ⏳ Auth Required |
 | **AliceBlue** | `aliceblue` | ✅ Ready | ⏳ Pending |

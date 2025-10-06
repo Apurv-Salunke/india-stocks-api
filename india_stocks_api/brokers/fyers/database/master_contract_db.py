@@ -4,14 +4,16 @@ import os
 import pandas as pd
 import httpx
 from typing import List, Tuple, Optional
-from utils.httpx_client import get_httpx_client
-
-
-from sqlalchemy import create_engine, Column, Integer, String, Float, Sequence, Index
-from sqlalchemy.orm import scoped_session, sessionmaker
-from sqlalchemy.ext.declarative import declarative_base
-from extensions import socketio  # Import SocketIO
-from utils.logging import get_logger
+from india_stocks_api.utils.logging import get_logger
+from india_stocks_api.utils.httpx_client import get_http_client
+from india_stocks_api.config import (
+    get_broker_config,
+    get_cache_directory,
+)
+from india_stocks_api.database import (
+    initialize_broker_database,
+    store_broker_instruments,
+)
 
 logger = get_logger(__name__)
 
@@ -66,74 +68,6 @@ data_types = {
     "Reserved column3": str,
 }
 
-DATABASE_URL = os.getenv("DATABASE_URL")  # Replace with your database path
-
-engine = create_engine(DATABASE_URL)
-db_session = scoped_session(
-    sessionmaker(autocommit=False, autoflush=False, bind=engine)
-)
-Base = declarative_base()
-Base.query = db_session.query_property()
-
-
-class SymToken(Base):
-    __tablename__ = "symtoken"
-    id = Column(Integer, Sequence("symtoken_id_seq"), primary_key=True)
-    symbol = Column(String, nullable=False, index=True)  # Single column index
-    brsymbol = Column(String, nullable=False, index=True)  # Single column index
-    name = Column(String)
-    exchange = Column(String, index=True)  # Include this column in a composite index
-    brexchange = Column(String, index=True)
-    token = Column(String, index=True)  # Indexed for performance
-    expiry = Column(String)
-    strike = Column(Float)
-    lotsize = Column(Integer)
-    instrumenttype = Column(String)
-    tick_size = Column(Float)
-
-    # Define a composite index on symbol and exchange columns
-    __table_args__ = (Index("idx_symbol_exchange", "symbol", "exchange"),)
-
-
-def init_db():
-    logger.info("Initializing Master Contract DB")
-    Base.metadata.create_all(bind=engine)
-
-
-def delete_symtoken_table():
-    logger.info("Deleting Symtoken Table")
-    SymToken.query.delete()
-    db_session.commit()
-
-
-def copy_from_dataframe(df):
-    logger.info("Performing Bulk Insert")
-    # Convert DataFrame to a list of dictionaries
-    data_dict = df.to_dict(orient="records")
-
-    # Retrieve existing tokens to filter them out from the insert
-    existing_tokens = {
-        result.token for result in db_session.query(SymToken.token).all()
-    }
-
-    # Filter out data_dict entries with tokens that already exist
-    filtered_data_dict = [
-        row for row in data_dict if row["token"] not in existing_tokens
-    ]
-
-    # Insert in bulk the filtered records
-    try:
-        if filtered_data_dict:  # Proceed only if there's anything to insert
-            db_session.bulk_insert_mappings(SymToken, filtered_data_dict)
-            db_session.commit()
-            logger.info(
-                f"Bulk insert completed successfully with {len(filtered_data_dict)} new records."
-            )
-        else:
-            logger.info("No new records to insert.")
-    except Exception as e:
-        logger.exception(f"Error during bulk insert: {e}")
-        db_session.rollback()
 
 
 def download_csv_fyers_data(output_path: str) -> Tuple[bool, List[str], Optional[str]]:
@@ -151,21 +85,15 @@ def download_csv_fyers_data(output_path: str) -> Tuple[bool, List[str], Optional
     """
     logger.info("Downloading Master Contract CSV Files")
 
-    # URLs of the CSV files to be downloaded
-    csv_urls = {
-        "NSE_CD": "https://public.fyers.in/sym_details/NSE_CD.csv",
-        "NSE_FO": "https://public.fyers.in/sym_details/NSE_FO.csv",
-        "NSE_CM": "https://public.fyers.in/sym_details/NSE_CM.csv",
-        "BSE_CM": "https://public.fyers.in/sym_details/BSE_CM.csv",
-        "BSE_FO": "https://public.fyers.in/sym_details/BSE_FO.csv",
-        "MCX_COM": "https://public.fyers.in/sym_details/MCX_COM.csv",
-    }
+    # Get Fyers URLs from config
+    fyers_config = get_broker_config("fyers")
+    csv_urls = fyers_config["master_contract_urls"]
 
     downloaded_files = []
     errors = []
 
     # Get the shared HTTPX client with connection pooling
-    client = get_httpx_client()
+    client = get_http_client()
 
     try:
         for key, url in csv_urls.items():
@@ -663,40 +591,50 @@ def delete_fyers_temp_data(output_path):
 def master_contract_download():
     logger.info("Downloading Master Contract")
 
-    output_path = "tmp"
+    # Use config for cache directory
+    cache_dir = get_cache_directory()
+    output_path = cache_dir / "fyers"
+    output_path.mkdir(exist_ok=True)
+    
     try:
         download_csv_fyers_data(output_path)
-        delete_symtoken_table()
+        
+        # Initialize our database
+        initialize_broker_database()
+        
+        # Process exchange data and store in our database
+        all_instruments = []
+        
+        # Process each exchange and collect all instruments
         token_df = process_fyers_nse_csv(output_path)
-        copy_from_dataframe(token_df)
+        all_instruments.extend(token_df.to_dict("records"))
+        
         token_df = process_fyers_bse_csv(output_path)
-        copy_from_dataframe(token_df)
+        all_instruments.extend(token_df.to_dict("records"))
+        
         token_df = process_fyers_bfo_csv(output_path)
-        copy_from_dataframe(token_df)
+        all_instruments.extend(token_df.to_dict("records"))
+        
         token_df = process_fyers_nfo_csv(output_path)
-        copy_from_dataframe(token_df)
+        all_instruments.extend(token_df.to_dict("records"))
+        
         token_df = process_fyers_cds_csv(output_path)
-        copy_from_dataframe(token_df)
+        all_instruments.extend(token_df.to_dict("records"))
+        
         token_df = process_fyers_mcx_csv(output_path)
-        copy_from_dataframe(token_df)
+        all_instruments.extend(token_df.to_dict("records"))
+
+        # Store all instruments in our database
+        store_broker_instruments(all_instruments, "fyers")
+
         delete_fyers_temp_data(output_path)
-        # token_df['token'] = pd.to_numeric(token_df['token'], errors='coerce').fillna(-1).astype(int)
 
-        # token_df = token_df.drop_duplicates(subset='symbol', keep='first')
-
-        return socketio.emit(
-            "master_contract_download",
-            {"status": "success", "message": "Successfully Downloaded"},
-        )
+        logger.info("Successfully Downloaded Fyers symbols")
+        return {"status": "success", "message": "Successfully Downloaded"}
 
     except Exception as e:
         logger.exception(f"{e}")
-        return socketio.emit(
-            "master_contract_download", {"status": "error", "message": f"{e}"}
-        )
+        logger.error(f"Failed to download Fyers symbols: {str(e)}")
+        return {"status": "error", "message": str(e)}
 
 
-def search_symbols(symbol, exchange):
-    return SymToken.query.filter(
-        SymToken.symbol.like(f"%{symbol}%"), SymToken.exchange == exchange
-    ).all()
