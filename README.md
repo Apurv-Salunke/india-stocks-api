@@ -69,7 +69,7 @@ print(f"LTP: {quote['ltp']}, Volume: {quote['volume']}")
 | **AngelOne** | `angelone` or `angel` | ✅ Ready | ✅ Tested (135,806 instruments) |
 | **Zerodha** | `zerodha` | ✅ Ready | ⏳ Auth Required |
 | **Upstox** | `upstox` | ✅ Ready | ✅ Tested (96,670 instruments) |
-| **Dhan** | `dhan` | ✅ Ready | ⏳ Pending |
+| **Dhan** | `dhan` | ✅ Ready | ✅ Tested (199,261 instruments) |
 | **Fyers** | `fyers` | ✅ Ready | ⏳ Pending |
 | **Groww** | `groww` | ✅ Ready | ⏳ Pending |
 | **Kotak** | `kotak` | ✅ Ready | ⏳ Auth Required |
@@ -89,7 +89,7 @@ print(f"LTP: {quote['ltp']}, Volume: {quote['volume']}")
 | **Wisdom** | `wisdom` | ✅ Ready | ⏳ Pending |
 | **Zebu** | `zebu` | ✅ Ready | ⏳ Pending |
 | **5PaisaXTS** | `fivepaisaxts` | ✅ Ready | ⏳ Pending |
-| **Dhan Sandbox** | `dhan_sandbox` | ✅ Ready | ⏳ Pending |
+| **Dhan Sandbox** | `dhan_sandbox` | ✅ Ready | ✅ Tested (199,261 instruments) |
 
 ### Token Service Status Legend:
 - ✅ **Tested** - Token download and storage working

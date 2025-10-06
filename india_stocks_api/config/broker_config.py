@@ -67,6 +67,32 @@ BROKER_CONFIGS = {
             "Accept": "application/json",
         },
     },
+    "dhan": {
+        "name": "Dhan",
+        "api_base_url": "https://api.dhan.co",
+        "auth_url": "https://api.dhan.co/auth/login",
+        "market_data_url": "https://api.dhan.co/marketdata",
+        "order_url": "https://api.dhan.co/orders",
+        "master_contract_url": "https://images.dhan.co/api-data/api-scrip-master.csv",
+        "required_env_vars": ["BROKER_API_KEY"],
+        "headers": {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+    },
+    "dhan_sandbox": {
+        "name": "Dhan Sandbox",
+        "api_base_url": "https://api.dhan.co",
+        "auth_url": "https://api.dhan.co/auth/login",
+        "market_data_url": "https://api.dhan.co/marketdata",
+        "order_url": "https://api.dhan.co/orders",
+        "master_contract_url": "https://images.dhan.co/api-data/api-scrip-master.csv",
+        "required_env_vars": ["BROKER_API_KEY"],
+        "headers": {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+    },
 }
 
 # Supported brokers

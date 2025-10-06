@@ -3,91 +3,28 @@
 import os
 import pandas as pd
 import requests
-
-
-from sqlalchemy import create_engine, Column, Integer, String, Float, Sequence, Index
-from sqlalchemy.orm import scoped_session, sessionmaker
-from sqlalchemy.ext.declarative import declarative_base
-from extensions import socketio  # Import SocketIO
-from utils.logging import get_logger
+from india_stocks_api.utils.logging import get_logger
+from india_stocks_api.config import (
+    get_broker_config,
+    get_cache_directory,
+)
+from india_stocks_api.database import (
+    initialize_broker_database,
+    store_broker_instruments,
+)
 
 logger = get_logger(__name__)
 
 
-DATABASE_URL = os.getenv("DATABASE_URL")  # Replace with your database path
-
-engine = create_engine(DATABASE_URL)
-db_session = scoped_session(
-    sessionmaker(autocommit=False, autoflush=False, bind=engine)
-)
-Base = declarative_base()
-Base.query = db_session.query_property()
-
-
-class SymToken(Base):
-    __tablename__ = "symtoken"
-    id = Column(Integer, Sequence("symtoken_id_seq"), primary_key=True)
-    symbol = Column(String, nullable=False, index=True)  # Single column index
-    brsymbol = Column(String, nullable=False, index=True)  # Single column index
-    name = Column(String)
-    exchange = Column(String, index=True)  # Include this column in a composite index
-    brexchange = Column(String, index=True)
-    token = Column(String, index=True)  # Indexed for performance
-    expiry = Column(String)
-    strike = Column(Float)
-    lotsize = Column(Integer)
-    instrumenttype = Column(String)
-    tick_size = Column(Float)
-
-    # Define a composite index on symbol and exchange columns
-    __table_args__ = (Index("idx_symbol_exchange", "symbol", "exchange"),)
-
-
-def init_db():
-    logger.info("Initializing Master Contract DB")
-    Base.metadata.create_all(bind=engine)
-
-
-def delete_symtoken_table():
-    logger.info("Deleting Symtoken Table")
-    SymToken.query.delete()
-    db_session.commit()
-
-
-def copy_from_dataframe(df):
-    logger.info("Performing Bulk Insert")
-    # Convert DataFrame to a list of dictionaries
-    data_dict = df.to_dict(orient="records")
-
-    # Retrieve existing tokens to filter them out from the insert
-    existing_tokens = {
-        result.token for result in db_session.query(SymToken.token).all()
-    }
-
-    # Filter out data_dict entries with tokens that already exist
-    filtered_data_dict = [
-        row for row in data_dict if row["token"] not in existing_tokens
-    ]
-
-    # Insert in bulk the filtered records
-    try:
-        if filtered_data_dict:  # Proceed only if there's anything to insert
-            db_session.bulk_insert_mappings(SymToken, filtered_data_dict)
-            db_session.commit()
-            logger.info(
-                f"Bulk insert completed successfully with {len(filtered_data_dict)} new records."
-            )
-        else:
-            logger.info("No new records to insert.")
-    except Exception as e:
-        logger.exception(f"Error during bulk insert: {e}")
-        db_session.rollback()
-
-
 def download_csv_dhan_data(output_path):
     logger.info("Downloading Master Contract CSV Files")
+
+    # Get Dhan config
+    dhan_config = get_broker_config("dhan")
+    master_contract_url = dhan_config["master_contract_url"]
+
     # URLs of the CSV files to be downloaded
-    csv_urls = {"master": "https://images.dhan.co/api-data/api-scrip-master.csv"}
+    csv_urls = {"master": master_contract_url}
 
     # Create a list to hold the paths of the downloaded files
     downloaded_files = []
@@ -289,30 +226,30 @@ def delete_dhan_temp_data(output_path):
 def master_contract_download():
     logger.info("Downloading Master Contract")
 
-    output_path = "tmp"
+    # Use config for cache directory
+    cache_dir = get_cache_directory()
+    output_path = cache_dir / "dhan"
+    output_path.mkdir(exist_ok=True)
+
     try:
         download_csv_dhan_data(output_path)
-        delete_symtoken_table()
         token_df = process_dhan_csv(output_path)
-        copy_from_dataframe(token_df)
         delete_dhan_temp_data(output_path)
         # token_df['token'] = pd.to_numeric(token_df['token'], errors='coerce').fillna(-1).astype(int)
 
         # token_df = token_df.drop_duplicates(subset='symbol', keep='first')
 
-        return socketio.emit(
-            "master_contract_download",
-            {"status": "success", "message": "Successfully Downloaded"},
-        )
+        # Initialize our database and store the data
+        initialize_broker_database()
+
+        # Convert DataFrame to list of dictionaries for our database function
+        instruments_list = token_df.to_dict("records")
+        store_broker_instruments(instruments_list, "dhan")
+
+        logger.info("Successfully Downloaded Dhan symbols")
+        return {"status": "success", "message": "Successfully Downloaded"}
 
     except Exception as e:
         logger.exception(f"Error during master contract download: {e}")
-        return socketio.emit(
-            "master_contract_download", {"status": "error", "message": str(e)}
-        )
-
-
-def search_symbols(symbol, exchange):
-    return SymToken.query.filter(
-        SymToken.symbol.like(f"%{symbol}%"), SymToken.exchange == exchange
-    ).all()
+        logger.error(f"Failed to download Dhan symbols: {str(e)}")
+        return {"status": "error", "message": str(e)}
