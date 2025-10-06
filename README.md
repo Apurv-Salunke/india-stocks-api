@@ -75,7 +75,7 @@ print(f"LTP: {quote['ltp']}, Volume: {quote['volume']}")
 | **Kotak** | `kotak` | ✅ Ready | ⏳ Auth Required |
 | **AliceBlue** | `aliceblue` | ✅ Ready | ⏳ Pending |
 | **Flattrade** | `flattrade` | ✅ Ready | ⏳ Pending |
-| **Shoonya** | `shoonya` | ✅ Ready | ⏳ Pending |
+| **Shoonya** | `shoonya` | ✅ Ready | ✅ Tested (172,112 instruments) |
 | **5Paisa** | `5paisa` or `fivepaisa` | ✅ Ready | ⏳ Pending |
 | **Firstock** | `firstock` | ✅ Ready | ⏳ Pending |
 | **CompositeEdge** | `compositedge` | ✅ Ready | ⏳ Pending |

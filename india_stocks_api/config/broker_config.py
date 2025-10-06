@@ -93,6 +93,27 @@ BROKER_CONFIGS = {
             "Accept": "application/json",
         },
     },
+    
+    "shoonya": {
+        "name": "Shoonya",
+        "api_base_url": "https://api.shoonya.com",
+        "auth_url": "https://api.shoonya.com/NorenWClientTP/QuickAuth",
+        "market_data_url": "https://api.shoonya.com/NorenWClientTP/GetMarketData",
+        "order_url": "https://api.shoonya.com/NorenWClientTP/PlaceOrder",
+        "master_contract_urls": {
+            "NSE": "https://api.shoonya.com/NSE_symbols.txt.zip",
+            "NFO": "https://api.shoonya.com/NFO_symbols.txt.zip",
+            "CDS": "https://api.shoonya.com/CDS_symbols.txt.zip",
+            "MCX": "https://api.shoonya.com/MCX_symbols.txt.zip",
+            "BSE": "https://api.shoonya.com/BSE_symbols.txt.zip",
+            "BFO": "https://api.shoonya.com/BFO_symbols.txt.zip",
+        },
+        "required_env_vars": ["BROKER_API_KEY"],
+        "headers": {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+    },
 }
 
 # Supported brokers

@@ -4,98 +4,22 @@ import zipfile
 import io
 import pandas as pd
 from datetime import datetime
-from sqlalchemy import create_engine, Column, Integer, String, Float, Sequence, Index
-from sqlalchemy.orm import scoped_session, sessionmaker
-from sqlalchemy.ext.declarative import declarative_base
-from extensions import socketio  # Import SocketIO
-from utils.logging import get_logger
+from india_stocks_api.utils.logging import get_logger
+from india_stocks_api.config import (
+    get_broker_config,
+    get_cache_directory,
+)
+from india_stocks_api.database import (
+    initialize_broker_database,
+    store_broker_instruments,
+)
 
 logger = get_logger(__name__)
 
 
-# Database setup
-DATABASE_URL = os.getenv("DATABASE_URL")  # Replace with your database path
-engine = create_engine(DATABASE_URL)
-db_session = scoped_session(
-    sessionmaker(autocommit=False, autoflush=False, bind=engine)
-)
-Base = declarative_base()
-Base.query = db_session.query_property()
-
-
-# Define SymToken table
-class SymToken(Base):
-    __tablename__ = "symtoken"
-    id = Column(Integer, Sequence("symtoken_id_seq"), primary_key=True)
-    symbol = Column(String, nullable=False, index=True)  # Single column index
-    brsymbol = Column(String, nullable=False, index=True)  # Single column index
-    name = Column(String)
-    exchange = Column(String, index=True)  # Include this column in a composite index
-    brexchange = Column(String, index=True)
-    token = Column(String, index=True)  # Indexed for performance
-    expiry = Column(String)
-    strike = Column(Float)
-    lotsize = Column(Integer)
-    instrumenttype = Column(String)
-    tick_size = Column(Float)
-
-    # Define a composite index on symbol and exchange columns
-    __table_args__ = (Index("idx_symbol_exchange", "symbol", "exchange"),)
-
-
-def init_db():
-    logger.info("Initializing Master Contract DB")
-    Base.metadata.create_all(bind=engine)
-
-
-def delete_symtoken_table():
-    logger.info("Deleting Symtoken Table")
-    SymToken.query.delete()
-    db_session.commit()
-
-
-def copy_from_dataframe(df):
-    logger.info("Performing Bulk Insert")
-    # Convert DataFrame to a list of dictionaries
-    data_dict = df.to_dict(orient="records")
-
-    # Retrieve existing token-exchange combinations to filter them out from the insert
-    existing_token_exchange = {
-        (result.token, result.exchange)
-        for result in db_session.query(SymToken.token, SymToken.exchange).all()
-    }
-
-    # Filter out data_dict entries with token-exchange combinations that already exist
-    filtered_data_dict = [
-        row
-        for row in data_dict
-        if (row["token"], row["exchange"]) not in existing_token_exchange
-    ]
-
-    # Insert in bulk the filtered records
-    try:
-        if filtered_data_dict:  # Proceed only if there's anything to insert
-            db_session.bulk_insert_mappings(SymToken, filtered_data_dict)
-            db_session.commit()
-            logger.info(
-                f"Bulk insert completed successfully with {len(filtered_data_dict)} new records."
-            )
-        else:
-            logger.info("No new records to insert.")
-    except Exception as e:
-        logger.error(f"Error during bulk insert: {e}")
-        db_session.rollback()
-
-
-# Define the shoonya URLs for downloading the symbol files
-shoonya_urls = {
-    "NSE": "https://api.shoonya.com/NSE_symbols.txt.zip",
-    "NFO": "https://api.shoonya.com/NFO_symbols.txt.zip",
-    "CDS": "https://api.shoonya.com/CDS_symbols.txt.zip",
-    "MCX": "https://api.shoonya.com/MCX_symbols.txt.zip",
-    "BSE": "https://api.shoonya.com/BSE_symbols.txt.zip",
-    "BFO": "https://api.shoonya.com/BFO_symbols.txt.zip",
-}
+# Get Shoonya URLs from config
+shoonya_config = get_broker_config("shoonya")
+shoonya_urls = shoonya_config["master_contract_urls"]
 
 
 def download_and_unzip_shoonya_data(output_path):
@@ -905,33 +829,48 @@ def master_contract_download():
     """
     logger.info("Downloading shoonya Master Contract")
 
-    output_path = "tmp"
+    # Use config for cache directory
+    cache_dir = get_cache_directory()
+    output_path = cache_dir / "shoonya"
+    output_path.mkdir(exist_ok=True)
+    
     try:
         download_and_unzip_shoonya_data(output_path)
-        delete_symtoken_table()
 
-        # Process exchange data
+        # Initialize our database
+        initialize_broker_database()
+        
+        # Process exchange data and store in our database
+        all_instruments = []
+        
+        # Process each exchange and collect all instruments
         token_df = process_shoonya_nse_data(output_path)
-        copy_from_dataframe(token_df)
+        all_instruments.extend(token_df.to_dict("records"))
+        
         token_df = process_shoonya_bse_data(output_path)
-        copy_from_dataframe(token_df)
+        all_instruments.extend(token_df.to_dict("records"))
+        
         token_df = process_shoonya_nfo_data(output_path)
-        copy_from_dataframe(token_df)
+        all_instruments.extend(token_df.to_dict("records"))
+        
         token_df = process_shoonya_cds_data(output_path)
-        copy_from_dataframe(token_df)
+        all_instruments.extend(token_df.to_dict("records"))
+        
         token_df = process_shoonya_mcx_data(output_path)
-        copy_from_dataframe(token_df)
+        all_instruments.extend(token_df.to_dict("records"))
+        
         token_df = process_shoonya_bfo_data(output_path)
-        copy_from_dataframe(token_df)
+        all_instruments.extend(token_df.to_dict("records"))
+
+        # Store all instruments in our database
+        store_broker_instruments(all_instruments, "shoonya")
 
         delete_shoonya_temp_data(output_path)
 
-        return socketio.emit(
-            "master_contract_download",
-            {"status": "success", "message": "Successfully Downloaded"},
-        )
+        logger.info("Successfully Downloaded Shoonya symbols")
+        return {"status": "success", "message": "Successfully Downloaded"}
+        
     except Exception as e:
         logger.info(f"{str(e)}")
-        return socketio.emit(
-            "master_contract_download", {"status": "error", "message": str(e)}
-        )
+        logger.error(f"Failed to download Shoonya symbols: {str(e)}")
+        return {"status": "error", "message": str(e)}
