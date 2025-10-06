@@ -6,8 +6,9 @@ Manages all broker tokens and instrument mappings using SQLAlchemy
 import logging
 from pathlib import Path
 from typing import Optional, Dict, Any, List
+from datetime import datetime
 
-from sqlalchemy import create_engine, Column, Integer, String, Float, Sequence, Index
+from sqlalchemy import create_engine, Column, Integer, String, Float, Sequence, Index, DateTime
 from sqlalchemy.orm import scoped_session, sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 
@@ -53,8 +54,8 @@ class BrokerInstrument(Base):
         String, nullable=False, index=True
     )  # e.g., "angelone", "zerodha"
     is_active = Column(Integer, default=1)  # 1 = active, 0 = inactive
-    created_at = Column(String, default="CURRENT_TIMESTAMP")
-    updated_at = Column(String, default="CURRENT_TIMESTAMP")
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Composite indexes for performance
     __table_args__ = (
