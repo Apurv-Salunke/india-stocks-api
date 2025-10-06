@@ -128,6 +128,20 @@ BROKER_CONFIGS = {
             "Accept": "application/json",
         },
     },
+    
+    "fivepaisa": {
+        "name": "5Paisa",
+        "api_base_url": "https://openapi.5paisa.com",
+        "auth_url": "https://openapi.5paisa.com/VendorsAPI/Service1.svc/V1/LoginRequestMobileNewbyEmail",
+        "market_data_url": "https://openapi.5paisa.com/VendorsAPI/Service1.svc/V1/MarketData",
+        "order_url": "https://openapi.5paisa.com/VendorsAPI/Service1.svc/V1/OrderRequest",
+        "master_contract_url": "https://openapi.5paisa.com/VendorsAPI/Service1.svc/ScripMaster/segment/all",
+        "required_env_vars": ["BROKER_API_KEY"],
+        "headers": {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+    },
 }
 
 # Supported brokers

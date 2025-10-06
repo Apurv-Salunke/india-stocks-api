@@ -2,88 +2,19 @@
 
 import os
 import pandas as pd
-
-# Import httpx and shared client
 import httpx
-from utils.httpx_client import get_httpx_client
-
-from sqlalchemy import create_engine, Column, Integer, String, Float, Sequence, Index
-from sqlalchemy.orm import scoped_session, sessionmaker
-from sqlalchemy.ext.declarative import declarative_base
-from extensions import socketio  # Import SocketIO
-from utils.logging import get_logger
+from india_stocks_api.utils.logging import get_logger
+from india_stocks_api.utils.httpx_client import get_http_client
+from india_stocks_api.config import (
+    get_broker_config,
+    get_cache_directory,
+)
+from india_stocks_api.database import (
+    initialize_broker_database,
+    store_broker_instruments,
+)
 
 logger = get_logger(__name__)
-
-
-DATABASE_URL = os.getenv("DATABASE_URL")  # Replace with your database path
-
-engine = create_engine(DATABASE_URL)
-db_session = scoped_session(
-    sessionmaker(autocommit=False, autoflush=False, bind=engine)
-)
-Base = declarative_base()
-Base.query = db_session.query_property()
-
-
-class SymToken(Base):
-    __tablename__ = "symtoken"
-    id = Column(Integer, Sequence("symtoken_id_seq"), primary_key=True)
-    symbol = Column(String, nullable=False, index=True)  # Single column index
-    brsymbol = Column(String, nullable=False, index=True)  # Single column index
-    name = Column(String)
-    exchange = Column(String, index=True)  # Include this column in a composite index
-    brexchange = Column(String, index=True)
-    token = Column(String, index=True)  # Indexed for performance
-    expiry = Column(String)
-    strike = Column(Float)
-    lotsize = Column(Integer)
-    instrumenttype = Column(String)
-    tick_size = Column(Float)
-
-    # Define a composite index on symbol and exchange columns
-    __table_args__ = (Index("idx_symbol_exchange", "symbol", "exchange"),)
-
-
-def init_db():
-    logger.info("Initializing Master Contract DB")
-    Base.metadata.create_all(bind=engine)
-
-
-def delete_symtoken_table():
-    logger.info("Deleting Symtoken Table")
-    SymToken.query.delete()
-    db_session.commit()
-
-
-def copy_from_dataframe(df):
-    logger.info("Performing Bulk Insert")
-    # Convert DataFrame to a list of dictionaries
-    data_dict = df.to_dict(orient="records")
-
-    # Retrieve existing tokens to filter them out from the insert
-    existing_tokens = {
-        result.token for result in db_session.query(SymToken.token).all()
-    }
-
-    # Filter out data_dict entries with tokens that already exist
-    filtered_data_dict = [
-        row for row in data_dict if row["token"] not in existing_tokens
-    ]
-
-    # Insert in bulk the filtered records
-    try:
-        if filtered_data_dict:  # Proceed only if there's anything to insert
-            db_session.bulk_insert_mappings(SymToken, filtered_data_dict)
-            db_session.commit()
-            logger.info(
-                f"Bulk insert completed successfully with {len(filtered_data_dict)} new records."
-            )
-        else:
-            logger.info("No new records to insert.")
-    except Exception as e:
-        logger.error(f"Error during bulk insert: {e}")
-        db_session.rollback()
 
 
 def download_csv_5paisa_data(url, output_path):
@@ -109,7 +40,7 @@ def download_csv_5paisa_data(url, output_path):
             )
 
             # Use a custom timeout for this specific request
-            client = get_httpx_client()
+            client = get_http_client()
 
             # Custom timeout for master contract download (2 minutes)
             timeout = httpx.Timeout(120.0)
@@ -289,11 +220,14 @@ def delete_5paisa_temp_data(output_path):
 
 def master_contract_download():
     logger.info("Starting Master Contract Download Process")
-    url = "https://openapi.5paisa.com/VendorsAPI/Service1.svc/ScripMaster/segment/all"
-    output_path = "tmp/5paisa.csv"
-
-    # Ensure tmp directory exists
-    os.makedirs("tmp", exist_ok=True)
+    
+    # Get 5Paisa config
+    fivepaisa_config = get_broker_config("fivepaisa")
+    url = fivepaisa_config["master_contract_url"]
+    
+    # Use config for cache directory
+    cache_dir = get_cache_directory()
+    output_path = cache_dir / "5paisa.csv"
 
     try:
         logger.info(f"Initiating download from {url}")
@@ -303,20 +237,19 @@ def master_contract_download():
         token_df = process_5paisa_csv(output_path)
         logger.info(f"Processed {len(token_df)} symbols")
 
+        # Initialize our database
+        initialize_broker_database()
+        
+        # Store in our database
+        logger.info("Storing symbols in database...")
+        instruments_list = token_df.to_dict("records")
+        store_broker_instruments(instruments_list, "fivepaisa")
+
         # Clean up temporary files
         delete_5paisa_temp_data(output_path)
 
-        # Clear existing data and insert new data
-        logger.info("Updating database with new symbols...")
-        delete_symtoken_table()  # Clear existing table
-        copy_from_dataframe(token_df)
-
-        logger.info("Master contract download completed successfully")
-        # Notify UI through Socket.IO
-        return socketio.emit(
-            "master_contract_download",
-            {"status": "success", "message": "Successfully Downloaded Master Contract"},
-        )
+        logger.info("Successfully Downloaded 5Paisa symbols")
+        return {"status": "success", "message": "Successfully Downloaded Master Contract"}
 
     except Exception as e:
         error_message = str(e)
@@ -326,13 +259,6 @@ def master_contract_download():
         if "timeout" in error_message.lower() or "timed out" in error_message.lower():
             error_message = f"Download timed out. The FivePaisa server is not responding within the allowed time. Error details: {error_message}"
 
-        # Notify UI through Socket.IO
-        return socketio.emit(
-            "master_contract_download", {"status": "error", "message": error_message}
-        )
+        return {"status": "error", "message": error_message}
 
 
-def search_symbols(symbol, exchange):
-    return SymToken.query.filter(
-        SymToken.symbol.like(f"%{symbol}%"), SymToken.exchange == exchange
-    ).all()
