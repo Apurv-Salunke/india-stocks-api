@@ -13,10 +13,12 @@ from india_stocks_api.database.broker_instruments_db import (
     get_symbol_info,
     get_all_broker_symbols,
     get_symbol_count,
+    initialize_broker_database
 )
 
 
 def main():
+    initialize_broker_database()
     print("🔗 SYMBOL MAPPING EXAMPLES")
     print("=" * 50)
 

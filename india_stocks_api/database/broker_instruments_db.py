@@ -63,8 +63,8 @@ class BrokerInstrument(Base):
         String, nullable=False, index=True
     )  # e.g., "angelone", "zerodha"
     is_active = Column(Integer, default=1)  # 1 = active, 0 = inactive
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
     # Composite indexes for performance
     __table_args__ = (

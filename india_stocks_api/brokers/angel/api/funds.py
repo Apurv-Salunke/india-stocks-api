@@ -2,8 +2,11 @@
 
 import os
 import json
-from utils.httpx_client import get_httpx_client
-from utils.logging import get_logger
+from india_stocks_api.utils.logging import get_logger
+from india_stocks_api.utils.httpx_client import get_http_client
+from dotenv import load_dotenv
+
+load_dotenv()
 
 logger = get_logger(__name__)
 
@@ -11,9 +14,9 @@ logger = get_logger(__name__)
 def get_margin_data(auth_token):
     """Fetch margin data from the broker's API using the provided auth token."""
     api_key = os.getenv("BROKER_API_KEY")
-
+    
     # Get the shared httpx client with connection pooling
-    client = get_httpx_client()
+    client = get_http_client()
 
     headers = {
         "Authorization": f"Bearer {auth_token}",

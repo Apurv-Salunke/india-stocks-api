@@ -66,15 +66,15 @@ def main():
 
     print()
 
-    # Example 5: Logout
-    print(f"🚪 Logging out from {broker_name}...")
-    if logout(broker_name):
-        print("✅ Successfully logged out")
-    else:
-        print("❌ Failed to logout")
+    # # Example 5: Logout
+    # print(f"🚪 Logging out from {broker_name}...")
+    # if logout(broker_name):
+    #     print("✅ Successfully logged out")
+    # else:
+    #     print("❌ Failed to logout")
 
-    print()
-    print("🎉 Authentication example completed!")
+    # print()
+    # print("🎉 Authentication example completed!")
 
 
 if __name__ == "__main__":
