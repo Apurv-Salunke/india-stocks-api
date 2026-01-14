@@ -37,7 +37,7 @@ def get_margin_data(auth_token):
 
     # Add status attribute for compatibility with the existing codebase
     response.status = response.status_code
-    print(response.text)
+    
     margin_data = json.loads(response.text)
 
     logger.info(f"Margin Data: {margin_data}")
