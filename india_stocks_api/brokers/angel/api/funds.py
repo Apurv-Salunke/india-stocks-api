@@ -14,7 +14,7 @@ logger = get_logger(__name__)
 def get_margin_data(auth_token):
     """Fetch margin data from the broker's API using the provided auth token."""
     api_key = os.getenv("BROKER_API_KEY")
-    
+
     # Get the shared httpx client with connection pooling
     client = get_http_client()
 
@@ -32,12 +32,12 @@ def get_margin_data(auth_token):
 
     response = client.get(
         "https://apiconnect.angelbroking.com/rest/secure/angelbroking/user/v1/getRMS",
-        headers=headers,
+        headers=headers
     )
 
     # Add status attribute for compatibility with the existing codebase
     response.status = response.status_code
-
+    print(response.text)
     margin_data = json.loads(response.text)
 
     logger.info(f"Margin Data: {margin_data}")
