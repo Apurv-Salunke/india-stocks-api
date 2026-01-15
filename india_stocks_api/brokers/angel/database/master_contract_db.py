@@ -13,6 +13,7 @@ from india_stocks_api.config import (
     get_database_url,
     get_cache_directory,
 )
+from india_stocks_api.config import get_http_settings
 from india_stocks_api.database import (
     initialize_broker_database,
     store_broker_instruments,
@@ -26,7 +27,6 @@ def download_json_angel_data(url, output_path):
     Downloads a JSON file from the specified URL and saves it to the specified path.
     """
     logger.info("Downloading JSON data")
-    from india_stocks_api.config import get_http_settings
 
     http_settings = get_http_settings()
     timeout = http_settings["timeout"]
