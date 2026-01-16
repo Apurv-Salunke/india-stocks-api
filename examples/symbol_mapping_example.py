@@ -24,7 +24,7 @@ def main():
     print("\n📊 Example 1: Get broker tokens for RELIANCE")
     print("-" * 40)
 
-    brokers = ["angelone", "fyers", "dhan", "shoonya"]
+    brokers = ["angelone"]
     for broker in brokers:
         token = get_broker_token("RELIANCE", "NSE", broker)
         symbol = get_broker_symbol("RELIANCE", "NSE", broker)
@@ -44,9 +44,7 @@ def main():
     print("-" * 40)
 
     broker_symbols = [
-        ("NSE:RELIANCE-EQ", "NSE", "fyers"),
         ("RELIANCE-EQ", "NSE", "angelone"),
-        ("NSE:NIFTYBANK-INDEX", "NSE_INDEX", "fyers"),
         ("Nifty Bank", "NSE_INDEX", "angelone"),
     ]
 

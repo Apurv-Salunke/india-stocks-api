@@ -12,11 +12,13 @@ from pathlib import Path
 from typing import Dict, Optional
 import importlib
 import pytz
+from dotenv import load_dotenv
 
 from .utils.logging import get_logger
 from .utils.common import get_india_time, IST
 
 logger = get_logger(__name__)
+load_dotenv()
 
 # Token storage file
 TOKEN_STORAGE_PATH = Path(__file__).parent.parent / "_cache" / "auth_tokens.json"
@@ -24,7 +26,7 @@ TOKEN_STORAGE_PATH = Path(__file__).parent.parent / "_cache" / "auth_tokens.json
 # Broker authentication mapping
 BROKER_AUTH_MAPPING = {
     "angelone": {
-        "module": "india_stocks_api.brokers.angel.api.auth_api",
+        "module": "india_stocks_api.brokers.angelone.api.auth_api",
         "function": "authenticate_broker",
         "env_vars": [
             "ANGELONE_CLIENT_CODE",

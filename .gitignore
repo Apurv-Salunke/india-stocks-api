@@ -1,43 +1,135 @@
+# IDE and Editor files
 .idea
-.ipynb_checkpoints
-.mypy_cache
 .vscode
-__pycache__
-.pytest_cache
-htmlcov
-dist
-site
-.coverage
-coverage.xml
-.netlify
-test.db
-log.txt
-Pipfile.lock
-env3.*
-env
-docs_build
-site_build
-venv
-docs.zip
-archive.zip
-
-# vim temporary files
+*.swp
+*.swo
 *~
 .*.sw?
 .cache
+.sublime-project
+.sublime-workspace
+*.code-workspace
+*.iml
 
-# macOS
-.DS_Store
-
-pytest.xml
-
-# local cache store
-_cache/
-broker.yaml
-instruments.db
-dist/
-build/
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+env3.*
+env
+venv
+ENV/
+newvenv/
+env.bak/
+venv.bak/
+.mypy_cache
+.dmypy.json
+dmypy.json
+.pyre/
+.pytest_cache
+.coverage
+coverage.xml
+htmlcov/
 *.egg-info/
 *.egg
 *.whl
 *.tar.gz
+dist/
+dist
+build/
+Pipfile.lock
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Logs
+*.log
+log.txt
+logs/
+*.log.*
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+test.db
+instruments.db
+broker.yaml
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+*.swp
+
+# Windows
+Thumbs.db
+Desktop.ini
+ehthumbs.db
+$RECYCLE.BIN/
+
+# Linux
+.directory
+.nfs*
+
+# Project specific
+_cache/
+cache/
+docs_build/
+site_build/
+site/
+docs.zip
+archive.zip
+.netlify
+pytest.xml
+*.pem
+*.key
+*.cert
+
+# IDE Caches
+.mypy_cache/
+.dmypy.json
+dmypy.json
+*.sublime-workspace
+
+# Node modules (if using npm)
+node_modules/
+npm-debug.log
+yarn-error.log
+package-lock.json
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
+*.backup
+
+# API keys and credentials (IMPORTANT!)
+*.apikey
+secret*.txt
+credentials*.json
+*.pem
+*.key
+
+# OS generated files
+.Spotlight-V100
+.Trashes
+._*
+
+# Development
+local_settings.py
+settings_local.py
+.idea/
+.vscode/
