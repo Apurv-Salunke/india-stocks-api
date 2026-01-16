@@ -108,7 +108,10 @@ def get_margin(broker_name: str) -> Dict[str, Any]:
         module = _resolve_funds_module(broker_name)
         margin_data = module.get_margin_data(auth_token)
 
-        logger.info(f"Successfully retrieved margin for {broker_name}")
+        if margin_data:
+            logger.info(f"Successfully retrieved margin for {broker_name}")
+        else:
+            logger.warning(f"Empty margin data returned for {broker_name}")
         return margin_data
 
     except ImportError as e:
@@ -153,7 +156,7 @@ def get_all_margins() -> Dict[str, Dict[str, Any]]:
             logger.error(f"Skipping broker '{broker}': {e}")
 
     if not all_margins:
-        logger.warning("No authenticated brokers found for fetching margins.")
+        logger.warning("No margin data retrieved from any broker.")
 
     return all_margins
 
@@ -181,6 +184,5 @@ def get_available_cash(broker_name: str) -> str:
         return margin["availablecash"]
     except KeyError:
         raise KeyError(
-            f"'availablecash' not present in margin data for broker '{broker_name}': "
-            f"{margin}"
+            f"'availablecash' not present in margin data for broker '{broker_name}'"
         )
