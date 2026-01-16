@@ -144,7 +144,11 @@ def get_all_margins() -> Dict[str, Dict[str, Any]]:
             continue
 
         try:
-            all_margins[broker] = get_margin(broker)
+            margin = get_margin(broker)
+            if not margin:
+                logger.warning(f"No margin data returned for broker '{broker}'")
+                continue
+            all_margins[broker] = margin
         except Exception as e:
             logger.error(f"Skipping broker '{broker}': {e}")
 

@@ -1,6 +1,6 @@
 """
-Angel Broker Funds API Example
-Demonstrates how to use the get_margin function from Angel Broker
+AngelOne Broker Funds API Example
+Demonstrates how to use the get_margin function from AngelOne Broker
 """
 
 from india_stocks_api.funds import get_margin
@@ -11,7 +11,7 @@ load_dotenv()
 
 
 def main():
-    print("🚀 Angel Broker Funds API Example")
+    print("🚀 AngelOne Broker Funds API Example")
     print("=" * 50)
 
     broker_name = "angelone"
@@ -62,7 +62,7 @@ def main():
         return
 
     print()
-    print("🎉 Angel Broker funds example completed!")
+    print("🎉 AngelOne Broker funds example completed!")
 
 
 if __name__ == "__main__":
