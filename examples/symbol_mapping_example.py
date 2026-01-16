@@ -141,7 +141,11 @@ def main():
     print("  Testing with NIFTY futures:")
     nifty_futures = [
         ("NIFTY28OCT25FUT", "NFO", "angelone"),
-        ("NIFTY30DEC25FUT", "NFO", "angelone"),
+        ("NIFTY30DEC25FUT", "NFO", "angelone"
+        ""
+        ""
+        ""
+        ""),
     ]
 
     for symbol, exchange, broker in nifty_futures:

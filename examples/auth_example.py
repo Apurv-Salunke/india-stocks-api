@@ -6,7 +6,6 @@ from india_stocks_api.auth import (
     authenticate_broker,
     is_authenticated,
     get_auth_headers,
-    logout,
     get_supported_brokers,
     get_missing_credentials,
 )
@@ -66,15 +65,15 @@ def main():
 
     print()
 
-    # Example 5: Logout
-    print(f"🚪 Logging out from {broker_name}...")
-    if logout(broker_name):
-        print("✅ Successfully logged out")
-    else:
-        print("❌ Failed to logout")
+    # # Example 5: Logout
+    # print(f"🚪 Logging out from {broker_name}...")
+    # if logout(broker_name):
+    #     print("✅ Successfully logged out")
+    # else:
+    #     print("❌ Failed to logout")
 
-    print()
-    print("🎉 Authentication example completed!")
+    # print()
+    # print("🎉 Authentication example completed!")
 
 
 if __name__ == "__main__":

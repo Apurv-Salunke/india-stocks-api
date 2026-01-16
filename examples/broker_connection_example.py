@@ -87,7 +87,7 @@ def main():
 
     # Step 2: Connect to broker
     print("\n🔗 Step 2: Connecting to broker...")
-    broker_name = "angelone"
+    broker_name = "angel"
 
     if connect_to_broker(broker_name):
         # Step 3: Check authentication status
