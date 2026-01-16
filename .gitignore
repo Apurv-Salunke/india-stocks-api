@@ -1,51 +1,61 @@
+# =========================
 # IDE and Editor files
-.idea
-.vscode
+# =========================
+.idea/
+.vscode/
+*.iml
+*.code-workspace
+*.sublime-project
+*.sublime-workspace
 *.swp
 *.swo
 *~
 .*.sw?
 .cache
-.sublime-project
-.sublime-workspace
-*.code-workspace
-*.iml
 
+# =========================
 # Python
-__pycache__
+# =========================
+__pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
-env3.*
-env
-venv
+
+# Virtual environments
+env/
+env3.*/
+venv/
 ENV/
 newvenv/
 env.bak/
 venv.bak/
-.mypy_cache
+
+# Python tooling / caches
+.mypy_cache/
 .dmypy.json
 dmypy.json
 .pyre/
-.pytest_cache
+.pytest_cache/
 .coverage
 coverage.xml
 htmlcov/
 *.egg-info/
 *.egg
 *.whl
-*.tar.gz
 dist/
-dist
 build/
 Pipfile.lock
 
+# =========================
 # Jupyter Notebook
-.ipynb_checkpoints
+# =========================
+.ipynb_checkpoints/
 *.ipynb
 
+# =========================
 # Environment variables
+# =========================
 .env
 .env.local
 .env.*.local
@@ -53,13 +63,17 @@ Pipfile.lock
 .env.test.local
 .env.production.local
 
+# =========================
 # Logs
+# =========================
 *.log
+*.log.*
 log.txt
 logs/
-*.log.*
 
-# Database
+# =========================
+# Databases
+# =========================
 *.db
 *.sqlite
 *.sqlite3
@@ -67,23 +81,60 @@ test.db
 instruments.db
 broker.yaml
 
+# =========================
+# API keys and credentials (IMPORTANT)
+# =========================
+*.apikey
+secret*.txt
+credentials*.json
+*.pem
+*.key
+*.cert
+
+# =========================
+# Node / JS (if applicable)
+# =========================
+node_modules/
+npm-debug.log
+yarn-error.log
+package-lock.json
+
+# =========================
+# Temporary files
+# =========================
+tmp/
+temp/
+*.tmp
+*.bak
+*.backup
+
+# =========================
 # macOS
+# =========================
 .DS_Store
 .AppleDouble
 .LSOverride
-*.swp
+.Spotlight-V100
+.Trashes
+._*
 
+# =========================
 # Windows
+# =========================
 Thumbs.db
 Desktop.ini
 ehthumbs.db
 $RECYCLE.BIN/
 
+# =========================
 # Linux
+# =========================
 .directory
 .nfs*
 
+# =========================
 # Project specific
+# =========================
 _cache/
 cache/
 docs_build/
@@ -93,43 +144,3 @@ docs.zip
 archive.zip
 .netlify
 pytest.xml
-*.pem
-*.key
-*.cert
-
-# IDE Caches
-.mypy_cache/
-.dmypy.json
-dmypy.json
-*.sublime-workspace
-
-# Node modules (if using npm)
-node_modules/
-npm-debug.log
-yarn-error.log
-package-lock.json
-
-# Temporary files
-tmp/
-temp/
-*.tmp
-*.bak
-*.backup
-
-# API keys and credentials (IMPORTANT!)
-*.apikey
-secret*.txt
-credentials*.json
-*.pem
-*.key
-
-# OS generated files
-.Spotlight-V100
-.Trashes
-._*
-
-# Development
-local_settings.py
-settings_local.py
-.idea/
-.vscode/

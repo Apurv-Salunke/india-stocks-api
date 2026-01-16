@@ -101,9 +101,7 @@ def get_margin(broker_name: str) -> Dict[str, Any]:
     auth_token = token_data.get("auth_token")
     if not auth_token or not isinstance(auth_token, str) or not auth_token.strip():
         logger.error(
-            f"Auth token missing or empty for broker {broker_name}. "
-            f"token_data={token_data}"
-        )
+            f"Auth token missing or empty for broker {broker_name}. ")
         return {}
 
     try:

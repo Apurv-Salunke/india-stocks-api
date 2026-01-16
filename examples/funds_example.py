@@ -1,6 +1,6 @@
 """
 Angel Broker Funds API Example
-Demonstrates how to use the get_margin_data function from Angel Broker
+Demonstrates how to use the get_margin function from Angel Broker
 """
 
 from india_stocks_api.funds import get_margin
