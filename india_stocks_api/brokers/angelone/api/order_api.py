@@ -404,7 +404,11 @@ def cancel_all_orders_api(data, auth):
 
     order_book_response = get_order_book(AUTH_TOKEN)
     # logger.info(f"{order_book_response}")
-    if not order_book_response["status"]:
+    status = order_book_response.get("status")
+    if isinstance(status, str):
+        status = status.lower() in {"true", "success"}
+    if not status:
+
         return (
             [],
             [],
