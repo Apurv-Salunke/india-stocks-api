@@ -11,6 +11,7 @@ on:
     branches:
       - main
       - dev
+      - feature-funds
 
   pull_request:
     branches:
