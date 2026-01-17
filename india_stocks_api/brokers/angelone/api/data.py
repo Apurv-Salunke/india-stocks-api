@@ -2,8 +2,8 @@ import json
 import os
 import pandas as pd
 from datetime import timedelta
-from database.token_db import get_br_symbol, get_token
-from utils.httpx_client import get_httpx_client
+from india_stocks_api.database.broker_instruments_db import get_broker_symbol, get_broker_token
+from utils.httpx_client import get_http_client
 from utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -15,7 +15,7 @@ def get_api_response(endpoint, auth, method="GET", payload=""):
     api_key = os.getenv("BROKER_API_KEY")
 
     # Get the shared httpx client with connection pooling
-    client = get_httpx_client()
+    client = get_http_client()
 
     headers = {
         "Authorization": f"Bearer {AUTH_TOKEN}",
@@ -85,14 +85,13 @@ class BrokerData:
         Get real-time quotes for given symbol
         Args:
             symbol: Trading symbol
-            exchange: Exchange (e.g., NSE, BSE, NFO, BFO, CDS, MCX)
+            exchange: Exchange (e.g., NSE_INDEX, BSE_INDEX, MCX_INDEX)
         Returns:
             dict: Quote data with required fields
         """
         try:
             # Convert symbol to broker format and get token
-            br_symbol = get_br_symbol(symbol, exchange)
-            token = get_token(symbol, exchange)
+            token = get_broker_token(standardized_symbol=symbol, exchange_code=exchange, broker_name="angelone")
 
             if exchange == "NSE_INDEX":
                 exchange = "NSE"
@@ -160,9 +159,9 @@ class BrokerData:
         """
         try:
             # Convert symbol to broker format and get token
-            br_symbol = get_br_symbol(symbol, exchange)
+            br_symbol = get_broker_symbol(standardized_symbol=symbol, exchange_code=exchange, broker_name="angelone")
 
-            token = get_token(symbol, exchange)
+            token = get_broker_token(standardized_symbol=symbol, exchange_code=exchange, broker_name="angelone")
             logger.debug(f"Debug - Broker Symbol: {br_symbol}, Token: {token}")
 
             if exchange == "NSE_INDEX":
@@ -374,7 +373,7 @@ class BrokerData:
         """
         try:
             # Get token for the symbol
-            token = get_token(symbol, exchange)
+            token = get_broker_token(standardized_symbol=symbol, exchange_code=exchange, broker_name="angelone")
 
             # Convert dates to datetime objects
             from_date = pd.to_datetime(start_date)
@@ -503,8 +502,7 @@ class BrokerData:
         """
         try:
             # Convert symbol to broker format and get token
-            br_symbol = get_br_symbol(symbol, exchange)
-            token = get_token(symbol, exchange)
+            token = get_broker_token(standardized_symbol=symbol, exchange_code=exchange, broker_name="angelone")
 
             if exchange == "NSE_INDEX":
                 exchange = "NSE"

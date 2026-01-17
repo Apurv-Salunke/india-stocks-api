@@ -10,7 +10,6 @@ from datetime import datetime
 from india_stocks_api.utils.logging import get_logger
 from india_stocks_api.config import (
     get_broker_config,
-    get_database_url,
     get_cache_directory,
 )
 from india_stocks_api.database import (

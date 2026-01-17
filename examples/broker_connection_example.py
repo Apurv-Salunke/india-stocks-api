@@ -10,15 +10,18 @@ from india_stocks_api.auth import (
     get_supported_brokers,
     get_missing_credentials,
 )
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 def setup_angelone_credentials():
     """Set up AngelOne credentials (example)"""
     # Method 1: Direct environment variables
-    os.environ["ANGELONE_CLIENT_CODE"] = "A1357374"
-    os.environ["ANGELONE_PIN"] = "8989"
-    os.environ["ANGELONE_TOTP_SECRET"] = "EL7KI5RGSJ5ZXZ625FDETRO44I"
-    os.environ["BROKER_API_KEY"] = "SP7RmmCu"
+    os.getenv("ANGELONE_CLIENT_CODE")
+    os.getenv("ANGELONE_PIN")
+    os.getenv("ANGELONE_TOTP_SECRET")
+    os.getenv("BROKER_API_KEY")
 
     print("✅ AngelOne credentials set up")
 
