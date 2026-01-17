@@ -16,14 +16,19 @@ load_dotenv()
 
 
 def setup_angelone_credentials():
-    """Set up AngelOne credentials (example)"""
-    # Method 1: Direct environment variables
-    os.getenv("ANGELONE_CLIENT_CODE")
-    os.getenv("ANGELONE_PIN")
-    os.getenv("ANGELONE_TOTP_SECRET")
-    os.getenv("BROKER_API_KEY")
-
-    print("✅ AngelOne credentials set up")
+    """Verify AngelOne credentials are loaded from environment."""
+    required_vars = [
+        "ANGELONE_CLIENT_CODE",
+        "ANGELONE_PIN",
+        "ANGELONE_TOTP_SECRET",
+        "BROKER_API_KEY",
+    ]
+    missing = [var for var in required_vars if not os.getenv(var)]
+    if missing:
+        print(f"⚠️ Missing environment variables: {', '.join(missing)}")
+        print("💡 Please set these in your .env file")
+    else:
+        print("✅ AngelOne credentials loaded from environment")
 
 
 def connect_to_broker(broker_name):

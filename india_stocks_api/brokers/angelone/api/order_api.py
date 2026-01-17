@@ -149,8 +149,11 @@ def place_order_api(data, auth):
     # Parse the JSON response
     response_data = response.json()
 
-    if response_data["status"]:
-        orderid = response_data["data"]["orderid"]
+    status = response_data.get("status")
+    if isinstance(status, str):
+        status = status.lower() in {"true", "success"}
+    if status:
+        orderid = response_data.get("data", {}).get("orderid")
     else:
         orderid = None
     return response, response_data, orderid
