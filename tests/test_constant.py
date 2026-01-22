@@ -1,7 +1,6 @@
 """
 Tests for constant enums
 """
-import pytest
 from india_stocks_api.constant import (
     OrderType,
     TransactionType,
