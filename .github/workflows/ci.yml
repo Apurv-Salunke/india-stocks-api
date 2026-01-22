@@ -2,9 +2,8 @@ name: CI Workflow
 
 # Assigning permissions to jobs
 permissions:
-  contents: write
-  checks: write
-  pull-requests: write
+  contents: read        # For checkout and comparing commits
+  pull-requests: write  # For creating/updating PR comments
 
 on:
   push:
