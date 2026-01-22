@@ -3,8 +3,6 @@
 import os
 import pandas as pd
 import requests
-import gzip
-import shutil
 from datetime import datetime
 
 from sqlalchemy import create_engine, Column, Integer, String, Float , Sequence, Index
