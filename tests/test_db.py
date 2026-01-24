@@ -6,24 +6,41 @@ from india_stocks_api.instruments.database import InstrumentDB, InstrumentMaster
 
 def test_db_operations():
     print("Testing DB...")
-    db = InstrumentDB("test.db")
+    db = InstrumentDB("instruments.db")
     
-    # Test 1: Insert
+    # Test 1: Insert Real Samples
     records = [
         {
-            "token": "123",
-            "symbol": "EST",
+            "token": "2885",
+            "symbol": "RELIANCE",
             "exchange": "NSE",
-            "tradingsymbol": "TEST-EQ",
-            "br_symbol": "TEST-EQ",
-            "lotsize": 1,
+            "tradingsymbol": "RELIANCE-EQ",
+            "br_symbol": "RELIANCE-EQ",
+            "expiry": None,
+            "strike": None,
+            "opt_type": None,
+            "lot_size": 1,
+            "tick_size": 0.05,
             "instrument_type": "EQ"
+        },
+        {
+            "token": "9992885",
+            "symbol": "NIFTY",
+            "exchange": "NFO",
+            "tradingsymbol": "NIFTY24DEC23000CE",
+            "br_symbol": "NIFTY24DEC23000CE",
+            "expiry": "2024-12-26",
+            "strike": 23000.0,
+            "opt_type": "CE",
+            "lot_size": 25,
+            "tick_size": 0.05,
+            "instrument_type": "OPT"
         }
     ]
     
-    print("Inserting...")
+    print("Inserting samples into instruments.db...")
     try:
-        db.bulk_insert(records)
+        db.raw_bulk_insert(records, truncate=True)
         print("Insert Success!")
     except Exception as e:
         print(f"Insert Failed: {e}")
