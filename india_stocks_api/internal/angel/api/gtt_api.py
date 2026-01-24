@@ -1,0 +1,61 @@
+import json
+import os
+from india_stocks_api.internal.context import get_httpx_client, get_logger
+
+logger = get_logger(__name__)
+
+def get_api_response(endpoint, auth, method="GET", payload=''):
+    AUTH_TOKEN = auth
+    api_key = os.getenv('BROKER_API_KEY')
+    client = get_httpx_client()
+    
+    headers = {
+      'Authorization': f'Bearer {AUTH_TOKEN}',
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'X-UserType': 'USER',
+      'X-SourceID': 'WEB',
+      'X-ClientLocalIP': 'CLIENT_LOCAL_IP', 
+      'X-ClientPublicIP': 'CLIENT_PUBLIC_IP',
+      'X-MACAddress': 'MAC_ADDRESS',
+      'X-PrivateKey': api_key
+    }
+    
+    url = f"https://apiconnect.angelbroking.com{endpoint}"
+    
+    if isinstance(payload, str):
+        try:
+            payload = json.loads(payload)
+        except:
+            pass
+
+    if method == "GET":
+        response = client.get(url, headers=headers)
+    elif method == "POST":
+        response = client.post(url, headers=headers, json=payload)
+    else:
+        response = client.request(method, url, headers=headers, json=payload)
+    
+    response.status = response.status_code
+    if not response.text: return {}
+    try:
+        return json.loads(response.text)
+    except json.JSONDecodeError:
+        logger.error(f"Failed to parse JSON response from {endpoint}: {response.text}")
+        return {}
+
+def create_gtt_rule(payload, auth):
+    return get_api_response("/rest/secure/angelbroking/gtt/v1/createRule", auth, "POST", payload)
+
+def modify_gtt_rule(payload, auth):
+    return get_api_response("/rest/secure/angelbroking/gtt/v1/modifyRule", auth, "POST", payload)
+
+def cancel_gtt_rule(payload, auth):
+    return get_api_response("/rest/secure/angelbroking/gtt/v1/cancelRule", auth, "POST", payload)
+
+def get_gtt_list(payload, auth):
+    # Payload usually contains status list like ["FOR_SETTLEMENT", "CANCELLED"]
+    return get_api_response("/rest/secure/angelbroking/gtt/v1/listRule", auth, "POST", payload)
+
+def get_gtt_status(id, auth):
+    return get_api_response(f"/rest/secure/angelbroking/gtt/v1/ruleDetails/{id}", auth, "GET")

@@ -5,6 +5,7 @@
 Trading with Indian brokers is painful. Here are the problems this library solves:
 
 ### The Problems
+
 - **Symbol Hell**: Each broker uses different symbols (RELIANCE vs RELIANCE-EQ vs RELIANCE.NS)
 - **Token Management**: You need to manually find and manage broker-specific tokens
 - **Broker Lock-in**: Switching brokers means rewriting your entire trading code
@@ -13,7 +14,9 @@ Trading with Indian brokers is painful. Here are the problems this library solve
 - **Data Inconsistency**: Same instrument, different data formats across brokers
 
 ### The Solution
+
 This library provides a **unified interface** that:
+
 - **No Symbol Management**: Use standard symbols (RELIANCE, BANKNIFTY) - we handle broker mapping
 - **No Token Hassle**: We automatically resolve broker-specific tokens
 - **Easy Broker Switching**: Change brokers with just one line of code
@@ -48,103 +51,65 @@ pip install india-stocks-api
 
 ## Quick Start
 
-### Easy Broker Switching
+### Modular Broker API (v2.0)
 
 ```python
-from india_stocks_api import brokers
+from india_stocks_api.brokers import AngelOne
+from india_stocks_api.constants import OrderType, TransactionType, ProductType
 
-# Start with AngelOne
-broker = brokers.AngelOne()
-broker.login("api_key", "username", "password")
-
-# Your trading code works the same way
-candles = broker.get_candles("RELIANCE", "NSE", "1minute", limit=100)
-order = broker.place_order("RELIANCE", "NSE", "BUY", 10, "MARKET", "INTRADAY")
-
-# Switch to Zerodha? Just change one line!
-broker = brokers.Zerodha()
-broker.login("user_id", "password", "totp")
-
-# Same code works - no changes needed!
-candles = broker.get_candles("RELIANCE", "NSE", "1minute", limit=100)
-order = broker.place_order("RELIANCE", "NSE", "BUY", 10, "MARKET", "INTRADAY")
-```
-
-### No Symbol Management Required
-
-```python
-# Use standard symbols - we handle broker mapping automatically
-symbols = ["RELIANCE", "TCS", "INFY", "BANKNIFTY", "GOLD"]
-
-for symbol in symbols:
-    # Works with any broker - no symbol conversion needed
-    candles = broker.get_candles(symbol, "NSE", "1minute", limit=10)
-    print(f"{symbol}: {candles[-1]['close']}")
-```
-
-### Login to Broker
-
-```python
-from india_stocks_api import brokers
-
-# Login to AngelOne
-angelone = brokers.AngelOne()
-angelone.login(
+# Initialize AngelOne
+broker = AngelOne(
     api_key="your_api_key",
-    username="your_username",
-    password="your_password"
-)
-
-# Login to Zerodha
-zerodha = brokers.Zerodha()
-zerodha.login(
-    user_id="your_user_id",
+    client_code="your_client_code",
     password="your_password",
-    totp="your_totp"
+    totp_key="your_totp_seed"
 )
+
+# Authenticate
+if broker.authenticate():
+    # Place a Market Order for Reliance
+    from india_stocks_api.instruments.models import Equity
+    reliance = Equity("RELIANCE")
+
+    order = broker.place_order(
+        instrument=reliance,
+        transaction_type=TransactionType.BUY,
+        quantity=1,
+        order_type=OrderType.MARKET,
+        product_type=ProductType.INTRADAY
+    )
+    print(f"Order Success: {order['order_id']}")
 ```
 
-### Fetch Candles (OHLCV Data)
+### Powerful Instrument Resolution
+
+No more hunting for tokens! Create `Equity`, `Future`, or `Option` objects and the library handles the rest.
 
 ```python
-# Get 1-minute candles for RELIANCE
-candles = angelone.get_candles(
-    symbol="RELIANCE",
-    exchange="NSE",
-    interval="1minute",
-    from_date="2024-01-01",
-    to_date="2024-01-31"
-)
+from india_stocks_api.instruments.models import Future, Option
+from india_stocks_api.constants import OptionType
+from datetime import date
 
-print(f"Got {len(candles)} candles")
-for candle in candles[-5:]:  # Last 5 candles
-    print(f"Date: {candle['date']}, Open: {candle['open']}, High: {candle['high']}, Low: {candle['low']}, Close: {candle['close']}, Volume: {candle['volume']}")
+# Resolve a Future
+nifty_fut = Future("NIFTY", expiry=date(2024, 12, 26))
+
+# Resolve an Option
+banknifty_call = Option("BANKNIFTY", expiry=date(2024, 12, 26), strike=52000, opt_type=OptionType.CE)
+
+# Fetch History
+history = broker.get_history(nifty_fut, start_date="2024-12-01", end_date="2024-12-20", interval="5m")
 ```
 
-### Place Orders
+### GTT (Good-Till-Triggered) Support
 
 ```python
-# Buy 10 shares of RELIANCE
-order = angelone.place_order(
-    symbol="RELIANCE",
-    exchange="NSE",
-    transaction_type="BUY",
+# Create a GTT Buy Rule
+broker.create_gtt(
+    instrument=reliance,
+    transaction_type=TransactionType.BUY,
     quantity=10,
-    order_type="MARKET",
-    product="INTRADAY"
-)
-
-print(f"Order placed: {order['order_id']}")
-
-# Place limit order
-limit_order = angelone.place_order(
-    symbol="RELIANCE",
-    exchange="NSE",
-    transaction_type="SELL",
-    quantity=10,
-    order_type="LIMIT",
-    price=2500.00,
-    product="DELIVERY"
+    trigger_price=2450.0,
+    price=2455.0
 )
 ```
 
@@ -287,6 +252,7 @@ except Exception as e:
 ## Common Use Cases
 
 ### Day Trading
+
 ```python
 # Quick day trading setup - works with any broker
 broker = brokers.AngelOne()  # or brokers.Zerodha()
@@ -300,6 +266,7 @@ order = broker.place_order("RELIANCE", "NSE", "BUY", 10, "MARKET", "INTRADAY")
 ```
 
 ### Swing Trading
+
 ```python
 # Swing trading with daily candles - broker agnostic
 daily_candles = broker.get_candles("RELIANCE", "NSE", "1day", limit=50)
@@ -309,6 +276,7 @@ order = broker.place_order("RELIANCE", "NSE", "BUY", 100, "LIMIT", "DELIVERY", p
 ```
 
 ### Options Trading
+
 ```python
 # Buy call option - standard symbol, we handle broker mapping
 call_order = broker.place_order("BANKNIFTY28OCT2545000CE", "NSE", "BUY", 25, "MARKET", "MIS")
@@ -318,6 +286,7 @@ put_order = broker.place_order("BANKNIFTY28OCT2545000PE", "NSE", "BUY", 25, "MAR
 ```
 
 ### Multi-Broker Strategy
+
 ```python
 # Run same strategy across multiple brokers
 brokers_list = [brokers.AngelOne(), brokers.Zerodha()]
@@ -334,11 +303,13 @@ for broker in brokers_list:
 ## Documentation
 
 ### For End Users
+
 - **[Quick Start Guide](#quick-start)** - Get started in minutes
 - **[API Reference](docs/api-reference.md)** - Complete API documentation with examples
 - **[Migration Guide](docs/migration-guide.md)** - Upgrade instructions and troubleshooting
 
 ### For Developers
+
 - **[Architecture Overview](docs/architecture.md)** - System design and components
 - **[Broker Integration Guide](docs/broker-integration-guide.md)** - Add support for new brokers
 - **[Database Schema](docs/database-schema.md)** - Database structure and relationships
