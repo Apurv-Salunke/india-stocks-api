@@ -34,7 +34,7 @@ pytest.xml
 # local cache store
 _cache/
 broker.yaml
-instruments.db
+# instruments.db (Previously ignored, now tracked for testing)
 dist/
 build/
 *.egg-info/
