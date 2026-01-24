@@ -1,0 +1,31 @@
+[tool.poetry]
+name = "india-stocks-api"
+version = "2.0.0"
+description = "A unified API for Indian stock market brokers"
+authors = ["Apurv Salunke <salunke.apurv7@gmail.com>"]
+license = "MIT"
+readme = "README.md"
+packages = [{include = "india_stocks_api"}]
+homepage = "https://github.com/Apurv-Salunke/india-stocks-api"
+documentation = "https://github.com/Apurv-Salunke/india-stocks-api/wiki"
+repository = "https://github.com/Apurv-Salunke/india-stocks-api"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+httpx = "^0.28.1"
+pandas = "^2.3.3"
+pyotp = "^2.9.0"
+sqlalchemy = "^2.0.0"
+python-dateutil = "^2.9.0"
+pyzmq = "^27.1.0"
+logzero = "^1.7.0"
+websocket-client = "^1.8.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0.0"
+flake8 = "^7.0.0"
+sphinx = "^7.0.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

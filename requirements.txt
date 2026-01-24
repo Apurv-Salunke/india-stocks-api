@@ -1,8 +1,0 @@
-httpx>=0.28.1
-pandas>=2.3.3
-pyotp>=2.9.0
-sqlalchemy>=2.0.0
-python-dateutil>=2.9.0
-pyzmq>=27.1.0
-logzero>=1.7.0
-websocket-client>=1.8.0
