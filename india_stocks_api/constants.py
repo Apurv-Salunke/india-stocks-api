@@ -45,3 +45,10 @@ class CandleInterval(str, Enum):
     THIRTY_MINUTE = "30m"
     ONE_HOUR = "1h"
     ONE_DAY = "D"
+
+class StreamMode(int, Enum):
+    """WebSocket Streaming Modes"""
+    LTP = 1         # Last Traded Price only
+    QUOTE = 2       # LTP + OHLC + Volume
+    SNAP_QUOTE = 3  # Quote + Best 5 Bid/Ask
+    DEPTH = 4       # Full 20-level Market Depth (NSE CM only)

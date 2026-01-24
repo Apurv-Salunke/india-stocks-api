@@ -2,10 +2,10 @@
 Angel One Adapter
 Thin wrapper around india_stocks_api.internal.angel
 """
-from typing import Optional
+from typing import Optional, Callable, List, Dict, Any
 from .base import BaseBroker
 from ..instruments.models import Equity, Future, Option, Index
-from ..constants import TransactionType, OrderType, ProductType, OrderValidity, CandleInterval
+from ..constants import TransactionType, OrderType, ProductType, OrderValidity, CandleInterval, StreamMode
 from ..internal import context
 
 # Import Ported Logic
@@ -323,3 +323,161 @@ class AngelOne(BaseBroker, broker_name="angel"):
         jwt_token = context.get_auth_token()
         resp = get_gtt_details_api(id, jwt_token)
         return resp.get('data') or {}
+
+    # --- WebSocket Streaming ---
+    
+    # Exchange type mapping for WebSocket
+    _WS_EXCHANGE_MAP = {
+        "NSE": 1,    # NSE Cash
+        "NFO": 2,    # NSE F&O
+        "BSE": 3,    # BSE Cash
+        "BFO": 4,    # BSE F&O
+        "MCX": 5,    # MCX
+        "NCX": 7,    # NCDEX
+        "CDS": 13,   # Currency
+    }
+    
+    def __init_streaming(self):
+        """Lazy initialization of streaming components."""
+        if not hasattr(self, '_ws_client'):
+            self._ws_client = None
+            self._pending_subscriptions: List[tuple] = []  # [(token_list, mode), ...]
+            
+            # User callbacks
+            self.on_tick: Optional[Callable[[Dict[str, Any]], None]] = None
+            self.on_error: Optional[Callable[[str, str], None]] = None
+            self.on_close: Optional[Callable[[], None]] = None
+            self.on_open: Optional[Callable[[], None]] = None
+    
+    def subscribe(
+        self, 
+        instruments: List[Equity | Future | Option | Index], 
+        mode: StreamMode = StreamMode.QUOTE
+    ) -> None:
+        """
+        Subscribe to real-time market data for given instruments.
+        
+        Args:
+            instruments: List of domain objects (Equity, Future, Option, Index)
+            mode: Streaming mode (LTP, QUOTE, SNAP_QUOTE, DEPTH)
+        
+        Example:
+            broker.subscribe([Equity("RELIANCE"), Equity("TCS")], mode=StreamMode.LTP)
+        """
+        self.__init_streaming()
+        
+        # Resolve instruments to tokens
+        token_list = []
+        for inst in instruments:
+            resolved = self._resolve_instrument(inst)
+            token_list.append({
+                "exchange": resolved["exchange"],
+                "token": resolved["token"]
+            })
+        
+        # Store for later (if not yet connected)
+        self._pending_subscriptions.append((token_list, mode.value))
+        
+        # If already connected, subscribe immediately
+        if self._ws_client and self._ws_client.wsapp:
+            self._send_subscription(token_list, mode.value)
+    
+    def _send_subscription(self, token_list: List[Dict], mode: int) -> None:
+        """Send subscription request to WebSocket."""
+        # Group by exchange type
+        exchange_tokens: Dict[int, List[str]] = {}
+        for item in token_list:
+            exch_type = self._WS_EXCHANGE_MAP.get(item["exchange"], 1)
+            if exch_type not in exchange_tokens:
+                exchange_tokens[exch_type] = []
+            exchange_tokens[exch_type].append(str(item["token"]))
+        
+        # Build token list in WebSocket format
+        ws_token_list = [
+            {"exchangeType": exch, "tokens": tokens}
+            for exch, tokens in exchange_tokens.items()
+        ]
+        
+        # Send via SmartWebSocketV2
+        self._ws_client.subscribe(
+            correlation_id=f"sub_{int(__import__('time').time())}",
+            mode=mode,
+            token_list=ws_token_list
+        )
+    
+    def start_streaming(self) -> None:
+        """
+        Connect to the WebSocket server and start streaming.
+        
+        This is a BLOCKING call - it will run until stop_streaming() is called
+        or the connection is closed.
+        
+        Make sure to:
+        1. Call authenticate() first
+        2. Set on_tick callback before calling this
+        3. Call subscribe() before or after this (subscriptions are buffered)
+        
+        Example:
+            broker.on_tick = lambda tick: print(tick['ltp'])
+            broker.subscribe([Equity("RELIANCE")])
+            broker.start_streaming()  # Blocks here
+        """
+        self.__init_streaming()
+        
+        # Get tokens from context
+        jwt_token = context.get_auth_token()
+        feed_token = context.get_feed_token()
+        
+        if not jwt_token or not feed_token:
+            raise RuntimeError("Not authenticated. Call authenticate() first.")
+        
+        # Import here to avoid circular imports
+        from ..internal.angel.streaming import SmartWebSocketV2
+        
+        # Create WebSocket client
+        self._ws_client = SmartWebSocketV2(
+            auth_token=jwt_token,
+            api_key=self.api_key,
+            client_code=self.client_code,
+            feed_token=feed_token,
+            max_retry_attempt=3,
+            retry_delay=5
+        )
+        
+        # Wire up callbacks
+        def handle_open(wsapp):
+            # Send pending subscriptions
+            for token_list, mode in self._pending_subscriptions:
+                self._send_subscription(token_list, mode)
+            if self.on_open:
+                self.on_open()
+        
+        def handle_data(wsapp, data):
+            if self.on_tick:
+                self.on_tick(data)
+        
+        def handle_error(error_type, error_msg):
+            if self.on_error:
+                self.on_error(error_type, error_msg)
+        
+        def handle_close(wsapp):
+            if self.on_close:
+                self.on_close()
+        
+        self._ws_client.on_open = handle_open
+        self._ws_client.on_data = handle_data
+        self._ws_client.on_error = handle_error
+        self._ws_client.on_close = handle_close
+        
+        # Connect (blocking)
+        self._ws_client.connect()
+    
+    def stop_streaming(self) -> None:
+        """
+        Disconnect from the WebSocket server.
+        """
+        self.__init_streaming()
+        if self._ws_client:
+            self._ws_client.close_connection()
+            self._ws_client = None
+
