@@ -12,6 +12,7 @@ _CONFIG = {
     "api_key": None,
     "access_token": None,
     "feed_token": None,
+    "broker_creds": {}, # Generic storage for broker-specific credentials
     # In a real implementation, this would be a proper mapped object or DB
     "symbol_map": {} 
 }
@@ -28,6 +29,12 @@ def set_auth_token(token: str):
 
 def set_feed_token(token: str):
     _CONFIG["feed_token"] = token
+
+def set_broker_creds(creds: Dict[str, Any]):
+    _CONFIG["broker_creds"] = creds
+
+def get_broker_creds() -> Dict[str, Any]:
+    return _CONFIG["broker_creds"]
 
 # --- Shimmed Functions (Replacements for OpenAlgo imports) ---
 
