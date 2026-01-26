@@ -22,6 +22,7 @@ def _get_api_credentials():
 
 
 
+
 def _get_request_template():
     api_key, _, client_id = _get_api_credentials()
     return {
@@ -32,6 +33,12 @@ def _get_request_template():
             "ClientCode": client_id
         }
     }
+
+def _clean_token(token: str) -> str:
+    """Extract raw ScripCode from composite token"""
+    if token and '|' in str(token):
+        return str(token).split('|')[-1]
+    return str(token)
 
 def normalize_exchange_for_query(symbol: str, exchange: str) -> str:
     """
@@ -510,7 +517,7 @@ class BrokerData:
                 # For fallback cases, use ScripData (br_symbol) as key
                 map_key = f"scripdata:{br_symbol}"
             else:
-                map_key = str(token)
+                map_key = str(_clean_token(token))
 
             symbol_map[map_key] = {
                 'symbol': symbol,

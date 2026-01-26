@@ -62,9 +62,8 @@ class FivePaisa(BaseBroker, broker_name="fivepaisa"):
     
     def _download_master_contract(self, db_path: str = 'instruments.db'):
         """Download and populate 5Paisa master contract."""
-        # TODO: Implement 5paisa master contract download
-        # For now, we'll reuse the default mechanism or skip
-        pass
+        from ..internal.fivepaisa.database.master_contract_db import master_contract_download
+        master_contract_download(db_path)
 
     def authenticate(self) -> bool:
         """

@@ -53,7 +53,7 @@ def map_order_data(order_data):
                 order['BrokerOrderId'] = str(order['BrokerOrderId'])
 
             # Extract the instrument_token and exchange for the current order
-            symboltoken = order['ScripCode']
+            symboltoken = f"{order['Exch']}|{order['ExchType']}|{order['ScripCode']}"
             Exch = order['Exch']
             ExchType = order['ExchType']
 
@@ -221,7 +221,7 @@ def map_trade_data(trade_data):
     if trade_data:
         for order in trade_data:
             # Extract the instrument_token and exchange for the current order
-            symboltoken = order['ScripCode']
+            symboltoken = f"{order['Exch']}|{order['ExchType']}|{order['ScripCode']}"
             Exch = order['Exch']
             ExchType = order['ExchType']
 
@@ -309,7 +309,7 @@ def map_position_data(position_data):
     if position_data:
         for position in position_data:
             # Extract the instrument_token and exchange for the current order
-            symboltoken = position['ScripCode']
+            symboltoken = f"{position['Exch']}|{position['ExchType']}|{position['ScripCode']}"
             Exch = position['Exch']
             ExchType = position['ExchType']
 

@@ -5,7 +5,7 @@ import httpx
 from india_stocks_api.internal.context import get_httpx_client
 from india_stocks_api.internal.context import get_auth_token
 from india_stocks_api.internal.context import get_token, get_br_symbol, get_symbol, get_oa_symbol
-from india_stocks_api.internal.fivepaisa.mapping.transform_data import transform_data, map_product_type, reverse_map_product_type, transform_modify_order_data
+from india_stocks_api.internal.fivepaisa.mapping.transform_data import transform_data, map_product_type, reverse_map_product_type, transform_modify_order_data, get_scrip_code
 from india_stocks_api.internal.fivepaisa.mapping.transform_data import map_exchange, map_exchange_type, reverse_map_exchange
 from india_stocks_api.internal.context import get_logger, get_broker_creds
 
@@ -189,7 +189,8 @@ def get_open_position(tradingsymbol: str, exchange: str, Exch: str, ExchType: st
     """
     try:
         # Convert Trading Symbol from OpenAlgo Format to Broker Format Before Search in OpenPosition
-        token = int(get_token(tradingsymbol, exchange))  # Convert token to integer
+        # Convert Trading Symbol from OpenAlgo Format to Broker Format Before Search in OpenPosition
+        token = int(get_scrip_code(get_token(tradingsymbol, exchange)))  # Convert token to integer
         tradingsymbol = get_br_symbol(tradingsymbol, exchange)
         positions_data = get_positions(auth)
         

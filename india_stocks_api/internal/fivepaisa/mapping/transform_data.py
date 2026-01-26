@@ -3,6 +3,11 @@
 
 from india_stocks_api.internal.context import get_br_symbol
 
+def get_scrip_code(token):
+    if token and '|' in str(token):
+        return str(token).split('|')[-1]
+    return str(token)
+
 def transform_data(data,token):
     """
     Transforms the new API request structure to the current expected structure.
@@ -13,7 +18,7 @@ def transform_data(data,token):
         "OrderType": map_action(data["action"].upper()),
         "Exchange": map_exchange(data["exchange"]),
         "ExchangeType": map_exchange_type(data["exchange"]),
-        "ScripCode": token,
+        "ScripCode": get_scrip_code(token),
         #"ScriData": symbol,
         #"iOrderValidity": "0",
         "Price": float(data.get("price", "0")), 
