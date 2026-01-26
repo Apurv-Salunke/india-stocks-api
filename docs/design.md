@@ -1,8 +1,9 @@
 # Indian Stocks API - Technical Design Document
 
-> **Package Name**: `india_stocks_api`  
-> **Version**: 1.0 (Design Phase)  
-> **Last Updated**: January 2026
+> **Package Name**: `india_stocks_api`
+>
+> > **Version**: 2.0  
+> > **Last Updated**: January 2026
 
 ---
 
@@ -53,8 +54,8 @@ india_stocks_api/
 
 The package reuses battle-tested code from OpenAlgo's `broker/` directory. To decouple from OpenAlgo's Flask dependencies, we use a "Shim" module that replaces internal imports.
 
-| Original Import                   | Shimmed Replacement                                   |
-| --------------------------------- | ----------------------------------------------------- |
+| Original Import                   | Shimmed Replacement                                  |
+| --------------------------------- | ---------------------------------------------------- |
 | `database.token_db.get_br_symbol` | `india_stocks_api.internal.context.get_br_symbol`    |
 | `utils.httpx_client.get_client`   | `india_stocks_api.internal.context.get_httpx_client` |
 
