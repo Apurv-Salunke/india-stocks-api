@@ -1,0 +1,18 @@
+rules:
+  # Database imports → context
+  - pattern: "from database.auth_db import"
+    replace: "from india_stocks_api.internal.context import"
+  - pattern: "from database.token_db import"
+    replace: "from india_stocks_api.internal.context import"
+
+  # Utils imports → context
+  - pattern: "from utils.httpx_client import"
+    replace: "from india_stocks_api.internal.context import"
+  - pattern: "from utils.logging import"
+    replace: "from india_stocks_api.internal.context import"
+
+  # Internal broker imports → absolute paths (fixing relative imports)
+  - pattern: "from broker.angel."
+    replace: "from india_stocks_api.internal.angel."
+  - pattern: "from broker.zerodha."
+    replace: "from india_stocks_api.internal.zerodha."

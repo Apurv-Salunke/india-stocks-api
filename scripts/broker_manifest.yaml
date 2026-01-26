@@ -1,0 +1,27 @@
+brokers:
+  angel:
+    source: broker/angel
+    dest: india_stocks_api/internal/angel
+    files:
+      # Files requiring shimming (import rewriting)
+      shimmed:
+        - api/auth_api.py
+        - api/data.py
+        - api/funds.py
+        - api/gtt_api.py
+        - api/margin_api.py
+        - api/order_api.py
+        - mapping/margin_data.py
+        - mapping/order_data.py
+        - mapping/transform_data.py
+        - streaming/angel_adapter.py
+        - streaming/angel_mapping.py
+
+      # Files copied as-is (no imports to rewrite)
+      passthrough:
+        - streaming/smartWebSocketV2.py
+
+      # Files we DON'T sync (we have custom implementations or they are auto-generated)
+      ignore:
+        - database/master_contract_db.py # We use our own auto-provisioning
+        - __init__.py # We maintain our own exports

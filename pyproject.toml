@@ -25,6 +25,8 @@ websocket-client = "^1.8.0"
 pytest = "^8.0.0"
 flake8 = "^7.0.0"
 sphinx = "^7.0.0"
+pyyaml = "^6.0.3"
+types-pyyaml = "^6.0.12.20250915"
 
 [build-system]
 requires = ["poetry-core"]
