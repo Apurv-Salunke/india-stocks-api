@@ -115,7 +115,7 @@ class InstrumentDB:
             # Safe way: explicitly map fields matching the Table definition
             
             insert_sql = """
-            INSERT INTO instruments (
+            INSERT OR REPLACE INTO instruments (
                 token, symbol, exchange, tradingsymbol, br_symbol, 
                 expiry, strike, opt_type, lot_size, tick_size, instrument_type
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)

@@ -1,14 +1,37 @@
-from abc import ABC, abstractmethod
+from abc import ABC, ABCMeta, abstractmethod
 from typing import Any, Optional, Dict, Type
 from functools import singledispatchmethod
+import os
+from datetime import date, datetime
 
 from ..instruments.models import Equity, Future, Option, Index
 from ..constants import TransactionType, OrderType, ProductType, OrderValidity, CandleInterval
 from ..internal import context
 
-class BaseBroker(ABC):
+
+class BrokerMeta(ABCMeta):
+    """
+    Metaclass that auto-provisions instruments database after broker instantiation.
+    
+    This ensures the instruments.db is always ready and fresh before any trading operations.
+    The staleness check is based on file modification date (DB is stale if older than today).
+    """
+    
+    def __call__(cls, *args, **kwargs):
+        # Create the broker instance (calls __init__)
+        instance = super().__call__(*args, **kwargs)
+        
+        # Auto-provision instruments DB if needed
+        instance._ensure_instruments_ready()
+        
+        return instance
+
+class BaseBroker(ABC, metaclass=BrokerMeta):
     """
     Common interface for all Stock Brokers.
+    
+    The BrokerMeta metaclass automatically ensures instruments database is ready
+    after instantiation, providing transparent auto-provisioning.
     """
     _registry: Dict[str, Type["BaseBroker"]] = {}
     
@@ -24,6 +47,53 @@ class BaseBroker(ABC):
         if broker_name not in cls._registry:
             raise ValueError(f"Unknown broker: {broker_name}. Available: {list(cls._registry.keys())}")
         return cls._registry[broker_name](**kwargs)
+    
+    def _ensure_instruments_ready(self, db_path: str = 'instruments.db'):
+        """
+        Check if instruments DB is stale and rebuild if needed.
+        Called automatically by BrokerMeta after __init__.
+        
+        Args:
+            db_path: Path to the instruments database
+        """
+        if self._is_db_stale(db_path):
+            from ..internal import context
+            logger = context.get_logger(__name__)
+            logger.info(f"Instruments DB is stale or missing. Downloading master contract...")
+            self._download_master_contract(db_path)
+            logger.info("Instruments DB ready.")
+    
+    def _is_db_stale(self, db_path: str) -> bool:
+        """
+        Returns True if DB doesn't exist or was last modified before today.
+        
+        Args:
+            db_path: Path to the instruments database
+            
+        Returns:
+            bool: True if DB needs refresh
+        """
+        if not os.path.exists(db_path):
+            return True
+        
+        # Check if file was modified today
+        mtime = os.path.getmtime(db_path)
+        file_date = datetime.fromtimestamp(mtime).date()
+        return file_date < date.today()
+    
+    @abstractmethod
+    def _download_master_contract(self, db_path: str = 'instruments.db'):
+        """
+        Subclasses must implement this to call their broker-specific download.
+        
+        Example for AngelOne:
+            from ..internal.angel.database import master_contract_download
+            master_contract_download(db_path)
+        
+        Args:
+            db_path: Path to the instruments database
+        """
+        ...
 
     @abstractmethod
     def authenticate(self) -> bool:
