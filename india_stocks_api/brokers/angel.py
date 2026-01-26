@@ -46,6 +46,12 @@ class AngelOne(BaseBroker, broker_name="angel"):
         # Shim Configuration
         context.set_api_key(api_key)
         # Note: Access Token is set after authenticate()
+        # Note: Metaclass will call _ensure_instruments_ready() after this returns
+    
+    def _download_master_contract(self, db_path: str = 'instruments.db'):
+        """Download and populate Angel One master contract."""
+        from ..internal.angel.database import master_contract_download
+        master_contract_download(db_path)
 
     def authenticate(self) -> bool:
         """
