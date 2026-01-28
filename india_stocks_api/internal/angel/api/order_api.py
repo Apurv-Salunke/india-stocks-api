@@ -10,6 +10,18 @@ logger = get_logger(__name__)
 
 
 def get_api_response(endpoint, auth, method="GET", payload=''):
+    """
+    Send an HTTP request to the AngelBROking API for the given endpoint and return the parsed JSON response.
+    
+    Parameters:
+        endpoint (str): API endpoint path prefixed to the AngelBROking base URL (e.g., "/order/v1/getOrderBook").
+        auth (str): Bearer authentication token to include in the Authorization header.
+        method (str): HTTP method to use (default "GET").
+        payload (str): JSON-serialized request body for methods that accept a body (default empty string).
+    
+    Returns:
+        dict | list: The parsed JSON response (dictionary or list) on success, or an empty dict `{}` if the response has no body or is not valid JSON.
+    """
     AUTH_TOKEN = auth
     api_key = get_api_key("angel")
 
@@ -86,6 +98,19 @@ def get_open_position(tradingsymbol, exchange, producttype,auth):
     return net_qty
 
 def place_order_api(data,auth):
+    """
+    Place an order on Angel Broking by transforming provided order data, sending it to the broker API, and returning the broker's response.
+    
+    Parameters:
+        data (dict): Order parameters in the module's expected format (must include at least 'symbol', 'exchange', and 'quantity'); this function will add the broker API key and transform fields required by the broker.
+        auth (str): Authorization token used as a Bearer token for the API request.
+    
+    Returns:
+        tuple: A three-item tuple (response, response_data, orderid)
+            - response (httpx.Response): The raw HTTP response object; a `status` attribute equal to `status_code` is attached for compatibility.
+            - response_data (dict): The parsed JSON body of the response.
+            - orderid (str or None): The broker-assigned order id when the request succeeded, or `None` when the order was not accepted.
+    """
     AUTH_TOKEN = auth
     BROKER_API_KEY = get_api_key()
     data['apikey'] = BROKER_API_KEY
@@ -290,6 +315,18 @@ def close_all_positions(current_api_key,auth):
 
 def cancel_order(orderid,auth):
     # Assuming you have a function to get the authentication token
+    """
+    Cancel a broker order identified by its order ID.
+    
+    Parameters:
+        orderid (str | int): The broker's order identifier to cancel.
+        auth (str): Authorization token used as the Bearer credential.
+    
+    Returns:
+        tuple: A pair (response_dict, http_status_code).
+            - On success: ({"status": "success", "orderid": orderid}, 200).
+            - On failure: ({"status": "error", "message": "<reason>"}, <response status code>).
+    """
     AUTH_TOKEN = auth
     api_key = get_api_key()
     
@@ -339,6 +376,21 @@ def cancel_order(orderid,auth):
 def modify_order(data,auth):
 
     # Assuming you have a function to get the authentication token
+    """
+    Modify an existing order on Angel Broking using the provided order fields.
+    
+    Parameters:
+        data (dict): Order modification payload. Must include at minimum:
+            - 'symbol' (str): trading symbol (OpenAlgo format accepted; it will be converted).
+            - 'exchange' (str): exchange identifier.
+            - other fields required by the broker's modifyOrder API (e.g., orderid, quantity, price, etc.).
+        auth (str): Bearer authentication token for the broker API.
+    
+    Returns:
+        tuple: (result, http_status)
+            - result (dict): On success: {"status": "success", "orderid": <orderid>}. On failure: {"status": "error", "message": <error message>}.
+            - http_status (int): HTTP status code associated with the broker response or the returned result.
+    """
     AUTH_TOKEN = auth
     api_key = get_api_key()
     
@@ -384,6 +436,19 @@ def modify_order(data,auth):
 def cancel_all_orders_api(data,auth):
     # Get the order book
 
+    """
+    Cancel all orders that are currently open or trigger-pending and return which cancellations succeeded and which failed.
+    
+    Parameters:
+        data: Ignored by this function (kept for API compatibility).
+        auth: Authentication token or credential object used to call the broker API.
+    
+    Returns:
+        tuple: (canceled_orders, failed_cancellations)
+            canceled_orders (list[str]): Order IDs successfully canceled.
+            failed_cancellations (list[str]): Order IDs that failed to cancel.
+            If the order book cannot be retrieved, returns two empty lists.
+    """
     AUTH_TOKEN = auth
     
 

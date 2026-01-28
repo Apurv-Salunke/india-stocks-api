@@ -12,7 +12,15 @@ from india_stocks_api.constants import OptionType
 from india_stocks_api.instruments.database import InstrumentDB, InstrumentMaster
 
 def get_valid_fo_instruments(db):
-    """Find a valid Future and Option from the DB."""
+    """
+    Locate the next NIFTY futures contract (expiry on or after today) and a CE option with the same expiry from the given instruments database.
+    
+    Parameters:
+        db: An instruments database accessor with a get_session() method used to query InstrumentMaster records.
+    
+    Returns:
+        tuple: A pair (future_record, option_record). Each is an InstrumentMaster record when found or `None` if no matching record exists.
+    """
     session = db.get_session()
     today = date.today()
     
@@ -42,6 +50,11 @@ def get_valid_fo_instruments(db):
     return fut_rec, opt_rec
 
 def test_fo_data():
+    """
+    Run an end-to-end integration test that verifies futures history retrieval and option quote retrieval via the Angel One API.
+    
+    Connects to the local instruments database to locate a valid NIFTY futures contract and a matching CE option, reads Angel One credentials from environment variables, authenticates with the API, then (1) fetches and prints recent historical data for the selected future and any available open interest and (2) fetches and prints the real-time quote fields (LTP, OI, top bid) for the selected option. Prints clear failure messages and stack traces on errors and returns early if required resources or credentials are missing.
+    """
     print("--- Testing Futures & Options Data ---")
     
     # Init DB

@@ -14,6 +14,17 @@ from india_stocks_api.constants import TransactionType, ProductType
 load_dotenv()
 
 def test_advanced_orders():
+    """
+    Run a sequence of integration tests exercising Advanced Order and GTT APIs of the AngelOne client.
+    
+    Performs these steps using credentials from environment variables (ANGEL_API_KEY, ANGEL_CLIENT_ID, ANGEL_PIN, ANGEL_TOTP_SECRET):
+    - Authenticates an AngelOne client; returns early and prints an error if credentials are missing or authentication fails.
+    - Fetches pending and executed orders and, if any pending order exists, fetches its details.
+    - Retrieves the list of GTT rules and prints summary information.
+    - Creates a GTT rule for the SBIN equity (NSE) with a buy trigger at 100.0 and immediate cancelation of the created rule.
+    
+    All network/API errors are caught and reported via printed messages; the function does not raise exceptions.
+    """
     print("--- Testing Advanced Order & GTT APIs ---")
     
     api_key = os.getenv("ANGEL_API_KEY")

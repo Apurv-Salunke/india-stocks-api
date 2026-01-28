@@ -11,6 +11,11 @@ from india_stocks_api.brokers import AngelOne
 load_dotenv()
 
 def test_real_angel_integration():
+    """
+    Run a live integration test against the Angel One broker using credentials from environment variables.
+    
+    Reads ANGEL_API_KEY, ANGEL_CLIENT_ID, ANGEL_PIN, and ANGEL_TOTP_SECRET from the environment, initializes an AngelOne client, attempts authentication, and fetches funds; prints progress, results, and any error messages. Exits early if required environment variables are missing or authentication fails.
+    """
     print("--- Testing Real Angel One Integration ---")
     
     # Read credentials from Environment (Set these when running the script!)

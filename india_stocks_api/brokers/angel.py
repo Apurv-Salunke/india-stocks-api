@@ -37,6 +37,17 @@ import pyotp
 class AngelOne(BaseBroker, broker_name="angel"):
     
     def __init__(self, api_key: str, client_code: str, password: str, totp_key: str):
+        """
+        Initialize the AngelOne broker wrapper with API credentials and keys.
+        
+        Stores the provided API key, client code, broker password, and TOTP key on the instance. Access tokens and persisted credentials are managed by authenticate(); a metaclass will call _ensure_instruments_ready() after initialization.
+        
+        Parameters:
+            api_key (str): API key provided by Angel One for API access.
+            client_code (str): Client identifier / trading account code.
+            password (str): Broker account password or trading PIN.
+            totp_key (str): Base32 TOTP secret used to generate one-time codes for login.
+        """
         self.api_key = api_key
         self.client_code = client_code
         self.password = password
@@ -45,15 +56,26 @@ class AngelOne(BaseBroker, broker_name="angel"):
         # Note: Metaclass will call _ensure_instruments_ready() after this returns
     
     def _download_master_contract(self, db_path: str = 'instruments.db'):
-        """Download and populate Angel One master contract."""
+        """
+        Populate the local Angel One master contract database from the remote source.
+        
+        Parameters:
+            db_path (str): Path to the local SQLite database file where instrument master data will be stored (default: 'instruments.db').
+        """
         from ..internal.angel.database import master_contract_download
         master_contract_download(db_path)
 
     def authenticate(self) -> bool:
         """
-        Login using SmartAPI.
-        Updates the internal context with the session token.
-        Also persists credentials to creds.json **only** after successful auth.
+        Authenticate with Angel One SmartAPI and store resulting session tokens.
+        
+        Attempts to authenticate using the instance's api_key, client_code, password, and totp_key, or loads stored credentials from the broker context when any are missing. On successful authentication stores the JWT auth token and feed token in the context and persists the used credentials. If authentication fails or an exception occurs the function returns False.
+        
+        Returns:
+            True if authentication succeeded and tokens were stored, False otherwise.
+        
+        Raises:
+            RuntimeError: If no credentials are provided on the instance and none are available in the broker context.
         """
         # Hack: The ported code reads BROKER_API_KEY from os.environ
         # We must set it here for the internal function to work.
@@ -170,7 +192,16 @@ class AngelOne(BaseBroker, broker_name="angel"):
 
     def get_depth(self, instrument: Equity | Future | Option | Index) -> dict:
         """
-        Get market depth.
+        Retrieve market depth (order book) for the specified instrument.
+        
+        Parameters:
+            instrument (Equity | Future | Option | Index): The instrument to query; supported types include Equity, Future, Option, or Index.
+        
+        Returns:
+            dict: Market depth data for the instrument (order book snapshot).
+        
+        Raises:
+            RuntimeError: If no authentication token is available.
         """
         token_info = self._resolve_instrument(instrument)
         jwt_token = context.get_auth_token()
@@ -283,7 +314,22 @@ class AngelOne(BaseBroker, broker_name="angel"):
     def create_gtt(self, instrument: Equity | Future | Option, transaction_type: TransactionType, 
                   quantity: int, trigger_price: float, price: float, 
                   product_type: ProductType = ProductType.DELIVERY, time_period: int = 365) -> dict:
-        print(f"DEBUG: Creating GTT for instrument type: {type(instrument)}")
+        """
+                  Create a Good-Till-Triggered (GTT) order for the given instrument.
+                  
+                  Parameters:
+                      instrument (Equity | Future | Option): The target trading instrument (symbol/token resolved internally).
+                      transaction_type (TransactionType): Buy or Sell action for the GTT.
+                      quantity (int): Quantity to be executed when the trigger is hit.
+                      trigger_price (float): Price that, when reached, will trigger the GTT order.
+                      price (float): Order price to be placed when the trigger is hit.
+                      product_type (ProductType): Order product type; mapped to the broker's product code (default: ProductType.DELIVERY).
+                      time_period (int): Duration in days the GTT will remain active (default: 365).
+                  
+                  Returns:
+                      dict: The broker API response for the created GTT rule (contains status and details returned by create_gtt_rule).
+                  """
+                  print(f"DEBUG: Creating GTT for instrument type: {type(instrument)}")
         print(f"DEBUG: Instrument details: {instrument}")
         token_info = self._resolve_instrument(instrument)
         print(f"DEBUG: Token info: {token_info}")
@@ -502,4 +548,3 @@ class AngelOne(BaseBroker, broker_name="angel"):
         if self._ws_client:
             self._ws_client.close_connection()
             self._ws_client = None
-

@@ -7,7 +7,14 @@ from india_stocks_api.internal.context import get_auth_token, get_feed_token, ge
 load_dotenv()
 
 def test_angel_one_authentication():
-    """Test real AngelOne authentication integration."""
+    """
+    Verify end-to-end AngelOne authentication and credential persistence.
+    
+    This integration test uses credentials from environment variables (ANGEL_API_KEY, ANGEL_CLIENT_ID, ANGEL_PIN, ANGEL_TOTP_SECRET) falling back to stored credentials from get_credentials("angel") if any are missing. It authenticates with AngelOne, asserts authentication succeeds, verifies that auth and feed tokens are present, and checks that stored credentials contain the expected keys and match the values used for authentication.
+    
+    Raises:
+        AssertionError: If required credentials are missing, authentication fails, tokens are absent, or stored credentials do not match.
+    """
     # Try environment variables first, fallback to stored credentials
     api_key = os.getenv("ANGEL_API_KEY")
     clientcode = os.getenv("ANGEL_CLIENT_ID") 

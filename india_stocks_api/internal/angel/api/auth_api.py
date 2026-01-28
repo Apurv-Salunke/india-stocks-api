@@ -4,7 +4,19 @@ from india_stocks_api.internal.context import get_httpx_client
 
 def authenticate_broker(api_key, clientcode, broker_pin, totp_code):
     """
-    Authenticate with the broker and return the auth token.
+    Authenticate with Angel Broking and obtain a JWT and an optional feed token.
+    
+    Parameters:
+        api_key (str): API private key to include in the request headers.
+        clientcode (str): Broker client code/identifier.
+        broker_pin (str): Broker PIN or password.
+        totp_code (str): Time-based one-time password (TOTP) for two-factor authentication.
+    
+    Returns:
+        tuple: (auth_token, feed_token, error_message)
+            auth_token (str or None): JWT on successful authentication, otherwise None.
+            feed_token (str or None): Feed token if returned by the broker, otherwise None.
+            error_message (str or None): None on success; an error message or exception text on failure.
     """
 
     try:

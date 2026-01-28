@@ -30,12 +30,24 @@ _CREDS_FILE_NAME = Path(__file__).parent.parent.parent / "_cache" / "creds.json"
 _CREDS_FILE_NAME.parent.mkdir(parents=True, exist_ok=True)
 
 def _get_creds_path() -> Path:
-    """Return path to creds.json (created lazily if needed)."""
+    """
+    Get the filesystem path for the credentials JSON cache, creating its parent directory if necessary.
+    
+    Returns:
+        Path: Path to the creds.json file used to persist broker credentials.
+    """
     return Path(_CREDS_FILE_NAME)
 
 
 def _load_all_creds() -> Dict[str, Dict[str, Any]]:
-    """Load all credentials from creds.json into memory cache (once)."""
+    """
+    Load and cache all broker credentials from the creds.json file.
+    
+    Reads creds.json (creating an empty in-memory cache if the file is missing, unreadable, or contains non-dict data), stores the result in the module-level _CREDS_CACHE, marks credentials as loaded by setting _CREDS_LOADED to True, and returns the in-memory credentials mapping. Subsequent calls return the cached mapping without re-reading the file.
+    
+    Returns:
+        Dict[str, Dict[str, Any]]: A mapping from broker identifier to its credentials dictionary; empty if no valid data was found.
+    """
     global _CREDS_LOADED, _CREDS_CACHE
     if _CREDS_LOADED:
         return _CREDS_CACHE
@@ -63,7 +75,12 @@ def _load_all_creds() -> Dict[str, Dict[str, Any]]:
 
 
 def _flush_creds() -> None:
-    """Persist in-memory credentials cache to creds.json."""
+    """
+    Persist the in-memory credentials cache to the creds.json file.
+    
+    Writes the contents of _CREDS_CACHE to the path returned by _get_creds_path().
+    If writing fails, logs a warning and suppresses the exception so callers treat persistence as best-effort.
+    """
     path = _get_creds_path()
     try:
         path.write_text(json.dumps(_CREDS_CACHE, indent=2), encoding="utf-8")
@@ -75,9 +92,11 @@ def _flush_creds() -> None:
 
 def set_credentials(broker: str, creds: Dict[str, Any]) -> None:
     """
-    Persist credentials for a broker into creds.json.
-
-    This is only called AFTER successful authentication.
+    Store credentials for the specified broker in the in-memory cache and persist them to creds.json.
+    
+    Parameters:
+    	broker (str): Broker identifier under which to store the credentials.
+    	creds (Dict[str, Any]): Mapping of credential fields (e.g., api_key, secret). A shallow copy of this mapping is stored to avoid accidental external mutation.
     """
     global _CREDS_CACHE
     all_creds = _load_all_creds()
@@ -89,9 +108,13 @@ def set_credentials(broker: str, creds: Dict[str, Any]) -> None:
 
 def get_credentials(broker: str) -> Dict[str, Any]:
     """
-    Load credentials for a broker from memory / creds.json.
-
-    Returns an empty dict if nothing is stored.
+    Return a copy of the stored credentials for the given broker.
+    
+    Parameters:
+        broker (str): Broker identifier whose credentials should be retrieved.
+    
+    Returns:
+        creds (Dict[str, Any]): A copy of the broker's credential dictionary; empty dict if none are stored.
     """
     all_creds = _load_all_creds()
     creds = all_creds.get(broker) or {}
@@ -100,7 +123,14 @@ def get_credentials(broker: str) -> Dict[str, Any]:
 
 
 def remove_credentials(broker: str) -> None:
-    """Remove stored credentials for a broker from creds.json."""
+    """
+    Remove credentials associated with the given broker and persist the change to the credentials cache file.
+    
+    This updates the in-memory credentials cache and writes the modified cache to creds.json. If no credentials exist for the broker, the function does nothing.
+    
+    Parameters:
+        broker (str): Broker identifier whose stored credentials should be removed.
+    """
     global _CREDS_CACHE
     all_creds = _load_all_creds()
     if broker in all_creds:
@@ -110,7 +140,15 @@ def remove_credentials(broker: str) -> None:
 
 
 def get_api_key(broker: str) -> Optional[str]:
-    """Convenience accessor for `api_key` for a given broker."""
+    """
+    Retrieve the stored API key for the specified broker.
+    
+    Parameters:
+        broker (str): Broker identifier whose credentials are queried.
+    
+    Returns:
+        api_key (Optional[str]): The stored `api_key` for the broker if present, `None` otherwise.
+    """
     creds = get_credentials(broker)
     return creds.get("api_key")
 
@@ -122,6 +160,12 @@ def get_api_key(broker: str) -> Optional[str]:
 #     _CONFIG["api_key"] = key
 
 def set_auth_token(token: str):
+    """
+    Store the access token used for authenticated API requests.
+    
+    Parameters:
+        token (str): Access token string to use for subsequent authenticated operations.
+    """
     _CONFIG["access_token"] = token
 
 def set_feed_token(token: str):
@@ -156,6 +200,14 @@ def get_logger(name: str) -> logging.Logger:
 _INSTRUMENT_DB = None
 
 def _get_db():
+    """
+    Return a cached InstrumentDB instance, initializing it on first use by locating an `instruments.db` file.
+    
+    The function lazily constructs and caches an InstrumentDB; on first call it attempts to locate a local `instruments.db` file (checking the current working directory and a path relative to the package) and initializes InstrumentDB with the resolved path. Subsequent calls return the same cached instance.
+    
+    Returns:
+        InstrumentDB: The initialized and cached InstrumentDB instance.
+    """
     global _INSTRUMENT_DB
     if _INSTRUMENT_DB is None:
         # Assuming DB is in src/instruments.db relative to this file

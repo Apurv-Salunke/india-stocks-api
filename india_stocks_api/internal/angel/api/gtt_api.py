@@ -4,6 +4,18 @@ from india_stocks_api.internal.context import get_api_key, get_httpx_client, get
 logger = get_logger(__name__)
 
 def get_api_response(endpoint, auth, method="GET", payload=''):
+    """
+    Perform an HTTP request to the Angel Broking API endpoint and return the parsed JSON response.
+    
+    Parameters:
+        endpoint (str): API path starting with a slash (e.g., "/rest/...") to append to the Angel base URL.
+        auth (str): Bearer authentication token to include in the Authorization header.
+        method (str): HTTP method to use (default: "GET").
+        payload (str | dict, optional): Request body; if a string, an attempt is made to parse it as JSON. For GET requests the payload is ignored.
+    
+    Returns:
+        dict: The response parsed from JSON. Returns an empty dict if the response has no text or if JSON parsing fails.
+    """
     AUTH_TOKEN = auth
     api_key = get_api_key("angel")
     client = get_httpx_client()

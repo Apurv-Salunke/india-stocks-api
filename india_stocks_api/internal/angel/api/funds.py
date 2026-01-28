@@ -8,7 +8,22 @@ logger = get_logger(__name__)
 
 
 def get_margin_data(auth_token):
-    """Fetch margin data from the broker's API using the provided auth token."""
+    """
+    Retrieve margin and collateral figures from the broker API using the given authentication token.
+    
+    Returns a dictionary with string-formatted monetary values (two decimal places) for the following keys when data is available:
+    - `availablecash`: available cash balance
+    - `collateral`: calculated collateral (availablecash minus utilisedpayout)
+    - `m2mrealized`: realized mark-to-market P&L
+    - `m2munrealized`: unrealized mark-to-market P&L
+    - `utiliseddebits`: utilised debits
+    
+    Parameters:
+        auth_token (str): Bearer authentication token to include in the request headers.
+    
+    Returns:
+        dict: Mapping of the keys above to their string values (e.g., "123.45"), or an empty dict if the API response contains no data.
+    """
     api_key = get_api_key("angel")
     
     # Get the shared httpx client with connection pooling

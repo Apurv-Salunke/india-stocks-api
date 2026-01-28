@@ -15,7 +15,21 @@ logger = get_logger(__name__)
 
 
 def get_api_response(endpoint, auth, method="GET", payload=""):
-    """Helper function to make API calls to Angel One"""
+    """
+    Perform an HTTP request to the Angel One API and return the parsed JSON response.
+    
+    Parameters:
+    	endpoint (str): Path and query portion of the API URL (e.g. '/client/v1/api/endpoint').
+    	auth (str): Bearer authentication token.
+    	method (str): HTTP method to use; typically "GET" or "POST". Defaults to "GET".
+    	payload (dict|str): Request payload; if a dict, it will be serialized to JSON.
+    
+    Returns:
+    	parsed (dict|list): The JSON-decoded response body.
+    
+    Raises:
+    	Exception: If the API returns HTTP 403 (authentication failed) or if the response body cannot be parsed as JSON.
+    """
     AUTH_TOKEN = auth
 
     api_key = get_api_key()
@@ -69,7 +83,17 @@ def get_api_response(endpoint, auth, method="GET", payload=""):
 
 class BrokerData:
     def __init__(self, auth_token):
-        """Initialize Angel data handler with authentication token"""
+        """
+        Initialize the BrokerData handler with credentials and default timeframe mappings.
+        
+        Parameters:
+            auth_token (str): Authentication token used for API requests to the Angel One service.
+        
+        Description:
+            Stores the provided auth token and defines a mapping from common interval strings
+            (e.g., "1m", "D") to the Angel One API resolution identifiers used when requesting
+            historical or streaming data.
+        """
         self.auth_token = auth_token
         # Map common timeframe format to Angel resolutions
         self.timeframe_map = {
@@ -88,12 +112,26 @@ class BrokerData:
 
     def get_quotes(self, symbol: str, exchange: str) -> dict:
         """
-        Get real-time quotes for given symbol
-        Args:
-            symbol: Trading symbol
-            exchange: Exchange (e.g., NSE, BSE, NFO, BFO, CDS, MCX)
+        Retrieve the latest market quote for a symbol from the broker and normalize it into a standard dictionary.
+        
+        Parameters:
+            symbol (str): Trading symbol.
+            exchange (str): Exchange code (e.g., "NSE", "BSE", "NFO", "BFO", "CDS", "MCX"). Index exchanges "NSE_INDEX", "BSE_INDEX", and "MCX_INDEX" are normalized to "NSE", "BSE", and "MCX" respectively.
+        
         Returns:
-            dict: Quote data with required fields
+            dict: Normalized quote with the following keys:
+                - bid (float): Best bid price (0 if unavailable).
+                - ask (float): Best ask price (0 if unavailable).
+                - open (float): Opening price.
+                - high (float): High price.
+                - low (float): Low price.
+                - ltp (float): Last traded price.
+                - prev_close (float): Previous close price.
+                - volume (int): Trade volume.
+                - oi (int): Open interest.
+        
+        Raises:
+            Exception: If the broker API returns an error, no quote data is received, or any other failure occurs while fetching or parsing the quote.
         """
         try:
             # Convert symbol to broker format and get token
@@ -151,13 +189,17 @@ class BrokerData:
 
     def get_multiquotes(self, symbols: list) -> list:
         """
-        Get real-time quotes for multiple symbols with automatic batching
-        Args:
-            symbols: List of dicts with 'symbol' and 'exchange' keys
-                     Example: [{'symbol': 'SBIN', 'exchange': 'NSE'}, ...]
+        Retrieve real-time quotes for multiple symbols, automatically batching requests to respect API limits.
+        
+        Parameters:
+            symbols (list): List of mappings each containing 'symbol' and 'exchange' keys.
+                            Example: [{'symbol': 'SBIN', 'exchange': 'NSE'}, ...]
+        
         Returns:
-            list: List of quote data for each symbol with format:
-                  [{'symbol': 'SBIN', 'exchange': 'NSE', 'data': {...}}, ...]
+            list: A list of per-symbol result dictionaries. Successful entries include keys
+                  'symbol', 'exchange', and 'data' (the normalized quote payload). Failed or
+                  unresolved symbols may be represented as dictionaries with an 'error' key
+                  describing the failure.
         """
         try:
             BATCH_SIZE = 50  # Angel API limit: 50 symbols per request
@@ -199,11 +241,29 @@ class BrokerData:
 
     def _process_quotes_batch(self, symbols: list) -> list:
         """
-        Process a single batch of symbols (internal method)
-        Args:
-            symbols: List of dicts with 'symbol' and 'exchange' keys (max 50)
+        Fetch quotes for up to 50 symbols and return normalized quote entries along with any skipped symbols.
+        
+        Parameters:
+            symbols (list): List of dictionaries each containing 'symbol' and 'exchange' keys (maximum 50 entries).
+        
         Returns:
-            list: List of quote data for the batch
+            list: A list where entries that failed token resolution appear first as dicts with keys
+                'symbol', 'exchange', and 'error', followed by successful quote entries of the form:
+                {
+                    "symbol": str,
+                    "exchange": str,
+                    "data": {
+                        "bid": float,
+                        "ask": float,
+                        "open": float,
+                        "high": float,
+                        "low": float,
+                        "ltp": float,
+                        "prev_close": float,
+                        "volume": int,
+                        "oi": int
+                    }
+                }
         """
         # Group symbols by exchange and build token map
         exchange_tokens = {}  # {exchange: [token1, token2, ...]}
@@ -349,16 +409,22 @@ class BrokerData:
         self, symbol: str, exchange: str, interval: str, start_date: str, end_date: str
     ) -> pd.DataFrame:
         """
-        Get historical data for given symbol
-        Args:
-            symbol: Trading symbol
-            exchange: Exchange (e.g., NSE, BSE, NFO, BFO, CDS, MCX)
-            interval: Candle interval (1m, 3m, 5m, 10m, 15m, 30m, 1h, D)
-            start_date: Start date (YYYY-MM-DD)
-            end_date: End date (YYYY-MM-DD)
-            include_oi: Include open interest data (only for F&O contracts)
+        Retrieve historical OHLCV (and open interest for F&O) data for a symbol over a date range.
+        
+        Parameters:
+            symbol (str): Trading symbol in broker format or user format resolved internally.
+            exchange (str): Exchange code (e.g., "NSE", "BSE", "NFO", "BFO", "CDS", "MCX"). Index exchanges ("NSE_INDEX", "BSE_INDEX", "MCX_INDEX") are normalized.
+            interval (str): Candle interval; one of "1m", "3m", "5m", "10m", "15m", "30m", "1h", or "D".
+            start_date (str): Start date in "YYYY-MM-DD" format.
+            end_date (str): End date in "YYYY-MM-DD" format.
+        
         Returns:
-            pd.DataFrame: Historical data with columns [timestamp, open, high, low, close, volume, oi (if requested)]
+            pd.DataFrame: Historical data with columns [close, high, low, open, timestamp, volume, oi].
+                - timestamp is Unix epoch seconds.
+                - oi is included and populated for F&O exchanges (NFO, BFO, CDS, MCX); otherwise it's 0.
+        
+        Raises:
+            Exception: If the timeframe or interval is unsupported, if the API returns an error, or on other failures while fetching or processing data.
         """
         try:
             # Convert symbol to broker format and get token
@@ -568,15 +634,17 @@ class BrokerData:
         self, symbol: str, exchange: str, interval: str, start_date: str, end_date: str
     ) -> pd.DataFrame:
         """
-        Get historical OI data for given symbol
-        Args:
-            symbol: Trading symbol
-            exchange: Exchange (e.g., NFO, BFO, CDS, MCX)
-            interval: Candle interval (1m, 3m, 5m, 10m, 15m, 30m, 1h, D)
-            start_date: Start date (YYYY-MM-DD)
-            end_date: End date (YYYY-MM-DD)
+        Retrieve historical open interest (OI) data for a symbol between the given start and end dates at the specified interval.
+        
+        Parameters:
+            symbol (str): Trading symbol.
+            exchange (str): Exchange identifier (e.g., "NFO", "BFO", "CDS", "MCX").
+            interval (str): Candle interval key (one of "1m", "3m", "5m", "10m", "15m", "30m", "1h", "D").
+            start_date (str): Start date in "YYYY-MM-DD" format.
+            end_date (str): End date in "YYYY-MM-DD" format.
+        
         Returns:
-            pd.DataFrame: Historical OI data with columns [timestamp, oi]
+            pd.DataFrame: DataFrame with columns `["timestamp", "oi"]` where `timestamp` is a Unix epoch (seconds) and `oi` is numeric.
         """
         try:
             # Get token for the symbol
@@ -704,12 +772,25 @@ class BrokerData:
 
     def get_depth(self, symbol: str, exchange: str) -> dict:
         """
-        Get market depth for given symbol
-        Args:
-            symbol: Trading symbol
-            exchange: Exchange (e.g., NSE, BSE, NFO, BFO, CDS, MCX)
+        Retrieve market depth for a symbol on a specific exchange, including the top five bid and ask levels and summary metrics.
+        
         Returns:
-            dict: Market depth data with bids, asks and other details
+            dict: Market depth with keys:
+                - bids (list): Five entries of {"price": number, "quantity": number} for top buy levels (padded with zeros).
+                - asks (list): Five entries of {"price": number, "quantity": number} for top sell levels (padded with zeros).
+                - high (number): Day high price.
+                - low (number): Day low price.
+                - ltp (number): Last traded price.
+                - ltq (number): Last traded quantity.
+                - open (number): Opening price.
+                - prev_close (number): Previous close price.
+                - volume (number): Trade volume.
+                - oi (number): Open interest.
+                - totalbuyqty (number): Total buy quantity.
+                - totalsellqty (number): Total sell quantity.
+        
+        Raises:
+            Exception: If the API returns an error, no depth data is received, or other failures occur while fetching or parsing market depth.
         """
         try:
             # Convert symbol to broker format and get token

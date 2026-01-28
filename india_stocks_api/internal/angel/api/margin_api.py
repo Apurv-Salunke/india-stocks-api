@@ -7,14 +7,16 @@ logger = get_logger(__name__)
 
 def calculate_margin_api(positions, auth):
     """
-    Calculate margin requirement for a basket of positions using Angel Broking API.
-
-    Args:
-        positions: List of positions in OpenAlgo format
-        auth: Authentication token for Angel Broking
-
+    Calculate margin requirement for a basket of positions using the Angel Broking API.
+    
+    Parameters:
+        positions (list): Positions in OpenAlgo format to be transformed and submitted to the broker API.
+        auth (str): Authentication token for Angel Broking.
+    
     Returns:
-        Tuple of (response, response_data)
+        tuple: A pair (response, response_data). `response` is the HTTP response object returned by the broker client
+        or a local mock response on error; `response_data` is the standardized margin result dictionary on success
+        or an error dictionary on failure.
     """
     AUTH_TOKEN = auth
     BROKER_API_KEY = get_api_key()

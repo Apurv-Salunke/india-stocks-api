@@ -36,7 +36,13 @@ class BaseBroker(ABC, metaclass=BrokerMeta):
     _registry: Dict[str, Type["BaseBroker"]] = {}
     
     def __init_subclass__(cls, broker_name: str = None, **kwargs):
-        """Auto-register subclasses when they're defined."""
+        """
+        Automatically register a broker subclass under a given name when the subclass is defined.
+        
+        Parameters:
+            broker_name (str): If provided, assign this value to the subclass as `broker_name`
+                and register the subclass in `BaseBroker._registry` under this key.
+        """
         super().__init_subclass__(**kwargs)
         if broker_name:
             cls.broker_name = broker_name 
@@ -51,11 +57,12 @@ class BaseBroker(ABC, metaclass=BrokerMeta):
     
     def _ensure_instruments_ready(self, db_path: str = 'instruments.db'):
         """
-        Check if instruments DB is stale and rebuild if needed.
-        Called automatically by BrokerMeta after __init__.
+        Ensure the instruments database exists and is up to date, rebuilding it if stale.
         
-        Args:
-            db_path: Path to the instruments database
+        If the file at `db_path` is missing or was last modified before today, the broker downloads or rebuilds the master contract into that path.
+        
+        Parameters:
+            db_path (str): Path to the instruments database (default 'instruments.db').
         """
         if self._is_db_stale(db_path):
             from ..internal import context

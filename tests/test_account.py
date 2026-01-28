@@ -11,6 +11,11 @@ from india_stocks_api.brokers import AngelOne
 load_dotenv()
 
 def test_account_info():
+    """
+    Run a sequence of Angel One API checks and print profile, trade book, and positions information.
+    
+    Reads ANGEL_API_KEY, ANGEL_CLIENT_ID, ANGEL_PIN, and ANGEL_TOTP_SECRET from the environment, authenticates with Angel One, and on success fetches and prints the account profile, recent trades, and raw positions. Exits early (prints an error) if required environment variables are missing or authentication fails.
+    """
     print("--- Testing Account & Portfolio Data ---")
     
     api_key = os.getenv("ANGEL_API_KEY")
