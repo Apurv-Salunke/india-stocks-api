@@ -1,4 +1,3 @@
-import json
 from india_stocks_api.internal.context import get_symbol, get_oa_symbol 
 from india_stocks_api.internal.context import get_logger
 

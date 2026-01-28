@@ -17,7 +17,7 @@ def calculate_margin_api(positions, auth):
         Tuple of (response, response_data)
     """
     AUTH_TOKEN = auth
-    BROKER_API_KEY = get_api_key()
+    BROKER_API_KEY = get_api_key("angel")
 
     # Transform positions to Angel format
     transformed_positions = transform_margin_positions(positions)

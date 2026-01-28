@@ -4,7 +4,7 @@ Resolves high-level Domain Objects to low-level Broker Tokens.
 """
 from functools import singledispatchmethod
 from typing import Dict, Any
-from .models import Equity, Future, Option, Index
+from .models import Equity, Future, Option
 from .database import InstrumentDB
 
 class Resolver:

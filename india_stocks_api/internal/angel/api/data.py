@@ -18,7 +18,7 @@ def get_api_response(endpoint, auth, method="GET", payload=""):
     """Helper function to make API calls to Angel One"""
     AUTH_TOKEN = auth
 
-    api_key = get_api_key()
+    api_key = get_api_key("angel")
 
     # Get the shared httpx client with connection pooling
     client = get_httpx_client()

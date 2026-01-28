@@ -54,11 +54,10 @@ def test_advanced_orders():
         time.sleep(1)
         gtt_list = client.get_gtt_list()
         print(f"   SUCCESS: GTT Rules: {len(gtt_list)}")
-        print(f"   ✅ GTT Rules: {len(gtt_list)}")
         if gtt_list:
             print(f"   First GTT ID: {gtt_list[0].get('id')}")
     except Exception as e:
-        print(f"   ❌ GTT List Failed: {e}")
+        print(f"   GTT List Failed: {e}")
 
     # 3. GTT Creation (SBIN)
     # Using 'NSE' exchange.
