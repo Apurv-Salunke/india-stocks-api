@@ -63,10 +63,14 @@ class AngelOne(BaseBroker, broker_name="angel"):
             if not creds:
                 raise RuntimeError("No credentials provided or stored.")
 
-            self.api_key = creds.get("api_key")
-            self.client_code = creds.get("client_code")
-            self.password = creds.get("password")
-            self.totp_key = creds.get("totp_key")
+            # Only fill missing values so explicit args win
+            self.api_key = self.api_key or creds.get("api_key")
+            self.client_code = self.client_code or creds.get("client_code")
+            self.password = self.password or creds.get("password")
+            self.totp_key = self.totp_key or creds.get("totp_key")
+
+        if not all([self.api_key, self.client_code, self.password, self.totp_key]):
+            raise RuntimeError("Missing credentials after loading stored values.")
         
         try:
             # Generate TOTP Code
