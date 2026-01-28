@@ -24,11 +24,17 @@ _HTTP_CLIENT: Optional[httpx.Client] = None
 _CREDS_CACHE: Dict[str, Dict[str, Any]] = {}
 _CREDS_LOADED: bool = False
 _CREDS_FILE_NAME = Path(__file__).parent.parent.parent / "_cache" / "creds.json"
-_CREDS_FILE_NAME.parent.mkdir(parents=True, exist_ok=True)
 
 def _get_creds_path() -> Path:
     """Return path to creds.json (created lazily if needed)."""
-    return Path(_CREDS_FILE_NAME)
+    path = Path(_CREDS_FILE_NAME)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+    except OSError as e:
+        logging.getLogger(__name__).warning(
+            f"Failed to create creds cache dir {path.parent}: {e}"
+        )
+    return path
 
 
 def _load_all_creds() -> Dict[str, Dict[str, Any]]:
@@ -64,6 +70,12 @@ def _flush_creds() -> None:
     path = _get_creds_path()
     try:
         path.write_text(json.dumps(_CREDS_CACHE, indent=2), encoding="utf-8")
+        try:
+            path.chmod(0o600)
+        except OSError as e:
+            logging.getLogger(__name__).warning(
+                f"Failed to set perms on {path}: {e}"
+            )
     except Exception as e:
         # Persistence failure should not crash trading flows
         # Callers treat this as best-effort storage.
