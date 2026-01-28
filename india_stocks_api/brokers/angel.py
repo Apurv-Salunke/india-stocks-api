@@ -43,8 +43,6 @@ class AngelOne(BaseBroker, broker_name="angel"):
         self.password = password
         self.totp_key = totp_key
         
-        # Shim Configuration
-        context.set_api_key(api_key)
         # Note: Access Token is set after authenticate()
         # Note: Metaclass will call _ensure_instruments_ready() after this returns
     
@@ -61,7 +59,19 @@ class AngelOne(BaseBroker, broker_name="angel"):
         # Hack: The ported code reads BROKER_API_KEY from os.environ
         # We must set it here for the internal function to work.
         # Ideally, we would patch the internal code to use context.get_api_key()
-        os.environ['BROKER_API_KEY'] = self.api_key
+        if not all([self.api_key, self.client_code, self.password, self.totp_key]):
+            creds = context.get_credentials("angel")
+            if not creds:
+                raise RuntimeError("No credentials provided or stored.")
+
+            # Only fill missing values so explicit args win
+            self.api_key = self.api_key or creds.get("api_key")
+            self.client_code = self.client_code or creds.get("client_code")
+            self.password = self.password or creds.get("password")
+            self.totp_key = self.totp_key or creds.get("totp_key")
+
+        if not all([self.api_key, self.client_code, self.password, self.totp_key]):
+            raise RuntimeError("Missing credentials after loading stored values.")
         
         try:
              # Generate TOTP Code
@@ -70,15 +80,22 @@ class AngelOne(BaseBroker, broker_name="angel"):
              
              # Call Internal API
              jwt_token, feed_token, error = authenticate_broker(
-                 clientcode=self.client_code,
-                 broker_pin=self.password,
-                 totp_code=generated_totp
+                api_key=self.api_key,
+                clientcode=self.client_code,
+                broker_pin=self.password,
+                totp_code=generated_totp
              )
              
              if jwt_token:
-                 context.set_auth_token(jwt_token)
-                 context.set_feed_token(feed_token)
-                 return True
+                context.set_auth_token(jwt_token)
+                context.set_feed_token(feed_token)
+                context.set_credentials("angel", {
+                    "api_key": self.api_key,
+                    "client_code": self.client_code,
+                    "password": self.password,
+                    "totp_key": self.totp_key
+                })
+                return True
              
              print(f"Auth failed: {error}")
              return False
