@@ -1,14 +1,11 @@
 import os
 import sys
 from pathlib import Path
-from dotenv import load_dotenv
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from india_stocks_api.brokers import AngelOne
-
-load_dotenv()
 
 def test_real_angel_integration():
     print("--- Testing Real Angel One Integration ---")

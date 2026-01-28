@@ -2,7 +2,6 @@ import os
 import sys
 import time
 from pathlib import Path
-from dotenv import load_dotenv
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -11,7 +10,6 @@ from india_stocks_api.brokers import AngelOne
 from india_stocks_api.instruments import Equity
 from india_stocks_api.constants import TransactionType, ProductType
 
-load_dotenv()
 
 def test_advanced_orders():
     print("--- Testing Advanced Order & GTT APIs ---")

@@ -1,11 +1,8 @@
 import os
-from dotenv import load_dotenv
 from india_stocks_api.brokers.angel import AngelOne
 from india_stocks_api.internal.context import get_auth_token, get_feed_token, get_credentials
 import pytest
-
-# Load environment variables from .env file
-load_dotenv()
+\
 
 def test_angel_one_authentication():
     """Test real AngelOne authentication integration."""

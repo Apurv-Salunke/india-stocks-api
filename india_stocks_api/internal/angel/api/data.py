@@ -19,6 +19,8 @@ def get_api_response(endpoint, auth, method="GET", payload=""):
     AUTH_TOKEN = auth
 
     api_key = get_api_key("angel")
+    if not api_key:
+        raise ValueError("Angel API key not configured. Please set credentials first.")
 
     # Get the shared httpx client with connection pooling
     client = get_httpx_client()
@@ -474,10 +476,10 @@ class BrokerData:
                     current_start = current_end + timedelta(days=1)
                     continue
 
-                if not response.get("status"):
-                    raise Exception(
-                        f"Error from Angel API: {response.get('message', 'Unknown error')}"
-                    )
+                # if not response.get("status"):
+                #     raise Exception(
+                #         f"Error from Angel API: {response.get('message', 'Unknown error')}"
+                #     )
 
                 # Extract candle data and create DataFrame
                 data = response.get("data", [])
