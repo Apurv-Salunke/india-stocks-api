@@ -15,8 +15,6 @@
 *.cfg text eol=lf
 *.conf text eol=lf
 *.sh text eol=lf
-*.bat text eol=lf
-*.ps1 text eol=lf
 
 # Binary file
 *.png binary

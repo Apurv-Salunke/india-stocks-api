@@ -374,7 +374,10 @@ def modify_order(data,auth):
     
     data = json.loads(response.text)
 
-    if data.get("status") == "true" or data.get("message") == "SUCCESS":
+    status = data.get("status")
+    if isinstance(status, str):
+        status = status.lower() in {"true", "success"}
+    if status or data.get("message") == "SUCCESS":
         return {"status": "success", "orderid": data["data"]["orderid"]}, 200
     else:
         return {"status": "error", "message": data.get("message", "Failed to modify order")}, response.status

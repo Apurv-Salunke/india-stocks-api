@@ -55,7 +55,7 @@ def test_advanced_orders():
         if gtt_list:
             print(f"   First GTT ID: {gtt_list[0].get('id')}")
     except Exception as e:
-        print(f"   GTT List Failed: {e}")
+        print(f"   ERROR: GTT List Failed: {e}")
 
     # 3. GTT Creation (SBIN)
     # Using 'NSE' exchange.
@@ -73,21 +73,21 @@ def test_advanced_orders():
             product_type=ProductType.DELIVERY
         )
         
-        print(f"   ✅ GTT Response: {res}")
+        print(f"   GTT Response: {res}")
         if res.get('status') and res.get('data'):
             gtt_id = res['data'].get('id')
-            print(f"   ✅ GTT Created! ID: {gtt_id}")
+            print(f"   GTT Created! ID: {gtt_id}")
             
             # Cancel it immediately
             print(f"   Cancelling GTT {gtt_id}...")
             time.sleep(1)
             c_res = client.cancel_gtt(gtt_id, inst)
-            print(f"   ✅ Cancel Response: {c_res}")
+            print(f"   Cancel Response: {c_res}")
         else:
-             print(f"   ❌ GTT Create logic failed: {res}")
+             print(f"   GTT Create logic failed: {res}")
             
     except Exception as e:
-        print(f"   ❌ GTT Workflow Failed: {e}")
+        print(f"   GTT Workflow Failed: {e}")
 
 if __name__ == "__main__":
     test_advanced_orders()

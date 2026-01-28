@@ -54,7 +54,10 @@ def get_api_response(endpoint, auth, method="GET", payload=""):
         response.status = response.status_code
 
         if response.status_code == 403:
-            logger.debug(f"Debug - API returned 403 Forbidden. Headers: {headers}")
+            redacted_headers = {**headers, "X-PrivateKey": "***"}
+            logger.debug(
+                f"Debug - API returned 403 Forbidden. Headers: {redacted_headers}"
+            )
             logger.debug(f"Debug - Response text: {response.text}")
             raise Exception(
                 "Authentication failed. Please check your API key and auth token."
@@ -62,11 +65,11 @@ def get_api_response(endpoint, auth, method="GET", payload=""):
 
         return json.loads(response.text)
     except json.JSONDecodeError:
-        logger.error(
+        logger.exception(
             f"Debug - Failed to parse response. Status code: {response.status_code}"
         )
         logger.debug(f"Debug - Response text: {response.text}")
-        raise Exception(f"Failed to parse API response (status {response.status_code})")
+        raise Exception(f"Failed to parse API response (status {response.status_code})") from None
 
 
 class BrokerData:
@@ -101,6 +104,10 @@ class BrokerData:
             # Convert symbol to broker format and get token
             #br_symbol = get_br_symbol(symbol, exchange)
             token = get_token(symbol, exchange)
+            
+            # Validate token before proceeding
+            if not token:
+                raise ValueError(f"Could not resolve token for symbol '{symbol}' on exchange '{exchange}'. Symbol may not exist in the instrument database.")
 
             if exchange == "NSE_INDEX":
                 exchange = "NSE"
@@ -368,6 +375,10 @@ class BrokerData:
 
             token = get_token(symbol, exchange)
             logger.debug(f"Debug - Broker Symbol: {br_symbol}, Token: {token}")
+            
+            # Validate token before proceeding
+            if not token:
+                raise ValueError(f"Could not resolve token for symbol '{symbol}' on exchange '{exchange}'. Symbol may not exist in the instrument database.")
 
             if exchange == "NSE_INDEX":
                 exchange = "NSE"
@@ -583,6 +594,10 @@ class BrokerData:
         try:
             # Get token for the symbol
             token = get_token(symbol, exchange)
+            
+            # Validate token before proceeding
+            if not token:
+                raise ValueError(f"Could not resolve token for symbol '{symbol}' on exchange '{exchange}'. Symbol may not exist in the instrument database.")
 
             # Convert dates to datetime objects
             from_date = pd.to_datetime(start_date)
@@ -717,6 +732,10 @@ class BrokerData:
             # Convert symbol to broker format and get token
             #br_symbol = get_br_symbol(symbol, exchange)
             token = get_token(symbol, exchange)
+            
+            # Validate token before proceeding
+            if not token:
+                raise ValueError(f"Could not resolve token for symbol '{symbol}' on exchange '{exchange}'. Symbol may not exist in the instrument database.")
 
             if exchange == "NSE_INDEX":
                 exchange = "NSE"
