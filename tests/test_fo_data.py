@@ -10,7 +10,6 @@ from india_stocks_api.brokers import AngelOne
 from india_stocks_api.instruments import Future, Option
 from india_stocks_api.constants import OptionType
 from india_stocks_api.instruments.database import InstrumentDB, InstrumentMaster
-from india_stocks_api.instruments.resolver import Resolver
 
 def get_valid_fo_instruments(db):
     """Find a valid Future and Option from the DB."""
@@ -108,7 +107,7 @@ def test_fo_data():
         )
         
         quote = client.get_quote(option_obj)
-        print(f"   ✅ Quote Received!")
+        print("    ✅ Quote Received!")
         print(f"   LTP: {quote['ltp']}")
         print(f"   OI: {quote['oi']}")
         print(f"   Depth (Top Bid): {quote['bid']}")

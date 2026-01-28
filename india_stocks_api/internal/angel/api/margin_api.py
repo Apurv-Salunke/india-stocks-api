@@ -1,7 +1,6 @@
 import json
-import os
 from india_stocks_api.internal.angel.mapping.margin_data import transform_margin_positions, parse_margin_response
-from india_stocks_api.internal.context import get_httpx_client
+from india_stocks_api.internal.context import get_api_key, get_httpx_client
 from india_stocks_api.internal.context import get_logger
 
 logger = get_logger(__name__)
@@ -18,7 +17,7 @@ def calculate_margin_api(positions, auth):
         Tuple of (response, response_data)
     """
     AUTH_TOKEN = auth
-    BROKER_API_KEY = os.getenv('BROKER_API_KEY')
+    BROKER_API_KEY = get_api_key()
 
     # Transform positions to Angel format
     transformed_positions = transform_margin_positions(positions)

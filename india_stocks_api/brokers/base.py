@@ -1,5 +1,5 @@
 from abc import ABC, ABCMeta, abstractmethod
-from typing import Any, Optional, Dict, Type
+from typing import Any, Dict, Type
 from functools import singledispatchmethod
 import os
 from datetime import date, datetime
@@ -39,6 +39,7 @@ class BaseBroker(ABC, metaclass=BrokerMeta):
         """Auto-register subclasses when they're defined."""
         super().__init_subclass__(**kwargs)
         if broker_name:
+            cls.broker_name = broker_name 
             BaseBroker._registry[broker_name] = cls
     
     @classmethod
@@ -59,7 +60,7 @@ class BaseBroker(ABC, metaclass=BrokerMeta):
         if self._is_db_stale(db_path):
             from ..internal import context
             logger = context.get_logger(__name__)
-            logger.info(f"Instruments DB is stale or missing. Downloading master contract...")
+            logger.info("Instruments DB is stale or missing. Downloading master contract...")
             self._download_master_contract(db_path)
             logger.info("Instruments DB ready.")
     

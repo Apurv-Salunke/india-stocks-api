@@ -2,13 +2,16 @@ import os
 import sys
 import time
 from pathlib import Path
+from dotenv import load_dotenv
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from india_stocks_api.brokers import AngelOne
 from india_stocks_api.instruments import Equity
-from india_stocks_api.constants import TransactionType, OrderType, ProductType
+from india_stocks_api.constants import TransactionType, ProductType
+
+load_dotenv()
 
 def test_advanced_orders():
     print("--- Testing Advanced Order & GTT APIs ---")
@@ -34,22 +37,23 @@ def test_advanced_orders():
         pending = client.get_pending_orders()
         time.sleep(1)
         executed = client.get_executed_orders()
-        print(f"   ✅ Pending: {len(pending)}, Executed: {len(executed)}")
+        print(f"   SUCCESS: Pending: {len(pending)}, Executed: {len(executed)}")
         
         if len(pending) > 0:
              order_id = pending[0].get('orderid')
              print(f"   Fetching details for {order_id}...")
              time.sleep(1)
              details = client.get_order_details(order_id)
-             print(f"   ✅ Details: {details.get('tradingsymbol')} - {details.get('status')}")
+             print(f"   SUCCESS: Details: {details.get('tradingsymbol')} - {details.get('status')}")
     except Exception as e:
-        print(f"   ❌ Filter/Details Failed: {e}")
+        print(f"   ERROR: Filter/Details Failed: {e}")
 
     # 2. GTT List
     print("\n2. Fetching GTT List...")
     try:
         time.sleep(1)
         gtt_list = client.get_gtt_list()
+        print(f"   SUCCESS: GTT Rules: {len(gtt_list)}")
         print(f"   ✅ GTT Rules: {len(gtt_list)}")
         if gtt_list:
             print(f"   First GTT ID: {gtt_list[0].get('id')}")
@@ -58,7 +62,7 @@ def test_advanced_orders():
 
     # 3. GTT Creation (SBIN)
     # Using 'NSE' exchange.
-    print(f"\n3. Creating GTT Rule for SBIN @ 100.0 (Trigger)...")
+    print("\n3. Creating GTT Rule for SBIN @ 100.0 (Trigger)...")
     try:
         inst = Equity("SBIN", exchange="NSE")
         

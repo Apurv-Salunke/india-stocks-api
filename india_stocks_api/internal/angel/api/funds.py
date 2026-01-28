@@ -1,9 +1,7 @@
 # api/funds.py
 
-import os
-import httpx
 import json
-from india_stocks_api.internal.context import get_httpx_client
+from india_stocks_api.internal.context import get_api_key, get_httpx_client
 from india_stocks_api.internal.context import get_logger
 
 logger = get_logger(__name__)
@@ -11,7 +9,7 @@ logger = get_logger(__name__)
 
 def get_margin_data(auth_token):
     """Fetch margin data from the broker's API using the provided auth token."""
-    api_key = os.getenv('BROKER_API_KEY')
+    api_key = get_api_key("angel")
     
     # Get the shared httpx client with connection pooling
     client = get_httpx_client()

@@ -1,7 +1,6 @@
 import json
 import os
-import httpx
-from india_stocks_api.internal.context import get_auth_token
+from india_stocks_api.internal.context import get_api_key
 from india_stocks_api.internal.context import get_token , get_br_symbol, get_symbol
 from india_stocks_api.internal.angel.mapping.transform_data import transform_data , map_product_type, reverse_map_product_type, transform_modify_order_data
 from india_stocks_api.internal.context import get_httpx_client
@@ -12,7 +11,7 @@ logger = get_logger(__name__)
 
 def get_api_response(endpoint, auth, method="GET", payload=''):
     AUTH_TOKEN = auth
-    api_key = os.getenv('BROKER_API_KEY')
+    api_key = get_api_key("angel")
 
     # Get the shared httpx client with connection pooling
     client = get_httpx_client()
@@ -88,7 +87,7 @@ def get_open_position(tradingsymbol, exchange, producttype,auth):
 
 def place_order_api(data,auth):
     AUTH_TOKEN = auth
-    BROKER_API_KEY = os.getenv('BROKER_API_KEY')
+    BROKER_API_KEY = get_api_key()
     data['apikey'] = BROKER_API_KEY
     token = get_token(data['symbol'], data['exchange'])
     newdata = transform_data(data, token)  
@@ -138,8 +137,11 @@ def place_order_api(data,auth):
     # Parse the JSON response
     response_data = response.json()
     
-    if response_data['status'] == True:
-        orderid = response_data['data']['orderid']
+    status = response_data.get("status")
+    if isinstance(status, str):
+        status = status.lower() in {"true", "success"}
+    if status:
+        orderid = response_data.get("data", {}).get("orderid")
     else:
         orderid = None
     return response, response_data, orderid
@@ -289,7 +291,7 @@ def close_all_positions(current_api_key,auth):
 def cancel_order(orderid,auth):
     # Assuming you have a function to get the authentication token
     AUTH_TOKEN = auth
-    api_key = os.getenv('BROKER_API_KEY')
+    api_key = get_api_key()
     
     # Get the shared httpx client with connection pooling
     client = get_httpx_client()
@@ -338,7 +340,7 @@ def modify_order(data,auth):
 
     # Assuming you have a function to get the authentication token
     AUTH_TOKEN = auth
-    api_key = os.getenv('BROKER_API_KEY')
+    api_key = get_api_key()
     
     # Get the shared httpx client with connection pooling
     client = get_httpx_client()
@@ -387,8 +389,15 @@ def cancel_all_orders_api(data,auth):
 
     order_book_response = get_order_book(AUTH_TOKEN)
     #logger.info(f"{order_book_response}")
-    if order_book_response['status'] != True:
-        return [], []  # Return empty lists indicating failure to retrieve the order book
+    status = order_book_response.get("status")
+    if isinstance(status, str):
+        status = status.lower() in {"true", "success"}
+    if not status:
+
+        return (
+            [],
+            [],
+        )  # Return empty lists indicating failure to retrieve the order book
 
     # Filter orders that are in 'open' or 'trigger_pending' state
     orders_to_cancel = [order for order in order_book_response.get('data', [])

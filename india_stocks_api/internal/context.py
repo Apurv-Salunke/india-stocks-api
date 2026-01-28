@@ -2,14 +2,18 @@
 Shim Context for Internal OpenAlgo Code.
 This module mocks/replaces the `database` and `utils` dependencies that
 the ported OpenAlgo broker code expects.
+
+It also acts as the single source of truth for broker credentials.
 """
+import json
 import httpx
 import logging
+from pathlib import Path
 from typing import Optional, Dict, Any
+from india_stocks_api.instruments.database import InstrumentDB
 
 # --- Shared State (Global for simplicity in Shim) ---
 _CONFIG = {
-    "api_key": None,
     "access_token": None,
     "feed_token": None,
     # In a real implementation, this would be a proper mapped object or DB
@@ -18,10 +22,104 @@ _CONFIG = {
 
 _HTTP_CLIENT: Optional[httpx.Client] = None
 
+# --- Credential Persistence (creds.json) ---
+
+_CREDS_CACHE: Dict[str, Dict[str, Any]] = {}
+_CREDS_LOADED: bool = False
+_CREDS_FILE_NAME = Path(__file__).parent.parent.parent / "_cache" / "creds.json"
+_CREDS_FILE_NAME.parent.mkdir(parents=True, exist_ok=True)
+
+def _get_creds_path() -> Path:
+    """Return path to creds.json (created lazily if needed)."""
+    return Path(_CREDS_FILE_NAME)
+
+
+def _load_all_creds() -> Dict[str, Dict[str, Any]]:
+    """Load all credentials from creds.json into memory cache (once)."""
+    global _CREDS_LOADED, _CREDS_CACHE
+    if _CREDS_LOADED:
+        return _CREDS_CACHE
+
+    path = _get_creds_path()
+    if path.exists():
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                # Ensure nested structure is dict-of-dicts
+                _CREDS_CACHE = {
+                    str(broker): (creds if isinstance(creds, dict) else {})
+                    for broker, creds in data.items()
+                }
+            else:
+                _CREDS_CACHE = {}
+        except Exception:
+            # Corrupt or unreadable file – fail soft and start fresh in memory
+            _CREDS_CACHE = {}
+    else:
+        _CREDS_CACHE = {}
+
+    _CREDS_LOADED = True
+    return _CREDS_CACHE
+
+
+def _flush_creds() -> None:
+    """Persist in-memory credentials cache to creds.json."""
+    path = _get_creds_path()
+    try:
+        path.write_text(json.dumps(_CREDS_CACHE, indent=2), encoding="utf-8")
+    except Exception as e:
+        # Persistence failure should not crash trading flows
+        # Callers treat this as best-effort storage.
+        logging.getLogger(__name__).warning(f"Failed to save credentials to {path}: {e}")
+
+
+def set_credentials(broker: str, creds: Dict[str, Any]) -> None:
+    """
+    Persist credentials for a broker into creds.json.
+
+    This is only called AFTER successful authentication.
+    """
+    global _CREDS_CACHE
+    all_creds = _load_all_creds()
+    # Store a shallow copy to avoid accidental external mutation
+    all_creds[broker] = dict(creds or {})
+    _CREDS_CACHE = all_creds
+    _flush_creds()
+
+
+def get_credentials(broker: str) -> Dict[str, Any]:
+    """
+    Load credentials for a broker from memory / creds.json.
+
+    Returns an empty dict if nothing is stored.
+    """
+    all_creds = _load_all_creds()
+    creds = all_creds.get(broker) or {}
+    # Return a copy so callers cannot mutate internal state
+    return dict(creds)
+
+
+def remove_credentials(broker: str) -> None:
+    """Remove stored credentials for a broker from creds.json."""
+    global _CREDS_CACHE
+    all_creds = _load_all_creds()
+    if broker in all_creds:
+        del all_creds[broker]
+        _CREDS_CACHE = all_creds
+        _flush_creds()
+
+
+def get_api_key(broker: str) -> Optional[str]:
+    """Convenience accessor for `api_key` for a given broker."""
+    creds = get_credentials(broker)
+    return creds.get("api_key")
+
+
 # --- Configuration Setters (Called by Broker Adapter) ---
 
-def set_api_key(key: str):
-    _CONFIG["api_key"] = key
+# def set_api_key(key: str):
+#     # Legacy runtime-only storage for internal code that expects this.
+#     _CONFIG["api_key"] = key
 
 def set_auth_token(token: str):
     _CONFIG["access_token"] = token
@@ -55,10 +153,6 @@ def get_logger(name: str) -> logging.Logger:
 
 # --- Symbol Mapping Shims (Replacements for database.token_db) ---
 
-# Global DB instance for the Shim
-from india_stocks_api.instruments.database import InstrumentDB
-import os
-
 _INSTRUMENT_DB = None
 
 def _get_db():
@@ -68,12 +162,11 @@ def _get_db():
         # This path logic might need adjustment based on installation
         # For now, assumes running from src or tests where CWD is root or src
         # Or better: use absolute path relative to package
-        from pathlib import Path
         chk_path = Path("instruments.db") # CWD (e.g., src/)
         if not chk_path.exists():
              # Try side-by-side with package?
              chk_path = Path(__file__).parent.parent.parent / "instruments.db"
-        
+
         _INSTRUMENT_DB = InstrumentDB(str(chk_path))
     return _INSTRUMENT_DB
 

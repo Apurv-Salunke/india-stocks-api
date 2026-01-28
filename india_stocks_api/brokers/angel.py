@@ -32,7 +32,6 @@ from ..internal.angel.api.gtt_api import (
 from ..internal.angel.api.auth_api import authenticate_broker
 from ..internal.angel.api.funds import get_margin_data
 from ..internal.angel.api.data import BrokerData
-import os
 import pyotp
 
 class AngelOne(BaseBroker, broker_name="angel"):
@@ -42,10 +41,7 @@ class AngelOne(BaseBroker, broker_name="angel"):
         self.client_code = client_code
         self.password = password
         self.totp_key = totp_key
-        
-        # Shim Configuration
-        context.set_api_key(api_key)
-        # Note: Access Token is set after authenticate()
+        # Note: Access Token and persisted credentials are handled by authenticate()
         # Note: Metaclass will call _ensure_instruments_ready() after this returns
     
     def _download_master_contract(self, db_path: str = 'instruments.db'):
@@ -57,31 +53,47 @@ class AngelOne(BaseBroker, broker_name="angel"):
         """
         Login using SmartAPI.
         Updates the internal context with the session token.
+        Also persists credentials to creds.json **only** after successful auth.
         """
         # Hack: The ported code reads BROKER_API_KEY from os.environ
         # We must set it here for the internal function to work.
         # Ideally, we would patch the internal code to use context.get_api_key()
-        os.environ['BROKER_API_KEY'] = self.api_key
+        if not all([self.api_key, self.client_code, self.password, self.totp_key]):
+            creds = context.get_credentials(self.broker_name)
+            if not creds:
+                raise RuntimeError("No credentials provided or stored.")
+
+            self.api_key = creds.get("api_key")
+            self.client_code = creds.get("client_code")
+            self.password = creds.get("password")
+            self.totp_key = creds.get("totp_key")
         
         try:
-             # Generate TOTP Code
-             totp_obj = pyotp.TOTP(self.totp_key)
-             generated_totp = totp_obj.now()
-             
-             # Call Internal API
-             jwt_token, feed_token, error = authenticate_broker(
-                 clientcode=self.client_code,
-                 broker_pin=self.password,
-                 totp_code=generated_totp
-             )
-             
-             if jwt_token:
-                 context.set_auth_token(jwt_token)
-                 context.set_feed_token(feed_token)
-                 return True
-             
-             print(f"Auth failed: {error}")
-             return False
+            # Generate TOTP Code
+            totp_obj = pyotp.TOTP(self.totp_key)
+            generated_totp = totp_obj.now()
+            
+            # Call Internal API
+            jwt_token, feed_token, error = authenticate_broker(
+                api_key=self.api_key,
+                clientcode=self.client_code,
+                broker_pin=self.password,
+                totp_code=generated_totp
+            )
+            
+            if jwt_token:
+                context.set_auth_token(jwt_token)
+                context.set_feed_token(feed_token)
+                context.set_credentials(self.broker_name, {
+                    "api_key": self.api_key,
+                    "client_code": self.client_code,
+                    "password": self.password,
+                    "totp_key": self.totp_key
+                })
+                return True
+            
+            print(f"Auth failed: {error}")
+            return False
         except Exception as e:
             print(f"Auth failed exception: {e}")
             return False
@@ -162,8 +174,9 @@ class AngelOne(BaseBroker, broker_name="angel"):
         """
         token_info = self._resolve_instrument(instrument)
         jwt_token = context.get_auth_token()
-        if not jwt_token: raise RuntimeError("Auth required.")
-        
+        if not jwt_token:
+            raise RuntimeError("Auth required.")
+
         bd = BrokerData(jwt_token)
         return bd.get_depth(symbol=token_info["symbol"], exchange=token_info["exchange"])
 
@@ -270,7 +283,10 @@ class AngelOne(BaseBroker, broker_name="angel"):
     def create_gtt(self, instrument: Equity | Future | Option, transaction_type: TransactionType, 
                   quantity: int, trigger_price: float, price: float, 
                   product_type: ProductType = ProductType.DELIVERY, time_period: int = 365) -> dict:
+        print(f"DEBUG: Creating GTT for instrument type: {type(instrument)}")
+        print(f"DEBUG: Instrument details: {instrument}")
         token_info = self._resolve_instrument(instrument)
+        print(f"DEBUG: Token info: {token_info}")
         jwt_token = context.get_auth_token()
         
         # Use existing internal mapping
