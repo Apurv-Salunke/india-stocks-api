@@ -3,11 +3,11 @@ import json
 import os
 from india_stocks_api.internal.context import get_httpx_client
 
-def authenticate_broker(clientcode, broker_pin, totp_code):
+def authenticate_broker(api_key, clientcode, broker_pin, totp_code):
     """
     Authenticate with the broker and return the auth token.
     """
-    api_key = os.getenv('BROKER_API_KEY')
+
 
     try:
         # Get the shared httpx client

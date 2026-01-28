@@ -5,7 +5,7 @@ import pandas as pd
 import time
 from datetime import datetime, timedelta
 import urllib.parse
-from india_stocks_api.internal.context import get_br_symbol, get_token, get_oa_symbol
+from india_stocks_api.internal.context import get_br_symbol, get_token, get_oa_symbol, get_api_key
 from india_stocks_api.internal.context import get_httpx_client
 from india_stocks_api.internal.context import get_logger
 
@@ -15,7 +15,7 @@ logger = get_logger(__name__)
 def get_api_response(endpoint, auth, method="GET", payload=''):
     """Helper function to make API calls to Angel One"""
     AUTH_TOKEN = auth
-    api_key = os.getenv('BROKER_API_KEY')
+    api_key = get_api_key("angel")
 
     # Get the shared httpx client with connection pooling
     client = get_httpx_client()
@@ -49,7 +49,8 @@ def get_api_response(endpoint, auth, method="GET", payload=''):
         response.status = response.status_code
         
         if response.status_code == 403:
-            logger.debug(f"Debug - API returned 403 Forbidden. Headers: {headers}")
+            redacted_headers = {**headers, "X-PrivateKey": "***"}
+            logger.debug(f"Debug - API returned 403 Forbidden. Headers: {redacted_headers}")
             logger.debug(f"Debug - Response text: {response.text}")
             raise Exception("Authentication failed. Please check your API key and auth token.")
             
@@ -91,6 +92,10 @@ class BrokerData:
             # Convert symbol to broker format and get token
             br_symbol = get_br_symbol(symbol, exchange)
             token = get_token(symbol, exchange)
+
+            # Validate token before proceeding
+            if not token:
+                raise ValueError(f"Could not resolve token for symbol '{symbol}' on exchange '{exchange}'. Symbol may not exist in the instrument database.")
 
             if exchange == 'NSE_INDEX':
                 exchange = 'NSE'

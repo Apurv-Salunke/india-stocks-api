@@ -1,12 +1,12 @@
 import json
 import os
-from india_stocks_api.internal.context import get_httpx_client, get_logger
+from india_stocks_api.internal.context import get_httpx_client, get_logger, get_api_key
 
 logger = get_logger(__name__)
 
 def get_api_response(endpoint, auth, method="GET", payload=''):
     AUTH_TOKEN = auth
-    api_key = os.getenv('BROKER_API_KEY')
+    api_key = get_api_key("angel")
     client = get_httpx_client()
     
     headers = {

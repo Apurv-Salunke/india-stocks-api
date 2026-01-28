@@ -126,7 +126,7 @@ class InstrumentDB:
             for r in records:
                 data_tuples.append((
                     r['token'], r['symbol'], r['exchange'], r['tradingsymbol'], r['br_symbol'],
-                    r['expiry'], r['strike'], r['opt_type'], r['lot_size'], r['tick_size'],
+                    r['expiry'] or None, r['strike'], r['opt_type'], r['lot_size'], r['tick_size'],
                     r['instrument_type']
                 ))
             
