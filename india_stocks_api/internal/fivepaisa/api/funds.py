@@ -26,7 +26,7 @@ def get_margin_data(auth_token: str) -> Dict[str, Any]:
                 
         creds=get_credentials("fivepaisa")
         api_key = creds["api_key"]
-        client_id = creds["client_id"]
+        client_id = creds["clientcode"]
 
     except ValueError:
         raise ValueError("Failed to get credentials. Please check your configuration.")

@@ -3,6 +3,8 @@
 Thin wrapper around india_stocks_api.internal.fivepaisa
 """
 from typing import Optional, Callable, List, Dict, Any
+import json
+import websocket
 from .base import BaseBroker
 from ..instruments.models import Equity, Future, Option, Index
 from ..constants import TransactionType, OrderType, ProductType, OrderValidity, CandleInterval, StreamMode
@@ -210,6 +212,11 @@ class FivePaisa(BaseBroker, broker_name="fivepaisa"):
         access_token = context.get_auth_token()
         resp = get_orders_api(access_token)
         return resp.get('body', {}).get('OrderBookDetail', [])
+    
+    def get_pending_orders(self) -> list:
+        orders = self.get_orders()
+        print(orders)
+        return [o for o in orders if o.get("OrderStatus") in ["Pending", "Xmitted", "AH Placed", "Modified"]]
 
     def cancel_order(self, order_id: str) -> dict:
         access_token = context.get_auth_token()
@@ -310,88 +317,134 @@ class FivePaisa(BaseBroker, broker_name="fivepaisa"):
         # TODO: Implement GTT details for 5paisa if available
         return {}
 
-    # --- WebSocket Streaming ---
-    # Note: 5paisa streaming implementation would need to be developed
-    # based on their specific WebSocket API
+    # 5paisa exchange mapping from docs
+    _WS_EXCHANGE_MAP = {
+        "NSE": ("N", "C"),
+        "BSE": ("B", "C"),
+        "NFO": ("N", "D"),
+        "BFO": ("B", "D"),
+        "MCX": ("M", "D"),
+        "CDS": ("N", "U"),
+    }
 
     def __init_streaming(self):
-        """Lazy initialization of streaming components."""
-        if not hasattr(self, '_ws_client'):
-            self._ws_client = None
-            self._pending_subscriptions: List[tuple] = []  # [(token_list, mode), ...]
-            
-            # User callbacks
+        """Lazy initialize streaming state."""
+        if not hasattr(self, "_ws"):
+            self._ws: Optional[websocket.WebSocketApp] = None
+            self._pending_subscriptions: List[Dict] = []
+
+            # user callbacks (same API as Angel)
             self.on_tick: Optional[Callable[[Dict[str, Any]], None]] = None
             self.on_error: Optional[Callable[[str, str], None]] = None
             self.on_close: Optional[Callable[[], None]] = None
             self.on_open: Optional[Callable[[], None]] = None
-    
+
     def subscribe(
-        self, 
-        instruments: List[Equity | Future | Option | Index], 
-        mode: StreamMode = StreamMode.QUOTE
+        self,
+        instruments: List[Equity | Future | Option | Index],
+        mode: StreamMode = StreamMode.QUOTE   # ignored (5paisa doesn't use modes)
     ) -> None:
         """
-        Subscribe to real-time market data for given instruments.
-        
-        Args:
-            instruments: List of domain objects (Equity, Future, Option, Index)
-            mode: Streaming mode (LTP, QUOTE, SNAP_QUOTE, DEPTH)
-        
-        Example:
-            broker.subscribe([Equity("RELIANCE"), Equity("TCS")], mode=StreamMode.LTP)
+        Buffer subscriptions. Sent automatically after connection.
         """
-        # TODO: Implement 5paisa streaming subscription
         self.__init_streaming()
-        
-        # Resolve instruments to tokens
-        token_list = []
+
+        items = []
+
         for inst in instruments:
             resolved = self._resolve_instrument(inst)
-            token_list.append({
-                "exchange": resolved["exchange"],
-                "token": resolved["token"]
+
+            exch, exch_type = self._WS_EXCHANGE_MAP.get(resolved["exchange"], ("N", "C"))
+
+            items.append({
+                "Exch": exch,
+                "ExchType": exch_type,
+                "ScripCode": int(resolved["token"])
             })
-        
-        # Store for later (if not yet connected)
-        self._pending_subscriptions.append((token_list, mode.value))
-        
-        # If already connected, subscribe immediately
-        if self._ws_client and self._ws_client.wsapp:
-            self._send_subscription(token_list, mode.value)
-    
-    def _send_subscription(self, token_list: List[Dict], mode: int) -> None:
-        """Send subscription request to WebSocket."""
-        # TODO: Implement 5paisa WebSocket subscription
-        pass
-    
+
+        self._pending_subscriptions.extend(items)
+
+        # If already connected, send immediately
+        if self._ws:
+            self._send_subscription(items)
+
+    def _send_subscription(self, items: List[Dict]):
+        payload = {
+            "Method": "MarketFeedV3",
+            "Operation": "Subscribe",
+            "ClientCode": self.clientcode,
+            "MarketFeedData": items
+        }
+
+        self._ws.send(json.dumps(payload))
+
+
     def start_streaming(self) -> None:
         """
-        Connect to the WebSocket server and start streaming.
-        
-        This is a BLOCKING call - it will run until stop_streaming() is called
-        or the connection is closed.
-        
-        Make sure to:
-        1. Call authenticate() first
-        2. Set on_tick callback before calling this
-        3. Call subscribe() before or after this (subscriptions are buffered)
-        
-        Example:
-            broker.on_tick = lambda tick: print(tick['ltp'])
-            broker.subscribe([Equity("RELIANCE")])
-            broker.start_streaming()  # Blocks here
+        Blocking streaming loop.
+        Exactly same usage style as AngelOne but pure 5paisa protocol.
         """
-        # TODO: Implement 5paisa WebSocket streaming
         self.__init_streaming()
-        raise NotImplementedError("WebSocket streaming not yet implemented for 5paisa")
-    
+
+        access_token = context.get_auth_token()
+        if not access_token:
+            raise RuntimeError("Authenticate first")
+
+        url = (
+            f"wss://openfeed.5paisa.com/feeds/api/chat"
+            f"?Value1={access_token}|{self.clientcode}"
+        )
+
+        # ---------- callbacks ----------
+
+        def _on_open(ws):
+            print("Connected")
+            if self.on_open:
+                self.on_open()
+
+            if self._pending_subscriptions:
+                self._send_subscription(self._pending_subscriptions)
+
+        def _on_message(ws, message):
+            try:
+                print(message)
+                data = json.loads(message)
+            except Exception:
+                return
+
+            if not self.on_tick:
+                return
+
+            # 5paisa sends list of ticks
+            if isinstance(data, list):
+                for tick in data:
+                    self.on_tick(tick)
+            else:
+                self.on_tick(data)
+
+
+        def _on_error(ws, error):
+            if self.on_error:
+                self.on_error("socket", str(error))
+
+        def _on_close(ws, *_):
+            if self.on_close:
+                self.on_close()
+
+        # ---------- create socket ----------
+
+        self._ws = websocket.WebSocketApp(
+            url,
+            on_open=_on_open,
+            on_message=_on_message,
+            on_error=_on_error,
+            on_close=_on_close
+        )
+
+        # blocking (same behavior as Angel)
+        self._ws.run_forever()
+
     def stop_streaming(self) -> None:
-        """
-        Disconnect from the WebSocket server.
-        """
-        # TODO: Implement 5paisa WebSocket stop
-        self.__init_streaming()
-        if self._ws_client:
-            self._ws_client.close_connection()
-            self._ws_client = None
+        if self._ws:
+            self._ws.close()
+            self._ws = None
