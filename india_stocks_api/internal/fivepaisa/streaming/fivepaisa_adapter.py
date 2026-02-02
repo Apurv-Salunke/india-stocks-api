@@ -7,9 +7,8 @@ import re
 from datetime import datetime
 from typing import Dict, Any, Optional, List
 
-from broker.fivepaisa.streaming.fivepaisa_websocket import FivePaisaWebSocket
-from database.auth_db import get_auth_token
-from database.token_db import get_token
+from india_stocks_api.internal.fivepaisa.streaming.fivepaisa_websocket import FivePaisaWebSocket
+from india_stocks_api.internal.context import get_auth_token
 
 import sys
 

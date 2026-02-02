@@ -2,12 +2,10 @@ import json
 import os
 from typing import Dict, Any, Optional
 import httpx
-from utils.httpx_client import get_httpx_client
-from database.auth_db import get_auth_token
-from database.token_db import get_token, get_br_symbol, get_symbol, get_oa_symbol
-from broker.fivepaisa.mapping.transform_data import transform_data, map_product_type, reverse_map_product_type, transform_modify_order_data
-from broker.fivepaisa.mapping.transform_data import map_exchange, map_exchange_type, reverse_map_exchange
-from utils.logging import get_logger
+from india_stocks_api.internal.context import get_credentials, get_httpx_client, get_logger
+from india_stocks_api.internal.context import get_token, get_br_symbol, get_symbol
+from india_stocks_api.internal.fivepaisa.mapping.transform_data import transform_data, map_product_type, reverse_map_product_type, transform_modify_order_data
+from india_stocks_api.internal.fivepaisa.mapping.transform_data import map_exchange, map_exchange_type, reverse_map_exchange
 
 logger = get_logger(__name__)
 
@@ -15,19 +13,21 @@ logger = get_logger(__name__)
 # Base URL for 5Paisa API
 BASE_URL = "https://Openapi.5paisa.com"
 
-# Retrieve the BROKER_API_KEY and BROKER_API_SECRET environment variables
-broker_api_key = os.getenv('BROKER_API_KEY')
-api_secret = os.getenv('BROKER_API_SECRET')
-api_key, user_id, client_id = broker_api_key.split(':::')
+def _get_api_credentials():
+    creds = get_credentials("fivepaisa")
+    return creds.get("api_key"), creds.get("user_id"), creds.get("clientcode")
 
-json_data = {
-    "head": {
-        "key": api_key
-    },
-    "body": {
-        "ClientCode": client_id
+def _get_json_data():
+    creds = get_credentials("fivepaisa")
+    json_data = {
+        "head": {
+            "key": creds.get("api_key")
+        },
+        "body": {
+            "ClientCode": creds.get("clientcode")
+        }
     }
-}
+    return json_data
 
 def get_api_response(endpoint: str, auth: str, method: str = "GET", payload: str = '') -> Dict[str, Any]:
     """Generic function to make API calls to 5Paisa using shared httpx client
@@ -87,7 +87,7 @@ def get_order_book(auth: str) -> Dict[str, Any]:
         Dict[str, Any]: Order book data
     """
     try:
-        payload = json.dumps(json_data)
+        payload = json.dumps(_get_json_data())
         return get_api_response("/VendorsAPI/Service1.svc/V3/OrderBook", auth, method="POST", payload=payload)
     except Exception as e:
         logger.error(f"Error getting order book: {e}")
@@ -103,7 +103,7 @@ def get_trade_book(auth: str) -> Dict[str, Any]:
         Dict[str, Any]: Trade book data
     """
     try:
-        payload = json.dumps(json_data)
+        payload = json.dumps(_get_json_data())
         return get_api_response("/VendorsAPI/Service1.svc/V1/TradeBook", auth, method="POST", payload=payload)
     except Exception as e:
         logger.error(f"Error getting trade book: {e}")
@@ -126,7 +126,7 @@ def get_positions(auth: str) -> Dict[str, Any]:
         try:
             # Get the shared httpx client
             client = get_httpx_client()
-            payload = json.dumps(json_data)
+            payload = json.dumps(_get_json_data())
             
             # Use a longer timeout specifically for positions endpoint
             headers = {
@@ -165,7 +165,7 @@ def get_holdings(auth: str) -> Dict[str, Any]:
         Dict[str, Any]: Holdings data
     """
     try:
-        payload = json.dumps(json_data)
+        payload = json.dumps(_get_json_data())
         return get_api_response("/VendorsAPI/Service1.svc/V3/Holding", auth, method="POST", payload=payload)
     except Exception as e:
         logger.error(f"Error getting holdings: {e}")
@@ -233,13 +233,9 @@ def place_order_api(data: Dict[str, Any], auth: str) -> Dict[str, Any]:
         'Authorization': f'bearer {AUTH_TOKEN}'
     }
     
-
-    json_data = {
-            "head": {
-                "key": api_key
-            },
-            "body": newdata
-        }
+    json_data = _get_json_data()
+    # Override body with new data
+    json_data["body"] = newdata
 
     payload = json.dumps(json_data)
 
@@ -460,13 +456,10 @@ def cancel_order(orderid: str, auth: str) -> Dict[str, Any]:
             return {"status": "error", "message": "Order is still pending at broker level. Cannot cancel until it reaches exchange."}, 400
         
         # Build the cancel request based on the official 5Paisa documentation
-        cancel_data = {
-            "head": {
-                "key": api_key
-            },
-            "body": {
-                "ExchOrderID": exchange_order_id
-            }
+        cancel_data = _get_json_data()
+        # Override body with cancel payload
+        cancel_data["body"] = {
+            "ExchOrderID": exchange_order_id
         }
 
         logger.info(f"Cancelling order with status: {order_details['OrderStatus']}")
@@ -545,12 +538,8 @@ def modify_order(data: Dict[str, Any], auth: str) -> Dict[str, Any]:
         transformed_data = transform_modify_order_data(data)
         
         # Prepare request data
-        json_data = {
-            "head": {
-                "key": api_key
-            },
-            "body": transformed_data
-        }
+        json_data = _get_json_data()
+        json_data["body"] = transformed_data
 
         logger.info(f"Modify Order Request: {json_data}")
         
