@@ -2,14 +2,11 @@ import os
 import json
 import httpx
 from typing import Dict, Any
-from utils.httpx_client import get_httpx_client
-from broker.fivepaisa.api.order_api import get_positions
-from utils.logging import get_logger
+from india_stocks_api.internal.fivepaisa.api.order_api import get_positions
+from india_stocks_api.internal.context import get_httpx_client, get_logger, get_credentials
 
 logger = get_logger(__name__)
 
-# Retrieve the BROKER_API_KEY environment variable
-broker_api_key = os.getenv('BROKER_API_KEY')
 
 def get_margin_data(auth_token: str) -> Dict[str, Any]:
     """Fetch margin data from the broker's API using the provided auth token.
@@ -25,14 +22,15 @@ def get_margin_data(auth_token: str) -> Dict[str, Any]:
             - m2mrealized: Total booked P&L
             - utiliseddebits: Utilized margin
     """
-    if not broker_api_key:
-        raise ValueError("BROKER_API_KEY not found in environment variables")
-
-    # Split the string to separate the API key and the client ID
+    # Get credentials
     try:
-        api_key, user_id, client_id  = broker_api_key.split(':::')
+                
+        creds=get_credentials("fivepaisa")
+        api_key = creds["api_key"]
+        client_id = creds["clientcode"]
+
     except ValueError:
-        raise ValueError("BROKER_API_KEY format is incorrect. Expected format: 'api_key:::client_id'")
+        raise ValueError("Failed to get credentials. Please check your configuration.")
 
     # Get the shared httpx client
     client = get_httpx_client()

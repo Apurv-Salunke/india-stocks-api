@@ -1,7 +1,7 @@
 # Mapping OpenAlgo API Request https://openalgo.in/docs
 # 5paisa does not provide position-specific Margin Calculator API
 
-from utils.logging import get_logger
+from india_stocks_api.internal.context import get_logger
 
 logger = get_logger(__name__)
 

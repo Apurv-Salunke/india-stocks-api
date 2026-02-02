@@ -5,19 +5,12 @@ import time
 from typing import Dict, Any, Optional
 import httpx
 import pytz
-from utils.httpx_client import get_httpx_client
-from database.token_db import get_br_symbol, get_token, get_oa_symbol
-from broker.fivepaisa.mapping.transform_data import map_exchange, map_exchange_type
+from india_stocks_api.internal.context import get_br_symbol, get_token, get_logger, get_httpx_client
+from india_stocks_api.internal.fivepaisa.mapping.transform_data import map_exchange, map_exchange_type
 import traceback
 import pandas as pd
-from utils.logging import get_logger
 
 logger = get_logger(__name__)
-
-
-# Retrieve the BROKER_API_KEY environment variable
-broker_api_key = os.getenv('BROKER_API_KEY')
-api_key, user_id, client_id = broker_api_key.split(':::')
 
 
 def normalize_exchange_for_query(symbol: str, exchange: str) -> str:
@@ -96,9 +89,11 @@ def get_api_response(endpoint: str, auth: str, method: str = "GET", payload: str
         raise
 
 class BrokerData:
-    def __init__(self, auth_token):
+    def __init__(self, auth_token, creds):
         """Initialize 5Paisa data handler with authentication token"""
         self.auth_token = auth_token
+        self.api_key = creds["api_key"]
+        self.client_id = creds["clientcode"]
         # Map common timeframe format to 5Paisa resolutions
         self.timeframe_map = {
             # Minutes
@@ -130,10 +125,10 @@ class BrokerData:
             # Prepare request payload
             json_data = {
                 "head": {
-                    "key": api_key
+                    "key": self.api_key
                 },
                 "body": {
-                    "ClientCode": client_id,
+                    "ClientCode": self.client_id,
                     "Exchange": map_exchange(exchange),
                     "ExchangeType": map_exchange_type(normalized_exchange),
                     "ScripCode": token,
@@ -211,10 +206,10 @@ class BrokerData:
             # Get market snapshot for overall data
             snapshot_data = {
                 "head": {
-                    "key": api_key
+                    "key": self.api_key
                 },
                 "body": {
-                    "ClientCode": client_id,
+                    "ClientCode": self.client_id,
                     "Data": [
                         {
                             "Exchange": map_exchange(exchange),
@@ -254,10 +249,10 @@ class BrokerData:
             # Get market depth data
             depth_data = {
                 "head": {
-                    "key": api_key
+                    "key": self.api_key
                 },
                 "body": {
-                    "ClientCode": client_id,
+                    "ClientCode": self.client_id,
                     "Exchange": map_exchange(exchange),
                     "ExchangeType": map_exchange_type(normalized_exchange),
                     "ScripCode": token,
@@ -356,10 +351,10 @@ class BrokerData:
             # Prepare request payload
             json_data = {
                 "head": {
-                    "key": api_key
+                    "key": self.api_key
                 },
                 "body": {
-                    "ClientCode": client_id,
+                    "ClientCode": self.client_id,
                     "Data": [
                         {
                             "Exchange": map_exchange(exchange),
@@ -534,10 +529,10 @@ class BrokerData:
         # Build request payload
         json_data = {
             "head": {
-                "key": api_key
+                "key": self.api_key
             },
             "body": {
-                "ClientCode": client_id,
+                "ClientCode": self.client_id,
                 "Data": data_array
             }
         }

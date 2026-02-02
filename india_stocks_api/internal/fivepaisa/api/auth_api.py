@@ -2,36 +2,26 @@ import json
 import os
 import httpx
 from typing import Tuple, Optional
-from utils.httpx_client import get_httpx_client
-from utils.logging import get_logger
+from india_stocks_api.internal.context import get_httpx_client, get_logger
 
 logger = get_logger(__name__)
 
 
-def authenticate_broker(clientcode: str, broker_pin: str, totp_code: str) -> Tuple[Optional[str], Optional[str]]:
+def authenticate_broker(api_key: str, clientcode: str, broker_pin: str, totp_code: str , api_secret: str, user_id: str) -> Tuple[Optional[str], Optional[str]]:
     """
     Authenticate with the broker and return the auth token.
     
     Args:
+        api_key (str): API key
         clientcode (str): Client's email ID
         broker_pin (str): Broker PIN
         totp_code (str): TOTP code for authentication
+        api_secret (str): Encryption key
+        user_id (str): User ID
     
     Returns:
         Tuple[Optional[str], Optional[str]]: (access_token, error_message)
     """
-    # Retrieve the BROKER_API_KEY and BROKER_API_SECRET environment variables
-    broker_api_key = os.getenv('BROKER_API_KEY')
-    api_secret = os.getenv('BROKER_API_SECRET')
-
-    if not broker_api_key or not api_secret:
-        return None, "BROKER_API_KEY or BROKER_API_SECRET not found in environment variables"
-
-    # Split the string to separate the API key and the client ID
-    try:
-        api_key, user_id, client_id = broker_api_key.split(':::')
-    except ValueError:
-        return None, "BROKER_API_KEY format is incorrect. Expected format: 'api_key:::user_id:::client_id'"
 
     headers = {
         'Content-Type': 'application/json',
