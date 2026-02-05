@@ -1,7 +1,6 @@
 import json
-from broker.zerodha.mapping.margin_data import transform_margin_positions, parse_margin_response
-from utils.httpx_client import get_httpx_client
-from utils.logging import get_logger
+from india_stocks_api.internal.zerodha.mapping.margin_data import transform_margin_positions, parse_margin_response
+from india_stocks_api.internal.context import get_httpx_client, get_logger
 
 logger = get_logger(__name__)
 

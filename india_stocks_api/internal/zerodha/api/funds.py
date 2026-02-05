@@ -2,8 +2,7 @@
 
 import os
 import json
-from utils.httpx_client import get_httpx_client
-from utils.logging import get_logger
+from india_stocks_api.internal.context import get_httpx_client, get_logger
 
 logger = get_logger(__name__)
 
@@ -11,7 +10,6 @@ logger = get_logger(__name__)
 
 def get_margin_data(auth_token):
     """Fetch margin data from Zerodha's API using the provided auth token."""
-    api_key = os.getenv('BROKER_API_KEY')
     
     # Get the shared httpx client with connection pooling
     client = get_httpx_client()

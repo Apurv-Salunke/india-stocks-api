@@ -1,8 +1,7 @@
 # Mapping OpenAlgo API Request https://openalgo.in/docs
 # Mapping Zerodha Margin API https://kite.trade/docs/connect/v3/margins/
 
-from database.token_db import get_br_symbol
-from utils.logging import get_logger
+from india_stocks_api.internal.context import get_br_symbol, get_logger
 
 logger = get_logger(__name__)
 

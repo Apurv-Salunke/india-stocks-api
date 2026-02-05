@@ -1,4 +1,4 @@
-from utils.logging import get_logger
+from india_stocks_api.internal.context import get_logger
 
 logger = get_logger(__name__)
 
@@ -14,8 +14,8 @@ import time
 from typing import Dict, List, Optional, Set, Any, Callable
 
 from websocket_proxy.base_adapter import BaseBrokerWebSocketAdapter
-from database.token_db import get_token
-from database.auth_db import get_auth_token
+from india_stocks_api.internal.context import get_token
+from india_stocks_api.internal.context import get_auth_token
 
 # Import the WebSocket client
 from .zerodha_websocket import ZerodhaWebSocket
@@ -60,33 +60,25 @@ class ZerodhaWebSocketAdapter(BaseBrokerWebSocketAdapter):
         self.batch_timer = None
         self.batch_delay = 0.5  # 500ms delay to collect more subscriptions in a batch
     
-    def initialize(self, broker_name: str, user_id: str, auth_data: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+    def initialize(self, broker_name: str, user_id: str, auth_data:str) -> Dict[str, Any]:
         """Initialize the adapter with broker credentials"""
         try:
             if broker_name != self.broker_name:
                 return {'status': 'error', 'message': f'Invalid broker name: {broker_name}'}
             
             self.user_id = user_id
-            
-            # Get API key from environment
-            self.api_key = os.getenv('BROKER_API_KEY')
-            if not self.api_key:
-                return {'status': 'error', 'message': 'API key not found in environment variables'}
+        
             
             # Get auth token from database
-            auth_token = get_auth_token(user_id)
+            auth_token = auth_data or get_auth_token(user_id)
             if not auth_token:
                 return {'status': 'error', 'message': 'Authentication token not found'}
             
             # Handle auth token format (api_key:access_token)
-            if ':' in auth_token:
-                parts = auth_token.split(':')
-                if len(parts) >= 2:
-                    self.access_token = parts[1]  # Use the access token part
-                else:
-                    self.access_token = auth_token
-            else:
-                self.access_token = auth_token
+            try:
+                self.api_key, self.access_token = auth_token.split(":", 1)
+            except ValueError:
+                return {'status': 'error', 'message': 'Invalid auth format. Expected api_key:access_token'}
             
             if not self.access_token:
                 return {'status': 'error', 'message': 'Invalid access token'}

@@ -1,6 +1,6 @@
 import json
-from database.token_db import get_symbol , get_oa_symbol
-from utils.logging import get_logger
+from india_stocks_api.internal.context import get_oa_symbol
+from india_stocks_api.internal.context import get_logger
 
 logger = get_logger(__name__)
 
