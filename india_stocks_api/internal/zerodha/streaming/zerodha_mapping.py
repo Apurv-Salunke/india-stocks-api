@@ -1,4 +1,4 @@
-from utils.logging import get_logger
+from india_stocks_api.internal.context import get_logger
 
 logger = get_logger(__name__)
 

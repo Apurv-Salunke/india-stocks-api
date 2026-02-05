@@ -2,11 +2,9 @@ import http.client
 import json
 import os
 import urllib.parse
-from database.auth_db import get_auth_token
-from database.token_db import get_br_symbol, get_oa_symbol
-from broker.zerodha.mapping.transform_data import transform_data, map_product_type, reverse_map_product_type, transform_modify_order_data
-from utils.httpx_client import get_httpx_client
-from utils.logging import get_logger
+from india_stocks_api.internal.context import get_br_symbol, get_oa_symbol, get_api_key
+from india_stocks_api.internal.zerodha.mapping.transform_data import transform_data, map_product_type, reverse_map_product_type, transform_modify_order_data
+from india_stocks_api.internal.context import get_httpx_client, get_logger
 
 logger = get_logger(__name__)
 
@@ -95,6 +93,9 @@ def get_positions(auth):
 def get_holdings(auth):
     return get_api_response("/portfolio/holdings",auth)
 
+def get_profile(auth):
+    return get_api_response("/user/profile",auth)
+
 def get_open_position(tradingsymbol, exchange, product,auth):
 
     #Convert Trading Symbol from OpenAlgo Format to Broker Format Before Search in OpenPosition
@@ -117,8 +118,8 @@ def get_open_position(tradingsymbol, exchange, product,auth):
 def place_order_api(data,auth):
     AUTH_TOKEN = auth
     
-    BROKER_API_KEY = os.getenv('BROKER_API_KEY')
-    data['apikey'] = BROKER_API_KEY
+    # BROKER_API_KEY = get_api_key()
+    # data['apikey'] = BROKER_API_KEY
     #token = get_token(data['symbol'], data['exchange'])
     newdata = transform_data(data)
     
