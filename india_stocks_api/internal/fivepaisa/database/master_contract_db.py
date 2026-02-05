@@ -8,73 +8,10 @@ from datetime import datetime
 
 # Import httpx and shared client
 import httpx
-from utils.httpx_client import get_httpx_client
 
-from sqlalchemy import create_engine, Column, Integer, String, Float , Sequence, Index
-from sqlalchemy.orm import scoped_session, sessionmaker
-from sqlalchemy.ext.declarative import declarative_base
-from extensions import socketio  # Import SocketIO
-from utils.logging import get_logger
+from india_stocks_api.internal.context import get_httpx_client, get_logger
 
 logger = get_logger(__name__)
-
-
-DATABASE_URL = os.getenv('DATABASE_URL')  # Replace with your database path
-
-engine = create_engine(DATABASE_URL)
-db_session = scoped_session(sessionmaker(autocommit=False, autoflush=False, bind=engine))
-Base = declarative_base()
-Base.query = db_session.query_property()
-
-class SymToken(Base):
-    __tablename__ = 'symtoken'
-    id = Column(Integer, Sequence('symtoken_id_seq'), primary_key=True)
-    symbol = Column(String, nullable=False, index=True)  # Single column index
-    brsymbol = Column(String, nullable=False, index=True)  # Single column index
-    name = Column(String)
-    exchange = Column(String, index=True)  # Include this column in a composite index
-    brexchange = Column(String, index=True)  
-    token = Column(String, index=True)  # Indexed for performance
-    expiry = Column(String)
-    strike = Column(Float)
-    lotsize = Column(Integer)
-    instrumenttype = Column(String)
-    tick_size = Column(Float)
-
-    # Define a composite index on symbol and exchange columns
-    __table_args__ = (Index('idx_symbol_exchange', 'symbol', 'exchange'),)
-
-def init_db():
-    logger.info("Initializing Master Contract DB")
-    Base.metadata.create_all(bind=engine)
-
-def delete_symtoken_table():
-    logger.info("Deleting Symtoken Table")
-    SymToken.query.delete()
-    db_session.commit()
-
-def copy_from_dataframe(df):
-    logger.info("Performing Bulk Insert")
-    # Convert DataFrame to a list of dictionaries
-    data_dict = df.to_dict(orient='records')
-
-    # Retrieve existing tokens to filter them out from the insert
-    existing_tokens = {result.token for result in db_session.query(SymToken.token).all()}
-
-    # Filter out data_dict entries with tokens that already exist
-    filtered_data_dict = [row for row in data_dict if row['token'] not in existing_tokens]
-
-    # Insert in bulk the filtered records
-    try:
-        if filtered_data_dict:  # Proceed only if there's anything to insert
-            db_session.bulk_insert_mappings(SymToken, filtered_data_dict)
-            db_session.commit()
-            logger.info(f"Bulk insert completed successfully with {len(filtered_data_dict)} new records.")
-        else:
-            logger.info("No new records to insert.")
-    except Exception as e:
-        logger.error(f"Error during bulk insert: {e}")
-        db_session.rollback()
 
 
 def download_csv_5paisa_data(url, output_path):
@@ -187,10 +124,8 @@ def process_5paisa_csv(path):
     #filtered_df.loc[filtered_df['Series'] == 'XX', 'Series'] = 'FUT'
 
     # Convert 'Expiry' to datetime format
-    filtered_df['Expiry'] = pd.to_datetime(filtered_df['Expiry'])
-
-    # Format 'Expiry' to 'DD-MMM-YY'
-    filtered_df['Expiry'] = filtered_df['Expiry'].dt.strftime('%d-%b-%y').str.upper()
+    filtered_df['Expiry'] = pd.to_datetime(filtered_df['Expiry']).dt.date
+    filtered_df['Expiry'] = filtered_df['Expiry'].where(filtered_df['Expiry'].notna(), None)
 
     # Function to format StrikeRate
     def format_strike(strike):
@@ -211,8 +146,8 @@ def process_5paisa_csv(path):
 
 
 
-    # Convert the Expiry column to strings and strip '-'
-    filtered_df['Expiry1'] = filtered_df['Expiry'].astype(str).str.replace('-', '')
+    # only for trading symbol construction
+    filtered_df['Expiry1'] = filtered_df['Expiry'].apply(lambda d: d.strftime('%d%b%y').upper() if d else None)
 
     # Apply the conditions
     def create_trading_symbol(row):
@@ -231,16 +166,17 @@ def process_5paisa_csv(path):
     # Create a new DataFrame in OpenAlgo format
     new_df = pd.DataFrame()
     new_df['symbol'] = filtered_df['TradingSymbol'] 
-    new_df['brsymbol'] = filtered_df['Name'].str.upper().str.rstrip()
+    new_df['tradingsymbol'] = filtered_df['ScripData']
+    new_df['br_symbol'] = filtered_df['Name'].str.upper().str.rstrip()
     new_df['name'] = filtered_df['FullName'] 
     new_df['exchange'] = filtered_df['exchange'] 
-    new_df['brexchange'] = filtered_df['exchange'] 
-    new_df['token'] = filtered_df['ScripCode'] 
+    new_df['token'] = filtered_df['ScripCode'].astype(str) 
     new_df['expiry'] = filtered_df['Expiry'] 
     new_df['strike'] = filtered_df['StrikeRate'] 
-    new_df['lotsize'] = filtered_df['LotSize'] 
-    new_df['instrumenttype'] = filtered_df['Series'] 
+    new_df['lot_size'] = filtered_df['LotSize'] 
+    new_df['instrument_type'] = filtered_df['Series'] 
     new_df['tick_size'] = filtered_df['TickSize'] 
+    new_df['opt_type'] = filtered_df['ScripType'].replace({'XX': None, 'EQ': None})
     # Common Index Symbol Formats
 
     new_df['symbol'] = new_df['symbol'].replace({
@@ -267,7 +203,7 @@ def delete_5paisa_temp_data(output_path):
         logger.error(f"An error occurred while deleting the file: {e}")
 
 
-def master_contract_download():
+def master_contract_download(db_path='instruments.db'):
     logger.info("Starting Master Contract Download Process")
     url = 'https://openapi.5paisa.com/VendorsAPI/Service1.svc/ScripMaster/segment/all'
     output_path = 'tmp/5paisa.csv'
@@ -286,30 +222,19 @@ def master_contract_download():
         # Clean up temporary files
         delete_5paisa_temp_data(output_path)
         
-        # Clear existing data and insert new data
-        logger.info("Updating database with new symbols...")
-        delete_symtoken_table()  # Clear existing table
-        copy_from_dataframe(token_df)
         
-        logger.info("Master contract download completed successfully")
-        # Notify UI through Socket.IO
-        return socketio.emit('master_contract_download', {'status': 'success', 'message': 'Successfully Downloaded Master Contract'})
+        # Convert DataFrame to list of dicts for our DB
+        records = token_df.to_dict('records')
+        
+        # Import here to avoid circular dependency
+        from ....instruments.database import InstrumentDB
+        
+        db = InstrumentDB(db_path)
+        db.raw_bulk_insert(records, truncate=True)
+        
+        logger.info(f"Successfully inserted {len(records)} instruments into database")
+        return len(records)
     
     except Exception as e:
-        error_message = str(e)
-        logger.error(f"Error during master contract download: {error_message}")
-        
-        # Check if it's a timeout error and provide more helpful message
-        if 'timeout' in error_message.lower() or 'timed out' in error_message.lower():
-            error_message = f"Download timed out. The FivePaisa server is not responding within the allowed time. Error details: {error_message}"
-        
-        # Notify UI through Socket.IO
-        return socketio.emit('master_contract_download', {
-            'status': 'error', 
-            'message': error_message
-        })
-
-
-
-def search_symbols(symbol, exchange):
-    return SymToken.query.filter(SymToken.symbol.like(f'%{symbol}%'), SymToken.exchange == exchange).all()
+        logger.error(f"Master contract download failed: {e}")
+        raise
