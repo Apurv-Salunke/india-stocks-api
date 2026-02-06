@@ -64,7 +64,7 @@ def download_csv_zerodha_data(output_path):
 
 def reformat_symbol(row):
     symbol = row['symbol']
-    instrument_type = row['instrumenttype']
+    instrument_type = row['instrument_type']
     
     if instrument_type == 'FUT':
         # For FUT, remove the spaces and append 'FUT' at the end
@@ -118,29 +118,36 @@ def process_zerodha_csv(path):
     # Combine instrument_token and exchange_token
     df['token'] = df['instrument_token'].astype(str) + '::::' + df['exchange_token'].astype(str)
 
+    df["symbol"] = df["tradingsymbol"]
+
     # Select and rename columns
-    df = df[['token', 'tradingsymbol', 'name', 'expiry', 
+    df = df[['token', 'symbol', 'tradingsymbol', 'name', 'expiry', 
              'strike', 'lot_size', 'instrument_type', 'exchange', 
              'tick_size']].rename(columns={
-        'tradingsymbol': 'symbol',
+        'tradingsymbol': 'tradingsymbol',  # Keep original tradingsymbol for DB
         'name': 'name',
         'expiry': 'expiry',
         'strike': 'strike',
-        'lot_size': 'lotsize',
-        'instrument_type': 'instrumenttype',
+        'lot_size': 'lot_size',
+        'instrument_type': 'instrument_type',
         'exchange': 'exchange',
         'tick_size': 'tick_size'
     })
 
-    df['brsymbol'] = df['symbol']
-    df['symbol'] = df.apply(reformat_symbol, axis=1)
+    df['br_symbol'] = df['tradingsymbol']  # Use tradingsymbol for brsymbol
+    df['symbol'] = df.apply(reformat_symbol, axis=1)  # Create formatted symbol
     df['brexchange'] = df['exchange']
-
+    
+    # Add missing opt_type column based on instrument type
+    df['opt_type'] = df['instrument_type'].apply(
+        lambda x: 'CE' if x == 'CE' else 'PE' if x == 'PE' else 'XX'
+    )
+    
     # Fill NaN values in the 'expiry' column with an empty string
     df['expiry'] = df['expiry'].fillna('')
     
     # Futures Symbol Update 
-    df.loc[(df['instrumenttype'] == 'FUT'), 'symbol'] = df['name'] + df['expiry'].str.replace('-', '', regex=False) + 'FUT'
+    df.loc[(df['instrument_type'] == 'FUT'), 'symbol'] = df['name'] + df['expiry'].str.replace('-', '', regex=False) + 'FUT'
     
     # Options Symbol Update 
 
@@ -149,8 +156,8 @@ def process_zerodha_csv(path):
         return str(int(float(strike)))
 
 
-    df.loc[(df['instrumenttype'] == 'CE'), 'symbol'] = df['name'] + df['expiry'].str.replace('-', '', regex=False) + df['strike'].apply(format_strike) + df['instrumenttype']
-    df.loc[(df['instrumenttype'] == 'PE'), 'symbol'] = df['name'] + df['expiry'].str.replace('-', '', regex=False) + df['strike'].apply(format_strike) + df['instrumenttype']
+    df.loc[(df['instrument_type'] == 'CE'), 'symbol'] = df['name'] + df['expiry'].str.replace('-', '', regex=False) + df['strike'].apply(format_strike) + df['instrument_type']
+    df.loc[(df['instrument_type'] == 'PE'), 'symbol'] = df['name'] + df['expiry'].str.replace('-', '', regex=False) + df['strike'].apply(format_strike) + df['instrument_type']
 
     df['symbol'] = df['symbol'].replace({
     'NIFTY 50': 'NIFTY',
