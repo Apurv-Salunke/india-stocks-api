@@ -99,7 +99,7 @@ if zerodha.authenticate():
     print("Zerodha authenticated successfully!")
 ```
 
-## Quick Start Examples
+## Quick Start
 
 ### Basic Equity Trading
 
