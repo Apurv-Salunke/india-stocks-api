@@ -68,47 +68,52 @@ def process_angel_json(path):
     df['br_symbol'] = df['symbol']
     df['tradingsymbol'] = df['symbol']
 
+    # Do not use angelone's symbol for finding underlying
+    df['symbol'] = df['name'].str.upper()
+
     # Update exchange names based on the instrument type
-    df.loc[(df['instrumenttype'] == 'AMXIDX') & (df['exchange'] == 'NSE'), 'exchange'] = 'NSE_INDEX'
-    df.loc[(df['instrumenttype'] == 'AMXIDX') & (df['exchange'] == 'BSE'), 'exchange'] = 'BSE_INDEX'
-    df.loc[(df['instrumenttype'] == 'AMXIDX') & (df['exchange'] == 'MCX'), 'exchange'] = 'MCX_INDEX'
+    # df.loc[(df['instrumenttype'] == 'AMXIDX') & (df['exchange'] == 'NSE'), 'exchange'] = 'NSE_INDEX'
+    # df.loc[(df['instrumenttype'] == 'AMXIDX') & (df['exchange'] == 'BSE'), 'exchange'] = 'BSE_INDEX'
+    # df.loc[(df['instrumenttype'] == 'AMXIDX') & (df['exchange'] == 'MCX'), 'exchange'] = 'MCX_INDEX'
+    df['exchange'] = df['exchange'].str.upper()
     
-    # Reformat 'symbol' based on 'br_symbol' - remove suffixes
-    df['symbol'] = df['symbol'].str.replace('-EQ|-BE|-MF|-SG', '', regex=True)
+
+
     
     # Process expiry dates
-    df['expiry'] = df['expiry'].apply(lambda x: convert_date(x) if pd.notnull(x) else x)
-    df['expiry'] = df['expiry'].str.upper()
+    df['expiry'] = pd.to_datetime(df['expiry'], format='%d%b%Y', errors='coerce').dt.date
+    df['expiry'] = df['expiry'].where(df['expiry'].notna(), None)
 
     # Convert 'strike' to float, 'lot_size' to int, and 'tick_size' to float
     df['strike'] = df['strike'].astype(float) / 100
-    df.loc[(df['instrumenttype'] == 'OPTCUR') & (df['exchange'] == 'CDS'), 'strike'] = df['strike'].astype(float) / 100000
-    df.loc[(df['instrumenttype'] == 'OPTIRC') & (df['exchange'] == 'CDS'), 'strike'] = df['strike'].astype(float) / 100000
+    mask_cds = df['instrumenttype'].isin(['OPTCUR', 'OPTIRC']) & df['exchange'].eq('CDS')
+    df.loc[mask_cds, 'strike'] = df.loc[mask_cds, 'strike'] / 1000
+    df['strike'] = df['strike'].clip(lower=0)
     
     df['lot_size'] = df['lot_size'].astype(int)
     df['tick_size'] = df['tick_size'].astype(float) / 100
 
-    # Futures Symbol Update in CDS and MCX Exchanges
-    df.loc[(df['instrumenttype'] == 'FUTCUR') & (df['exchange'] == 'CDS'), 'symbol'] = df['name'] + df['expiry'].str.replace('-', '', regex=False) + 'FUT'
-    df.loc[(df['instrumenttype'] == 'FUTIRC') & (df['exchange'] == 'CDS'), 'symbol'] = df['name'] + df['expiry'].str.replace('-', '', regex=False) + 'FUT' 
-    df.loc[(df['instrumenttype'] == 'FUTCOM') & (df['exchange'] == 'MCX'), 'symbol'] = df['name'] + df['expiry'].str.replace('-', '', regex=False) + 'FUT'
+    # # Futures Symbol Update in CDS and MCX Exchanges
+    # df.loc[(df['instrumenttype'] == 'FUTCUR') & (df['exchange'] == 'CDS'), 'symbol'] = df['name'] + df['expiry'].str.replace('-', '', regex=False) + 'FUT'
+    # df.loc[(df['instrumenttype'] == 'FUTIRC') & (df['exchange'] == 'CDS'), 'symbol'] = df['name'] + df['expiry'].str.replace('-', '', regex=False) + 'FUT' 
+    # df.loc[(df['instrumenttype'] == 'FUTCOM') & (df['exchange'] == 'MCX'), 'symbol'] = df['name'] + df['expiry'].str.replace('-', '', regex=False) + 'FUT'
     
-    # Options Symbol Update in CDS and MCX Exchanges
-    df.loc[(df['instrumenttype'] == 'OPTCUR') & (df['exchange'] == 'CDS'), 'symbol'] = df['name'] + df['expiry'].str.replace('-', '', regex=False) + df['strike'].astype(str).str.replace(r'\.0', '', regex=True) + df['symbol'].str[-2:]
-    df.loc[(df['instrumenttype'] == 'OPTIRC') & (df['exchange'] == 'CDS'), 'symbol'] = df['name'] + df['expiry'].str.replace('-', '', regex=False) + df['strike'].astype(str).str.replace(r'\.0', '', regex=True) + df['symbol'].str[-2:]
-    df.loc[(df['instrumenttype'] == 'OPTFUT') & (df['exchange'] == 'MCX'), 'symbol'] = df['name'] + df['expiry'].str.replace('-', '', regex=False) + df['strike'].astype(str).str.replace(r'\.0', '', regex=True) + df['symbol'].str[-2:]
+    # # Options Symbol Update in CDS and MCX Exchanges
+    # df.loc[(df['instrumenttype'] == 'OPTCUR') & (df['exchange'] == 'CDS'), 'symbol'] = df['name'] + df['expiry'].str.replace('-', '', regex=False) + df['strike'].astype(str).str.replace(r'\.0', '', regex=True) + df['symbol'].str[-2:]
+    # df.loc[(df['instrumenttype'] == 'OPTIRC') & (df['exchange'] == 'CDS'), 'symbol'] = df['name'] + df['expiry'].str.replace('-', '', regex=False) + df['strike'].astype(str).str.replace(r'\.0', '', regex=True) + df['symbol'].str[-2:]
+    # df.loc[(df['instrumenttype'] == 'OPTFUT') & (df['exchange'] == 'MCX'), 'symbol'] = df['name'] + df['expiry'].str.replace('-', '', regex=False) + df['strike'].astype(str).str.replace(r'\.0', '', regex=True) + df['symbol'].str[-2:]
 
-    # BFO Index Futures Symbol Update
-    df.loc[(df['instrumenttype'] == 'FUTIDX') & (df['exchange'] == 'BFO'), 'symbol'] = df['name'] + df['expiry'].str.replace('-', '', regex=False) + 'FUT'
-    df.loc[(df['instrumenttype'] == 'FUTSTK') & (df['exchange'] == 'BFO'), 'symbol'] = df['name'] + df['expiry'].str.replace('-', '', regex=False) + 'FUT'
+    # # BFO Index Futures Symbol Update
+    # df.loc[(df['instrumenttype'] == 'FUTIDX') & (df['exchange'] == 'BFO'), 'symbol'] = df['name'] + df['expiry'].str.replace('-', '', regex=False) + 'FUT'
+    # df.loc[(df['instrumenttype'] == 'FUTSTK') & (df['exchange'] == 'BFO'), 'symbol'] = df['name'] + df['expiry'].str.replace('-', '', regex=False) + 'FUT'
 
-    # BFO Index Options Symbol Update
-    df.loc[(df['instrumenttype'] == 'OPTIDX') & (df['exchange'] == 'BFO') & (df['symbol'].str.endswith('CE', na=False)), 'symbol'] = df['name'] + df['expiry'].str.replace('-', '', regex=False) + df['strike'].astype(str).str.replace(r'\.0', '', regex=True) + 'CE'
-    df.loc[(df['instrumenttype'] == 'OPTIDX') & (df['exchange'] == 'BFO') & (df['symbol'].str.endswith('PE', na=False)), 'symbol'] = df['name'] + df['expiry'].str.replace('-', '', regex=False) + df['strike'].astype(str).str.replace(r'\.0', '', regex=True) + 'PE'
+    # # BFO Index Options Symbol Update
+    # df.loc[(df['instrumenttype'] == 'OPTIDX') & (df['exchange'] == 'BFO') & (df['symbol'].str.endswith('CE', na=False)), 'symbol'] = df['name'] + df['expiry'].str.replace('-', '', regex=False) + df['strike'].astype(str).str.replace(r'\.0', '', regex=True) + 'CE'
+    # df.loc[(df['instrumenttype'] == 'OPTIDX') & (df['exchange'] == 'BFO') & (df['symbol'].str.endswith('PE', na=False)), 'symbol'] = df['name'] + df['expiry'].str.replace('-', '', regex=False) + df['strike'].astype(str).str.replace(r'\.0', '', regex=True) + 'PE'
 
-    # BFO Stock Options Symbol Update
-    df.loc[(df['instrumenttype'] == 'OPTSTK') & (df['exchange'] == 'BFO') & (df['symbol'].str.endswith('CE', na=False)), 'symbol'] = df['name'] + df['expiry'].str.replace('-', '', regex=False) + df['strike'].astype(str).str.replace(r'\.0', '', regex=True) + 'CE'
-    df.loc[(df['instrumenttype'] == 'OPTSTK') & (df['exchange'] == 'BFO') & (df['symbol'].str.endswith('PE', na=False)), 'symbol'] = df['name'] + df['expiry'].str.replace('-', '', regex=False) + df['strike'].astype(str).str.replace(r'\.0', '', regex=True) + 'PE'
+    # # BFO Stock Options Symbol Update
+    # df.loc[(df['instrumenttype'] == 'OPTSTK') & (df['exchange'] == 'BFO') & (df['symbol'].str.endswith('CE', na=False)), 'symbol'] = df['name'] + df['expiry'].str.replace('-', '', regex=False) + df['strike'].astype(str).str.replace(r'\.0', '', regex=True) + 'CE'
+    # df.loc[(df['instrumenttype'] == 'OPTSTK') & (df['exchange'] == 'BFO') & (df['symbol'].str.endswith('PE', na=False)), 'symbol'] = df['name'] + df['expiry'].str.replace('-', '', regex=False) + df['strike'].astype(str).str.replace(r'\.0', '', regex=True) + 'PE'
 
     # Common Index Symbol Formats
     df['symbol'] = df['symbol'].replace({
@@ -121,37 +126,39 @@ def process_angel_json(path):
         'SNSX50': 'SENSEX50'
     })
 
-    # Convert instrumenttype from OPTIDX/OPTSTK to CE/PE
-    df.loc[(df['instrumenttype'] == 'OPTIDX') & (df['symbol'].str.endswith('CE', na=False)), 'instrumenttype'] = 'CE'
-    df.loc[(df['instrumenttype'] == 'OPTIDX') & (df['symbol'].str.endswith('PE', na=False)), 'instrumenttype'] = 'PE'
-    df.loc[(df['instrumenttype'] == 'OPTSTK') & (df['symbol'].str.endswith('CE', na=False)), 'instrumenttype'] = 'CE'
-    df.loc[(df['instrumenttype'] == 'OPTSTK') & (df['symbol'].str.endswith('PE', na=False)), 'instrumenttype'] = 'PE'
+    # # Convert instrumenttype from OPTIDX/OPTSTK to CE/PE
+    # df.loc[(df['instrumenttype'] == 'OPTIDX') & (df['symbol'].str.endswith('CE', na=False)), 'instrumenttype'] = 'CE'
+    # df.loc[(df['instrumenttype'] == 'OPTIDX') & (df['symbol'].str.endswith('PE', na=False)), 'instrumenttype'] = 'PE'
+    # df.loc[(df['instrumenttype'] == 'OPTSTK') & (df['symbol'].str.endswith('CE', na=False)), 'instrumenttype'] = 'CE'
+    # df.loc[(df['instrumenttype'] == 'OPTSTK') & (df['symbol'].str.endswith('PE', na=False)), 'instrumenttype'] = 'PE'
 
-    # Convert MCX OPTFUT to CE/PE
-    df.loc[(df['instrumenttype'] == 'OPTFUT') & (df['symbol'].str.endswith('CE', na=False)), 'instrumenttype'] = 'CE'
-    df.loc[(df['instrumenttype'] == 'OPTFUT') & (df['symbol'].str.endswith('PE', na=False)), 'instrumenttype'] = 'PE'
+    # # Convert MCX OPTFUT to CE/PE
+    # df.loc[(df['instrumenttype'] == 'OPTFUT') & (df['symbol'].str.endswith('CE', na=False)), 'instrumenttype'] = 'CE'
+    # df.loc[(df['instrumenttype'] == 'OPTFUT') & (df['symbol'].str.endswith('PE', na=False)), 'instrumenttype'] = 'PE'
 
-    # Convert CDS OPTCUR/OPTIRC to CE/PE
-    df.loc[(df['instrumenttype'] == 'OPTCUR') & (df['symbol'].str.endswith('CE', na=False)), 'instrumenttype'] = 'CE'
-    df.loc[(df['instrumenttype'] == 'OPTCUR') & (df['symbol'].str.endswith('PE', na=False)), 'instrumenttype'] = 'PE'
-    df.loc[(df['instrumenttype'] == 'OPTIRC') & (df['symbol'].str.endswith('CE', na=False)), 'instrumenttype'] = 'CE'
-    df.loc[(df['instrumenttype'] == 'OPTIRC') & (df['symbol'].str.endswith('PE', na=False)), 'instrumenttype'] = 'PE'
+    # # Convert CDS OPTCUR/OPTIRC to CE/PE
+    # df.loc[(df['instrumenttype'] == 'OPTCUR') & (df['symbol'].str.endswith('CE', na=False)), 'instrumenttype'] = 'CE'
+    # df.loc[(df['instrumenttype'] == 'OPTCUR') & (df['symbol'].str.endswith('PE', na=False)), 'instrumenttype'] = 'PE'
+    # df.loc[(df['instrumenttype'] == 'OPTIRC') & (df['symbol'].str.endswith('CE', na=False)), 'instrumenttype'] = 'CE'
+    # df.loc[(df['instrumenttype'] == 'OPTIRC') & (df['symbol'].str.endswith('PE', na=False)), 'instrumenttype'] = 'PE'
 
-    # Convert all futures instrument types to 'FUT' for consistency
-    df.loc[df['instrumenttype'] == 'FUTIDX', 'instrumenttype'] = 'FUT'
-    df.loc[df['instrumenttype'] == 'FUTSTK', 'instrumenttype'] = 'FUT'
-    df.loc[df['instrumenttype'] == 'FUTCOM', 'instrumenttype'] = 'FUT'
-    df.loc[df['instrumenttype'] == 'FUTCUR', 'instrumenttype'] = 'FUT'
-    df.loc[df['instrumenttype'] == 'FUTIRC', 'instrumenttype'] = 'FUT'
-    df.loc[df['instrumenttype'] == 'FUTIRT', 'instrumenttype'] = 'FUT'
+    # # Convert all futures instrument types to 'FUT' for consistency
+    # df.loc[df['instrumenttype'] == 'FUTIDX', 'instrumenttype'] = 'FUT'
+    # df.loc[df['instrumenttype'] == 'FUTSTK', 'instrumenttype'] = 'FUT'
+    # df.loc[df['instrumenttype'] == 'FUTCOM', 'instrumenttype'] = 'FUT'
+    # df.loc[df['instrumenttype'] == 'FUTCUR', 'instrumenttype'] = 'FUT'
+    # df.loc[df['instrumenttype'] == 'FUTIRC', 'instrumenttype'] = 'FUT'
+    # df.loc[df['instrumenttype'] == 'FUTIRT', 'instrumenttype'] = 'FUT'
 
-    # Map to our DB schema: instrument_type
-    df['instrument_type'] = df['instrumenttype']
+    df['instrument_type'] = 'EQ'
+    df.loc[df['instrumenttype'].str.startswith('OPT', na=False), 'instrument_type'] = 'OPT'
+    df.loc[df['instrumenttype'].str.startswith('FUT', na=False), 'instrument_type'] = 'FUT'
+    df.loc[df['instrumenttype'].str.contains('IDX|INDEX', na=False), 'instrument_type'] = 'IDX'
     
-    # Determine opt_type from instrument_type
+    # Determine opt_type from instrument_type and tradingsymbol
     df['opt_type'] = None
-    df.loc[df['instrument_type'] == 'CE', 'opt_type'] = 'CE'
-    df.loc[df['instrument_type'] == 'PE', 'opt_type'] = 'PE'
+    mask = df['instrument_type'] == 'OPT'
+    df.loc[mask, 'opt_type'] = (df.loc[mask, 'tradingsymbol'].str.extract(r'(CE|PE)$', expand=False))
     
     # Final cleanup: select only columns we need
     final_df = df[['token', 'symbol', 'exchange', 'tradingsymbol', 'br_symbol', 
