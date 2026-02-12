@@ -69,7 +69,7 @@ def process_angel_json(path):
     df['tradingsymbol'] = df['symbol']
 
     # Do not use angelone's symbol for finding underlying
-    df['symbol'] = df['name'].str.upper()
+    df['symbol'] = df['name'].str.upper().fillna('')
 
     # Update exchange names based on the instrument type
     # df.loc[(df['instrumenttype'] == 'AMXIDX') & (df['exchange'] == 'NSE'), 'exchange'] = 'NSE_INDEX'
@@ -150,15 +150,31 @@ def process_angel_json(path):
     # df.loc[df['instrumenttype'] == 'FUTIRC', 'instrumenttype'] = 'FUT'
     # df.loc[df['instrumenttype'] == 'FUTIRT', 'instrumenttype'] = 'FUT'
 
-    df['instrument_type'] = 'EQ'
-    df.loc[df['instrumenttype'].str.startswith('OPT', na=False), 'instrument_type'] = 'OPT'
-    df.loc[df['instrumenttype'].str.startswith('FUT', na=False), 'instrument_type'] = 'FUT'
-    df.loc[df['instrumenttype'].str.contains('IDX|INDEX', na=False), 'instrument_type'] = 'IDX'
-    
+    opt_types = {
+        'OPTSTK', 'OPTIDX', 'OPTCUR', 'OPTIRC',
+        'OPTFUT', 'OPTBLN'
+    }
+
+    fut_types = {
+        'FUTSTK', 'FUTIDX', 'FUTCUR', 'FUTIRC',
+        'FUTIRT', 'FUTCOM', 'FUTENR', 'FUTBLN', 'FUTBAS'
+    }
+
+    idx_types = {'AMXIDX', 'INDEX'}
+
+    df['instrument_type'] = None
+    df.loc[df['instrumenttype'].isin(opt_types), 'instrument_type'] = 'OPT'
+    df.loc[df['instrumenttype'].isin(fut_types), 'instrument_type'] = 'FUT'
+    df.loc[df['instrumenttype'].isin(idx_types), 'instrument_type'] = 'IDX'
+    df['instrument_type'] = df['instrument_type'].fillna('EQ')
+
+    df.loc[df['instrument_type'] != 'OPT', 'strike'] = None
+
     # Determine opt_type from instrument_type and tradingsymbol
     df['opt_type'] = None
     mask = df['instrument_type'] == 'OPT'
-    df.loc[mask, 'opt_type'] = (df.loc[mask, 'tradingsymbol'].str.extract(r'(CE|PE)$', expand=False))
+    extracted = df.loc[mask, 'tradingsymbol'].str.extract(r'(CE|PE)$', expand=False)
+    df.loc[mask, 'opt_type'] = extracted.where(extracted.notna(), None)
     
     # Final cleanup: select only columns we need
     final_df = df[['token', 'symbol', 'exchange', 'tradingsymbol', 'br_symbol', 

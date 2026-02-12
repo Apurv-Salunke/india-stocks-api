@@ -179,5 +179,6 @@ VALID_OPT = {'CE','PE',None}
 
 assert df['exchange'].isin(VALID_EXCHANGES).all()
 assert df['instrument_type'].isin(VALID_TYPES).all()
-assert df['opt_type'].isin(VALID_OPT).all()
+assert df['opt_type'].dropna().isin({'CE', 'PE'}).all()
+assert df.loc[df['instrument_type'] != 'OPT', 'opt_type'].isna().all()
 ```
