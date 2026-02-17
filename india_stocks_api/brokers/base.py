@@ -3,10 +3,14 @@ from typing import Any, Optional, Dict, Type
 from functools import singledispatchmethod
 import os
 from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 from ..instruments.models import Equity, Future, Option, Index
 from ..constants import TransactionType, OrderType, ProductType, OrderValidity, CandleInterval
+from ..exceptions import AuthenticationError, SessionExpiredError
 from ..internal import context
+
+_IST = ZoneInfo("Asia/Kolkata")
 
 
 class BrokerMeta(ABCMeta):
@@ -39,6 +43,7 @@ class BaseBroker(ABC, metaclass=BrokerMeta):
         """Auto-register subclasses when they're defined."""
         super().__init_subclass__(**kwargs)
         if broker_name:
+            cls._broker_name = broker_name
             BaseBroker._registry[broker_name] = cls
     
     @classmethod
@@ -94,6 +99,29 @@ class BaseBroker(ABC, metaclass=BrokerMeta):
             db_path: Path to the instruments database
         """
         ...
+
+    def _require_auth(self) -> str:
+        """
+        Validate that a live, non-expired session exists.
+
+        Returns the JWT token if valid.
+        Raises AuthenticationError if not authenticated.
+        Raises SessionExpiredError if session is past midnight IST.
+        """
+        token = context.get_auth_token()
+        if not token:
+            raise AuthenticationError("Not authenticated. Call authenticate() first.")
+
+        session = context.load_session(self._broker_name)
+        expires_at = session.get("expires_at")
+        if expires_at:
+            if datetime.fromisoformat(expires_at) <= datetime.now(_IST):
+                context.set_auth_token(None)
+                context.set_feed_token(None)
+                raise SessionExpiredError(
+                    "Session expired (past midnight IST). Call authenticate() to start a new session."
+                )
+        return token
 
     @abstractmethod
     def authenticate(self) -> bool:
@@ -210,7 +238,7 @@ class BaseBroker(ABC, metaclass=BrokerMeta):
         ...
 
     @abstractmethod
-    def get_gtt_list(self, status: list = ["FOR_SETTLEMENT", "CANCELLED", "TRIGGERED"]) -> list:
+    def get_gtt_list(self, status: list | None = None) -> list:
         """Get list of GTT rules."""
         ...
 

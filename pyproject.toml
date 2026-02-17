@@ -23,8 +23,17 @@ websocket-client = "^1.8.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0.0"
+python-dotenv = "^1.2.1"
+pytest-mock = "^3.14.0"
+respx = "^0.22.0"
 flake8 = "^7.0.0"
 sphinx = "^7.0.0"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "integration: requires live broker credentials (deselect with '-m not integration')",
+]
 
 [build-system]
 requires = ["poetry-core"]

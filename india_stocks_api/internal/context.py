@@ -5,138 +5,136 @@ the ported OpenAlgo broker code expects.
 """
 import httpx
 import logging
-from pathlib import Path
 import json
+from pathlib import Path
 from typing import Optional, Dict, Any
+
+_logger = logging.getLogger(__name__)
 
 # --- Shared State (Global for simplicity in Shim) ---
 _CONFIG = {
     "access_token": None,
     "feed_token": None,
-    # In a real implementation, this would be a proper mapped object or DB
-    "symbol_map": {} 
+    "symbol_map": {}
 }
 
 _HTTP_CLIENT: Optional[httpx.Client] = None
 
-# --- Credential Persistence (creds.json) ---
+# --- Session Persistence (_cache/sessions.json) ---
+#
+# Stores ONLY data needed for API calls: access_token, feed_token,
+# api_key, client_code, authenticated_at, expires_at.
+# Sensitive secrets (password, totp_key) are NEVER written to disk.
 
-_CREDS_CACHE: Dict[str, Dict[str, Any]] = {}
-_CREDS_LOADED: bool = False
-_CREDS_FILE_NAME = Path(__file__).parent.parent.parent / "_cache" / "creds.json"
+_SESSION_CACHE: Dict[str, Dict[str, Any]] = {}
+_SESSION_LOADED: bool = False
+_SESSION_FILE = Path(__file__).parent.parent.parent / "_cache" / "sessions.json"
 
-def _get_creds_path() -> Path:
-    """Return path to creds.json (created lazily if needed)."""
-    path = Path(_CREDS_FILE_NAME)
+
+def _get_session_path() -> Path:
+    """Return path to sessions.json, creating parent dir lazily."""
+    path = _SESSION_FILE
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
     except OSError as e:
-        logging.getLogger(__name__).warning(
-            f"Failed to create creds cache dir {path.parent}: {e}"
-        )
+        _logger.warning(f"Failed to create session cache dir {path.parent}: {e}")
     return path
 
 
-def _load_all_creds() -> Dict[str, Dict[str, Any]]:
-    """Load all credentials from creds.json into memory cache (once)."""
-    global _CREDS_LOADED, _CREDS_CACHE
-    if _CREDS_LOADED:
-        return _CREDS_CACHE
+def _load_all_sessions() -> Dict[str, Dict[str, Any]]:
+    """Load all sessions from disk into memory (once per process)."""
+    global _SESSION_LOADED, _SESSION_CACHE
+    if _SESSION_LOADED:
+        return _SESSION_CACHE
 
-    path = _get_creds_path()
+    path = _get_session_path()
     if path.exists():
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
             if isinstance(data, dict):
-                # Ensure nested structure is dict-of-dicts
-                _CREDS_CACHE = {
-                    str(broker): (creds if isinstance(creds, dict) else {})
-                    for broker, creds in data.items()
+                _SESSION_CACHE = {
+                    str(broker): (sess if isinstance(sess, dict) else {})
+                    for broker, sess in data.items()
                 }
             else:
-                _CREDS_CACHE = {}
+                _SESSION_CACHE = {}
         except Exception:
-            # Corrupt or unreadable file – fail soft and start fresh in memory
-            _CREDS_CACHE = {}
+            _SESSION_CACHE = {}
     else:
-        _CREDS_CACHE = {}
+        _SESSION_CACHE = {}
 
-    _CREDS_LOADED = True
-    return _CREDS_CACHE
+    _SESSION_LOADED = True
+    return _SESSION_CACHE
 
 
-def _flush_creds() -> None:
-    """Persist in-memory credentials cache to creds.json."""
-    path = _get_creds_path()
+def _flush_sessions() -> None:
+    """Persist in-memory session cache to sessions.json (chmod 600)."""
+    path = _get_session_path()
     try:
-        path.write_text(json.dumps(_CREDS_CACHE, indent=2), encoding="utf-8")
+        path.write_text(json.dumps(_SESSION_CACHE, indent=2), encoding="utf-8")
         try:
             path.chmod(0o600)
         except OSError as e:
-            logging.getLogger(__name__).warning(
-                f"Failed to set perms on {path}: {e}"
-            )
+            _logger.warning(f"Failed to set perms on {path}: {e}")
     except Exception as e:
-        # Persistence failure should not crash trading flows
-        # Callers treat this as best-effort storage.
-        logging.getLogger(__name__).warning(f"Failed to save credentials to {path}: {e}")
+        _logger.warning(f"Failed to save sessions to {path}: {e}")
 
 
-def set_credentials(broker: str, creds: Dict[str, Any]) -> None:
+def save_session(broker: str, session: Dict[str, Any]) -> None:
     """
-    Persist credentials for a broker into creds.json.
+    Persist a broker session to _cache/sessions.json.
 
-    This is only called AFTER successful authentication.
+    Called AFTER successful authentication. The session dict should
+    contain only: access_token, feed_token, api_key, client_code,
+    authenticated_at, expires_at. Never store passwords or TOTP keys.
     """
-    global _CREDS_CACHE
-    all_creds = _load_all_creds()
-    # Store a shallow copy to avoid accidental external mutation
-    all_creds[broker] = dict(creds or {})
-    _CREDS_CACHE = all_creds
-    _flush_creds()
+    global _SESSION_CACHE
+    all_sessions = _load_all_sessions()
+    all_sessions[broker] = dict(session)
+    _SESSION_CACHE = all_sessions
+    _flush_sessions()
 
 
-def get_credentials(broker: str) -> Dict[str, Any]:
+def load_session(broker: str) -> Dict[str, Any]:
     """
-    Load credentials for a broker from memory / creds.json.
+    Load a broker session from memory / sessions.json.
 
-    Returns an empty dict if nothing is stored.
+    Returns an empty dict if no session exists.
     """
-    all_creds = _load_all_creds()
-    creds = all_creds.get(broker) or {}
-    # Return a copy so callers cannot mutate internal state
-    return dict(creds)
+    all_sessions = _load_all_sessions()
+    session = all_sessions.get(broker) or {}
+    return dict(session)
 
 
-def remove_credentials(broker: str) -> None:
-    """Remove stored credentials for a broker from creds.json."""
-    global _CREDS_CACHE
-    all_creds = _load_all_creds()
-    if broker in all_creds:
-        del all_creds[broker]
-        _CREDS_CACHE = all_creds
-        _flush_creds()
+def clear_session(broker: str) -> None:
+    """Remove a broker's session from sessions.json."""
+    global _SESSION_CACHE
+    all_sessions = _load_all_sessions()
+    if broker in all_sessions:
+        del all_sessions[broker]
+        _SESSION_CACHE = all_sessions
+        _flush_sessions()
 
 
 def get_api_key(broker: str) -> Optional[str]:
-    """Convenience accessor for `api_key` for a given broker."""
-    creds = get_credentials(broker)
-    return creds.get("api_key")
+    """Get api_key for a broker from the session cache."""
+    session = load_session(broker)
+    return session.get("api_key")
 
 
 # --- Configuration Setters (Called by Broker Adapter) ---
+
 def set_auth_token(token: str):
     _CONFIG["access_token"] = token
 
 def set_feed_token(token: str):
     _CONFIG["feed_token"] = token
 
+
 # --- Shimmed Functions (Replacements for OpenAlgo imports) ---
 
 def get_auth_token(user_id: Optional[str] = None) -> Optional[str]:
     """Replacement for database.auth_db.get_auth_token"""
-    # The ported code expects a user_id, but in this standalone package,
-    # we just return the active token set by the client.
     return _CONFIG["access_token"]
 
 def get_feed_token(user_id: Optional[str] = None) -> Optional[str]:
@@ -147,7 +145,6 @@ def get_httpx_client() -> httpx.Client:
     """Replacement for utils.httpx_client.get_httpx_client"""
     global _HTTP_CLIENT
     if _HTTP_CLIENT is None:
-        # Create a standard client with reasonable defaults
         _HTTP_CLIENT = httpx.Client(timeout=10.0)
     return _HTTP_CLIENT
 
@@ -155,54 +152,29 @@ def get_logger(name: str) -> logging.Logger:
     """Replacement for utils.logging.get_logger"""
     return logging.getLogger(f"india_stocks_api.internal.{name}")
 
+
 # --- Symbol Mapping Shims (Replacements for database.token_db) ---
 
-# Global DB instance for the Shim
 from india_stocks_api.instruments.database import InstrumentDB
-import os
 
 _INSTRUMENT_DB = None
 
 def _get_db():
     global _INSTRUMENT_DB
     if _INSTRUMENT_DB is None:
-        # Assuming DB is in src/instruments.db relative to this file
-        # This path logic might need adjustment based on installation
-        # For now, assumes running from src or tests where CWD is root or src
-        # Or better: use absolute path relative to package
-        from pathlib import Path
-        chk_path = Path("instruments.db") # CWD (e.g., src/)
+        chk_path = Path("instruments.db")
         if not chk_path.exists():
-             # Try side-by-side with package?
-             chk_path = Path(__file__).parent.parent.parent / "instruments.db"
-        
+            chk_path = Path(__file__).parent.parent.parent / "instruments.db"
         _INSTRUMENT_DB = InstrumentDB(str(chk_path))
     return _INSTRUMENT_DB
 
 def get_br_symbol(symbol: str, exchange: str) -> str:
-    """
-    Replacement for database.token_db.get_br_symbol.
-    """
+    """Replacement for database.token_db.get_br_symbol."""
     db = _get_db()
-    # lookup_token requires more args for options, but for equity 'symbol' + 'exchange' is key
-    # However, 'symbol' argument here might comprise multiple parts for options?
-    # OpenAlgo uses 'symbol' as the unique key.
-    # In my DB, I have 'symbol' (underlying) and 'tradingsymbol' (unique).
-    # If the input 'symbol' is "NIFTY24DECFUT", that maps to 'tradingsymbol' in my DB?
-    # Actually, OpenAlgo's 'symbol' column IS the standardized string.
-    
-    # Simple query: SELECT tradingsymbol FROM instruments WHERE symbol (OA col) = symbol
-    # But wait, my DB 'symbol' column is 'NIFTY'. My 'tradingsymbol' is 'NIFTY...'.
-    # I need to match the input `symbol` to SOMETHING in DB.
-    # If standard OA symbol is used as input (e.g. "RELIANCE"), match `symbol`
-    
-    # For now, let's treat the input `symbol` as the 'symbol' column for Equities
-    # casting wide net.
-    
     record = db.lookup_token(symbol, exchange)
     if record:
         return record.tradingsymbol
-    return symbol # Fallback
+    return symbol
 
 def get_token(symbol: str, exchange: str) -> Optional[str]:
     """Replacement for database.token_db.get_token"""
@@ -222,7 +194,7 @@ def get_tradingsymbol(symbol: str, exchange: str) -> Optional[str]:
 
 def get_symbol(token: str, exchange: str) -> Optional[str]:
     """Replacement for database.token_db.get_symbol"""
-    return token # TODO implementation
+    return token  # TODO implementation
 
 def get_oa_symbol(brsymbol: str, exchange: str) -> Optional[str]:
     """Replacement for database.token_db.get_oa_symbol"""
