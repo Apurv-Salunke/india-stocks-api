@@ -364,9 +364,7 @@ class AngelOne(BaseBroker, broker_name="angel"):
 
         ws_token_list = [{"exchangeType": exch, "tokens": tokens} for exch, tokens in exchange_tokens.items()]
 
-        self._ws_client.subscribe(
-            correlation_id=f"sub_{uuid4().hex[:12]}", mode=mode, token_list=ws_token_list
-        )
+        self._ws_client.subscribe(correlation_id=f"sub_{uuid4().hex[:12]}", mode=mode, token_list=ws_token_list)
 
     def unsubscribe(
         self, instruments: List[Equity | Future | Option | Index], mode: StreamMode = StreamMode.QUOTE
@@ -378,9 +376,7 @@ class AngelOne(BaseBroker, broker_name="angel"):
             resolved = self._resolve_instrument(inst)
             if not resolved.get("token") or resolved.get("token") == "DUMMY":
                 exchange = resolved.get("exchange")
-                raise ValueError(
-                    f"Unable to unsubscribe: instrument token not found for {inst.symbol} on {exchange}."
-                )
+                raise ValueError(f"Unable to unsubscribe: instrument token not found for {inst.symbol} on {exchange}.")
             token_list.append({"exchange": resolved["exchange"], "token": resolved["token"]})
 
         self._pending_subscriptions = [
