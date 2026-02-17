@@ -74,7 +74,12 @@ class AngelOne(BaseBroker, broker_name="angel"):
                 "Incomplete credentials. All of api_key, client_code, password, totp_key are required."
             )
 
-        totp_code = pyotp.TOTP(self.totp_key).now()
+        try:
+            totp_code = pyotp.TOTP(self.totp_key).now()
+        except Exception as exc:
+            raise AuthenticationError(
+                f"Invalid TOTP secret: {exc}"
+            ) from exc
 
         jwt_token, feed_token, error = authenticate_broker(
             api_key=self.api_key,
@@ -298,8 +303,10 @@ class AngelOne(BaseBroker, broker_name="angel"):
 
         return cancel_gtt_rule(payload, jwt_token)
 
-    def get_gtt_list(self, status: list = ["FOR_SETTLEMENT", "CANCELLED", "TRIGGERED"]) -> list:
+    def get_gtt_list(self, status: list | None = None) -> list:
         jwt_token = self._require_auth()
+        if status is None:
+            status = ["FOR_SETTLEMENT", "CANCELLED", "TRIGGERED"]
         payload = {"status": status, "page": 1, "count": 50}
         resp = get_gtt_list_api(payload, jwt_token)
         return resp.get('data') or []

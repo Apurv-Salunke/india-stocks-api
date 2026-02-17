@@ -238,7 +238,7 @@ class BaseBroker(ABC, metaclass=BrokerMeta):
         ...
 
     @abstractmethod
-    def get_gtt_list(self, status: list = ["FOR_SETTLEMENT", "CANCELLED", "TRIGGERED"]) -> list:
+    def get_gtt_list(self, status: list | None = None) -> list:
         """Get list of GTT rules."""
         ...
 

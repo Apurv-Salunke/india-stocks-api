@@ -110,6 +110,11 @@ class TestAuthenticateFailure:
         with pytest.raises(AuthenticationError, match="Incomplete credentials"):
             broker.authenticate()
 
+    def test_malformed_totp_secret_raises_auth_error(self, tmp_session_file):
+        broker = AngelOne(api_key="AK", client_code="C1", password="1234", totp_key="NOT!!VALID")
+        with pytest.raises(AuthenticationError, match="Invalid TOTP secret"):
+            broker.authenticate()
+
     def test_missing_creds_no_network_call(self, tmp_session_file, mocker):
         """When creds are incomplete, authenticate_broker must never be called."""
         spy = mocker.patch("india_stocks_api.brokers.angel.authenticate_broker")
