@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from typing import List, Optional, Any, TypeVar, Generic, TypeAlias
-from ..constants import TransactionType, OrderType, ProductType
+from india_stocks_api.constants import TransactionType, OrderType, ProductType, ExecutionStatus
 from pydantic import BaseModel, Field, ConfigDict
 
 
@@ -89,10 +89,33 @@ class ExecutionResponse(BaseResponse, Generic[T]):
         description="Broker execution reference (order id, gtt id, etc.)"
     )
 
+    broker_reference_id: Optional[str] = Field(
+        default=None,
+        description="Secondary broker reference (unique id if available)"
+    )
+    
+    execution_status: Optional[ExecutionStatus] = Field(
+        default=None,
+        description="Execution result: ACCEPTED, REJECTED, FAILED"
+    )
 
 # -------------------------
 # Core primitives
 # -------------------------
+class AuthResponse(BaseResponse):
+    """
+    Response returned after broker authentication.
+    """
+
+    session_active: bool = Field(
+        default=False,
+        description="Indicates whether broker session is active"
+    )
+
+    environment: Optional[str] = Field(
+        default=None,
+        description="Broker environment (e.g., live, paper)"
+    )
 
 class DepthLevel(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -122,17 +145,34 @@ class Order(BaseModel):
     status: str
     timestamp: Optional[datetime] = None
 
+class SquareOffResult(BaseModel):
+    symbol: str
+    exchange: str
+    quantity: int
+    side: TransactionType
+    execution_id: Optional[str] = None
+    status: str  # CLOSED | FAILED | REJECTED
+    error: Optional[str] = None
+    
 
 class Position(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     symbol: str
     exchange: str
+
     quantity: int
     average_price: float
-    pnl: float
+
+    last_price: Optional[float] = None
+
+    pnl: Optional[float] = None
+    unrealized_pnl: Optional[float] = None
+    realized_pnl: Optional[float] = None
+
     product_type: ProductType
 
+    multiplier: int = 1
 
 class Holding(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -143,6 +183,7 @@ class Holding(BaseModel):
     average_price: float
     current_price: float
     pnl: float
+    pnl_percent: float
     product_type: ProductType
 
 
@@ -156,7 +197,7 @@ class Trade(BaseModel):
     side: TransactionType
     quantity: int
     price: float
-
+    product_type: ProductType
     timestamp: Optional[datetime] = None
 
 
@@ -173,7 +214,10 @@ class Quote(BaseModel):
     low: Optional[float] = None
     close: Optional[float] = None
     volume: Optional[int] = None
+    oi: Optional[int] = None
     timestamp: Optional[datetime] = None
+    bid: Optional[float] = None
+    ask: Optional[float] = None
 
 
 class MarketDepth(BaseModel):
@@ -184,17 +228,24 @@ class MarketDepth(BaseModel):
 
     bids: List[DepthLevel]
     asks: List[DepthLevel]
+    last_price: float
+    last_quantity: Optional[int] = None
 
-    timestamp: Optional[datetime] = None
+    total_bid_qty: Optional[int] = None
+    total_ask_qty: Optional[int] = None
 
+    volume: Optional[int] = None
+    oi: Optional[int] = None
 
 class Funds(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    available: float
-    used: float
-    total: float
+    available: str
+    used: str
+    collateral: str
 
+    realized_pnl: str
+    unrealized_pnl: str
 
 class Profile(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -206,6 +257,7 @@ class Profile(BaseModel):
     email: Optional[str] = None
     phone: Optional[str] = None
 
+    last_login: Optional[datetime] = None
 
 class Candle(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -218,7 +270,64 @@ class Candle(BaseModel):
     close: float
 
     volume: int
+    oi: Optional[int] = None
 
+class GTTRule(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    rule_id: str
+    symbol: str
+    exchange: str
+
+    transaction_type: TransactionType
+    product_type: ProductType
+
+    quantity: int
+    price: float
+    trigger_price: float
+
+    status: str
+
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    expires_at: Optional[datetime] = None
+
+class StreamEvent(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    symbol: str
+    exchange: str
+    timestamp: datetime
+
+class LTPTick(StreamEvent):
+    last_price: float
+
+class QuoteTick(StreamEvent):
+    last_price: float
+
+    open: Optional[float] = None
+    high: Optional[float] = None
+    low: Optional[float] = None
+    close: Optional[float] = None
+
+    volume: Optional[int] = None
+    oi: Optional[int] = None
+
+    bid: Optional[float] = None
+    ask: Optional[float] = None
+
+class DepthTick(StreamEvent):
+    bids: List[DepthLevel]
+    asks: List[DepthLevel]
+
+    last_price: float
+    last_quantity: Optional[int] = None
+
+    total_bid_qty: Optional[int] = None
+    total_ask_qty: Optional[int] = None
+
+    volume: Optional[int] = None
+    oi: Optional[int] = None
 
 # -------------------------
 # Typed response aliases
@@ -245,6 +354,9 @@ ProfileResponse: TypeAlias = DataResponse[Profile]
 CandleResponse: TypeAlias = DataResponse[Candle]
 CandlesResponse: TypeAlias = ListResponse[Candle]
 
-OrderExecutionResponse: TypeAlias = ExecutionResponse[Order]
+GTTRuleResponse: TypeAlias = DataResponse[GTTRule]
+GTTRulesResponse: TypeAlias = ListResponse[GTTRule]
+
+OrderExecutionResponse: TypeAlias = ExecutionResponse[Any]
 GTTExecutionResponse: TypeAlias = ExecutionResponse[Any]
 BatchExecutionResponse: TypeAlias = ExecutionResponse[List[Any]]

@@ -52,3 +52,31 @@ class StreamMode(int, Enum):
     QUOTE = 2       # LTP + OHLC + Volume
     SNAP_QUOTE = 3  # Quote + Best 5 Bid/Ask
     DEPTH = 4       # Full 20-level Market Depth (NSE CM only)
+
+class ExecutionStatus:
+    """Execution status for order placement"""
+    ACCEPTED = "ACCEPTED"
+    REJECTED = "REJECTED"
+    FAILED = "FAILED"
+    UNKNOWN = "UNKNOWN"
+    CANCELLED = "CANCELLED"
+    MODIFIED = "MODIFIED"
+    COMPLETED = "COMPLETED"
+    PARTIAL = "PARTIAL"
+    NO_ACTION = "NO_ACTION"
+
+class OrderStatus:
+    FILLED = "FILLED"
+    OPEN = "OPEN"
+    CANCELLED = "CANCELLED"
+    REJECTED = "REJECTED"
+    TRIGGER_PENDING = "TRIGGER_PENDING"
+    UNKNOWN = "UNKNOWN"
+
+class GTTRuleStatus(str):
+    ACTIVE = "ACTIVE"
+    TRIGGERED = "TRIGGERED"
+    CANCELLED = "CANCELLED"
+    EXPIRED = "EXPIRED"
+    REJECTED = "REJECTED"
+    UNKNOWN = "UNKNOWN"
