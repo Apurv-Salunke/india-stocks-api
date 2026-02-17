@@ -1,88 +1,77 @@
 # India Stocks API v2.0
 
-**A type-safe Python client for trading and market data across Indian brokers.**
+Type-safe Python client for Indian brokers with canonical responses and auto-provisioned instruments.
 
-## Why this library exists
+## What this solves
+- Single, typed surface for orders, market data, history, streaming, funds, profile.
+- Auto-downloads and normalizes the instruments DB; you always code with NSE-style symbols.
+- Canonical response objects so downstream code stays broker-agnostic.
 
-1. **Unified broker surface** — tangent clients only interact with typed domain objects (`Equity`, `Future`, `Option`, `StreamMode`), even though the underlying code reuses OpenAlgo implementations.
-2. **Zero config provisioning** — instruments DB downloads automatically and smart symbol resolution keeps NSE-style names in your code.
-3. **Canonical responses** — market data, historical candles, funds, and profile APIs expose structured objects so downstream logic is broker-agnostic.
-
-## Status at a glance
-
-| Area | Status |
-| --- | --- |
-| Brokers | Angel One (live), Zerodha (in progress) |
-| Streaming | WebSocket (Angel) with reconnect + canonical tick) |
-| Python | 3.10, 3.11, 3.12 |
-| Tests | Unit suite in CI, integration scripts gated by env vars |
+## Supported today
+- Broker: Angel One (live). Zerodha in progress.
+- Python: 3.10, 3.11, 3.12.
+- CI: ruff, mypy, unit tests. Integration tests are opt-in (require creds).
 
 ## Install
-
 ```bash
 git clone https://github.com/Apurv-Salunke/india-stocks-api.git
 cd india-stocks-api
 poetry install
+# or: pip install india-stocks-api
 ```
 
-Alternatively: `pip install india-stocks-api`.
-
 ## Quick start
-
 ```python
 from india_stocks_api.brokers import AngelOne
-from india_stocks_api.constants import OrderType, TransactionType, StreamMode
+from india_stocks_api.constants import TransactionType, OrderType, StreamMode
 from india_stocks_api.instruments import Equity
 
 broker = AngelOne(api_key, client_code, password, totp_key)
 broker.authenticate()
 
-# place a quote-safe order
+# Market data (canonical QuoteResponse)
 quote = broker.get_quote(Equity("RELIANCE"))
 print("LTP:", quote.ltp)
 
-# subscribe to streaming ticks
+# Place order
+broker.place_order(
+    instrument=Equity("RELIANCE"),
+    transaction_type=TransactionType.BUY,
+    quantity=1,
+    order_type=OrderType.MARKET,
+)
+
+# Streaming (canonical WebSocketTick)
 broker.on_tick = lambda tick: print("tick", tick.symbol, tick.ltp)
 broker.subscribe([Equity("RELIANCE")], mode=StreamMode.QUOTE)
-broker.start_streaming()  # blocking, so do this in a thread
+broker.start_streaming()  # blocking; run in a thread if needed
 ```
 
-## Canonical response contracts
-
-All public market-data/funds/profile APIs return typed objects from `india_stocks_api.responses`. Example:
-
+## Canonical responses
+Returned from `india_stocks_api.responses`:
 - `QuoteResponse`, `DepthResponse`, `HistoryResponse`
 - `FundsResponse`, `ProfileResponse`
-- `WebSocketTick` for streaming (with normalized depth levels)
+- `WebSocketTick` (streaming, normalized depth levels)
 
-Each object exposes explicit fields (`ltp`, `volume`, `high`, `low`, `exchanges`, `client_code`, …) so callers never need to parse raw broker payload keys.
+## Streaming behavior (Angel One)
+- Subscriptions are buffered; sent on connect.
+- Reconnects auto-resubscribe via SmartWebSocketV2; adapter maps frames → `WebSocketTick`.
+- `unsubscribe(...)` and `stop_streaming()` are idempotent.
 
-## Streaming overview
+## Architecture (short)
+1. Public adapter (`brokers/angel.py`) exposes typed methods and maps to canonical responses.
+2. Shim (`internal/context.py`) supplies auth, symbols, HTTP to ported OpenAlgo code.
+3. Ported internals (`internal/angel/*`) stay close to upstream for easier syncs.
 
-- `AngelOne.subscribe(...)` resolves domain instruments to tokens and buffers subscriptions.
-- `SmartWebSocketV2` handles reconnect/resubscribe while the adapter maps binary frames into `WebSocketTick`.
-- Streaming clients consume the normalized tick object (no raw JSON) and receive consistent `symbol`, `mode`, `ltp`, `volume`, `oi`, plus depth levels.
-- `stop_streaming()` and `unsubscribe(...)` cleanly drop the session with idempotent behavior.
-
-## Architecture snapshot
-
-1. **Public adapter** (`india_stocks_api/brokers/angel.py`) exposes typed methods and canonical responses.
-2. **Shim/context** (`india_stocks_api/internal/context.py`) provides shared auth, symbol, and HTTP helpers to the ported OpenAlgo code.
-3. **Ported internals** under `internal/angel` remain close to OpenAlgo to simplify syncing/upstream updates.
-
-## Testing & quality
-
-- `poetry run pytest tests/unit` (runs in CI and covers adapters, streaming helpers, and response mappers).
-- Integration scripts under `tests/integration/` require live credentials and are skipped in CI; run locally with `.env` containing Angel API secrets.
-- `ruff`, `mypy`, and `pre-commit` enforce formatting and typing.
+## Testing
+- Unit: `poetry run pytest tests/unit`
+- Integration (live Angel creds in `.env`): `poetry run pytest tests/integration/test_data_methods_live.py -v`
+- Lint/type: `poetry run ruff check .` and `poetry run mypy india_stocks_api`
 
 ## Contributing
+- Install hooks: `pre-commit install`
+- Before push: run unit tests + ruff + mypy.
+- PRs target `dev`; include what changed, tests run, and any live-cred needs.
 
-- Use `pre-commit install` before committing.
-- Run `poetry run pytest tests/unit` and `poetry run ruff check .` before pushing.
-- Open a PR targeting `dev`; describe the change, tests, and any live dependencies (e.g., credentials required).
-
-## Next steps / docs
-
-1. Expand docs under `docs/` or the upcoming dedicated site for API reference, streaming guide, and error handling.
-2. Link to this README after the docs site is live so it remains a concise landing page.
+## Docs
+A dedicated docs site is planned. Until then, this README + `tests/` and `internal/` act as reference.
