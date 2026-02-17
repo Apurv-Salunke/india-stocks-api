@@ -2,8 +2,13 @@ import os
 import sys
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
+
+# Load .env from project root (needed when running this file directly)
+load_dotenv(dotenv_path=Path(__file__).resolve().parent.parent / ".env")
 
 from india_stocks_api.brokers import AngelOne
 
