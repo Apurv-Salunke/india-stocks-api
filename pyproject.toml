@@ -20,11 +20,20 @@ python-dateutil = "^2.9.0"
 pyzmq = "^27.1.0"
 logzero = "^1.7.0"
 websocket-client = "^1.8.0"
+python-dotenv = "^1.2.1"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0.0"
+pytest-mock = "^3.14.0"
+respx = "^0.22.0"
 flake8 = "^7.0.0"
 sphinx = "^7.0.0"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "integration: requires live broker credentials (deselect with '-m not integration')",
+]
 
 [build-system]
 requires = ["poetry-core"]
