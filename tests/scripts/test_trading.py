@@ -6,17 +6,18 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from india_stocks_api.brokers import AngelOne
+from india_stocks_api.constants import OrderType, ProductType, TransactionType
 from india_stocks_api.instruments import Equity
-from india_stocks_api.constants import TransactionType, OrderType, ProductType
+
 
 def test_trading_workflow():
     print("--- Testing Trading Workflow (Buy Limit + Cancel) ---")
-    
+
     api_key = os.getenv("ANGEL_API_KEY")
     client_id = os.getenv("ANGEL_CLIENT_ID")
     pin = os.getenv("ANGEL_PIN")
     totp = os.getenv("ANGEL_TOTP_SECRET")
-    
+
     if not all([api_key, client_id, pin, totp]):
         print("Error: Missing env vars.")
         return
@@ -25,7 +26,7 @@ def test_trading_workflow():
     if not client.authenticate():
         print("Auth failed.")
         return
-        
+
     # 1. Holdings
     print("\n1. Fetching Holdings...")
     try:
@@ -46,35 +47,36 @@ def test_trading_workflow():
 
     # 3. Place Limit Order (SBIN)
     # Using 'NSE' exchange.
-    symbol_to_trade = "SBIN" 
+    symbol_to_trade = "SBIN"
     print(f"\n3. Placing Limit Buy Order for {symbol_to_trade} @ 200.0...")
-    
+
     order_id = None
     try:
         inst = Equity(symbol_to_trade, exchange="NSE")
-        
+
         # Limit Buy @ 200.0
         resp = client.place_order(
             instrument=inst,
             transaction_type=TransactionType.BUY,
             quantity=1,
             order_type=OrderType.LIMIT,
-            product_type=ProductType.DELIVERY, # CNC
-            price=2.0
+            product_type=ProductType.DELIVERY,  # CNC
+            price=2.0,
         )
-        
+
         print(f"   Response: {resp}")
-        
-        if resp['status'] == 'success':
-            order_id = resp['order_id']
+
+        if resp["status"] == "success":
+            order_id = resp["order_id"]
             print(f"   ✅ Order Placed! ID: {order_id}")
         else:
             print(f"   ❌ Order Placement Failed logic: {resp}")
-            
+
     except Exception as e:
         print(f"   ❌ Order Placement Exception: {e}")
         # If symbol resolution failed, maybe check DB?
         import traceback
+
         traceback.print_exc()
 
     # 4. Cancel Order (If placed)
@@ -83,12 +85,13 @@ def test_trading_workflow():
         try:
             c_resp = client.cancel_order(order_id)
             print(f"   Cancel Response: {c_resp}")
-            if c_resp['status'] == 'success':
+            if c_resp["status"] == "success":
                 print("   ✅ Order Cancelled!")
             else:
                 print("   ❌ Cancel Failed.")
         except Exception as e:
             print(f"   ❌ Cancel Exception: {e}")
+
 
 if __name__ == "__main__":
     test_trading_workflow()

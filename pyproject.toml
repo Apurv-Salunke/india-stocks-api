@@ -26,7 +26,8 @@ pytest = "^8.0.0"
 python-dotenv = "^1.2.1"
 pytest-mock = "^3.14.0"
 respx = "^0.22.0"
-flake8 = "^7.0.0"
+ruff = "^0.9.0"
+mypy = "^1.14.0"
 sphinx = "^7.0.0"
 
 [tool.pytest.ini_options]
@@ -34,6 +35,31 @@ testpaths = ["tests"]
 markers = [
     "integration: requires live broker credentials (deselect with '-m not integration')",
 ]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+
+[tool.ruff.lint.per-file-ignores]
+"india_stocks_api/internal/angel/**" = ["E501", "E712", "E722", "F841"]
+"india_stocks_api/internal/context.py" = ["E402"]
+"tests/scripts/**" = ["E402", "E501", "F841"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true
+no_implicit_optional = false
+check_untyped_defs = false
+
+[[tool.mypy.overrides]]
+module = "india_stocks_api.internal.*"
+ignore_errors = true
 
 [build-system]
 requires = ["poetry-core"]

@@ -2,12 +2,12 @@
 
 Uses ``respx`` to intercept httpx calls — no real network traffic.
 """
-import pytest
+
 import httpx
+import pytest
 import respx
 
 from india_stocks_api.internal.angel.api.auth_api import authenticate_broker
-
 
 ANGEL_LOGIN_URL = "https://apiconnect.angelbroking.com/rest/auth/angelbroking/user/v1/loginByPassword"
 
@@ -26,7 +26,6 @@ def _patch_httpx_client(mocker):
 
 
 class TestAuthenticateBrokerSuccess:
-
     def test_returns_tokens_on_success(self, _patch_httpx_client):
         router = _patch_httpx_client
         router.post(ANGEL_LOGIN_URL).mock(
@@ -52,7 +51,6 @@ class TestAuthenticateBrokerSuccess:
 
 
 class TestAuthenticateBrokerFailure:
-
     def test_returns_error_message_on_api_error(self, _patch_httpx_client):
         router = _patch_httpx_client
         router.post(ANGEL_LOGIN_URL).mock(
@@ -84,7 +82,6 @@ class TestAuthenticateBrokerFailure:
 
 
 class TestNoCredentialLeaks:
-
     def test_no_print_output(self, _patch_httpx_client, capsys):
         """Regression: authenticate_broker must not print credentials."""
         router = _patch_httpx_client

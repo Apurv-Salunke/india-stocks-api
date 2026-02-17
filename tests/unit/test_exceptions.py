@@ -1,11 +1,11 @@
 """Tests for the exception hierarchy in india_stocks_api.exceptions."""
+
 import pytest
 
-from india_stocks_api.exceptions import ISAError, AuthenticationError, SessionExpiredError
+from india_stocks_api.exceptions import AuthenticationError, ISAError, SessionExpiredError
 
 
 class TestExceptionHierarchy:
-
     def test_isa_error_is_exception(self):
         assert issubclass(ISAError, Exception)
 

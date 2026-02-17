@@ -2,10 +2,11 @@
 
 Validates token presence checks and IST midnight expiry logic.
 """
-import pytest
+
 from datetime import datetime, timedelta
-from unittest.mock import patch
 from zoneinfo import ZoneInfo
+
+import pytest
 
 from india_stocks_api.brokers.angel import AngelOne
 from india_stocks_api.exceptions import AuthenticationError, SessionExpiredError
@@ -25,7 +26,6 @@ def broker(dummy_creds):
 
 
 class TestNoToken:
-
     def test_raises_authentication_error(self, broker):
         context._CONFIG["access_token"] = None
         with pytest.raises(AuthenticationError, match="Not authenticated"):
@@ -33,7 +33,6 @@ class TestNoToken:
 
 
 class TestTokenPresentNoSession:
-
     def test_returns_token_gracefully(self, broker, tmp_session_file):
         context._CONFIG["access_token"] = "jwt_abc"
         # No session saved → no expires_at → should just return token
@@ -42,7 +41,6 @@ class TestTokenPresentNoSession:
 
 
 class TestTokenPresentSessionNotExpired:
-
     def test_returns_token(self, broker, tmp_session_file):
         context._CONFIG["access_token"] = "jwt_abc"
         future = (datetime.now(_IST) + timedelta(hours=6)).isoformat()
@@ -52,7 +50,6 @@ class TestTokenPresentSessionNotExpired:
 
 
 class TestTokenPresentSessionExpired:
-
     def test_raises_session_expired_error(self, broker, tmp_session_file):
         context._CONFIG["access_token"] = "jwt_abc"
         past = (datetime.now(_IST) - timedelta(hours=1)).isoformat()
@@ -75,7 +72,6 @@ class TestTokenPresentSessionExpired:
 
 
 class TestExpiryBoundary:
-
     def test_exactly_at_current_time_is_expired(self, broker, tmp_session_file):
         """expires_at <= now → expired (boundary: equal)."""
         context._CONFIG["access_token"] = "jwt_abc"

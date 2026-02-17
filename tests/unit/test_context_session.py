@@ -1,19 +1,17 @@
 """Tests for session persistence in india_stocks_api.internal.context."""
+
 import json
-import stat
-import pytest
 
 from india_stocks_api.internal import context
 from india_stocks_api.internal.context import (
-    save_session,
-    load_session,
     clear_session,
     get_api_key,
+    load_session,
+    save_session,
 )
 
 
 class TestSaveAndLoad:
-
     def test_round_trip(self, tmp_session_file):
         save_session("angel", {"access_token": "jwt123", "api_key": "ak"})
         loaded = load_session("angel")
@@ -37,7 +35,6 @@ class TestSaveAndLoad:
 
 
 class TestClearSession:
-
     def test_clear_removes_broker(self, tmp_session_file):
         save_session("angel", {"access_token": "jwt"})
         clear_session("angel")
@@ -54,7 +51,6 @@ class TestClearSession:
 
 
 class TestGetApiKey:
-
     def test_returns_api_key(self, tmp_session_file):
         save_session("angel", {"api_key": "my_key"})
         assert get_api_key("angel") == "my_key"
@@ -64,7 +60,6 @@ class TestGetApiKey:
 
 
 class TestFilePermissions:
-
     def test_session_file_is_chmod_600(self, tmp_session_file):
         save_session("angel", {"access_token": "jwt"})
         mode = tmp_session_file.stat().st_mode & 0o777
@@ -72,7 +67,6 @@ class TestFilePermissions:
 
 
 class TestCorruptData:
-
     def test_corrupt_json_returns_empty(self, tmp_session_file):
         tmp_session_file.parent.mkdir(parents=True, exist_ok=True)
         tmp_session_file.write_text("NOT VALID JSON{{{", encoding="utf-8")
@@ -94,7 +88,6 @@ class TestCorruptData:
 
 
 class TestSessionLoadedFlag:
-
     def test_once_loaded_does_not_reread_disk(self, tmp_session_file):
         save_session("angel", {"access_token": "first"})
 

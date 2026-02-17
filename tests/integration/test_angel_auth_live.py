@@ -6,7 +6,9 @@ Skipped automatically when credentials are missing.
 Authenticates ONCE per class to avoid Angel API rate-limiting on TOTP reuse
 within the same 30-second window.
 """
+
 import os
+
 import pytest
 
 from india_stocks_api.brokers.angel import AngelOne
@@ -37,7 +39,6 @@ def angel_session():
 @pytest.mark.integration
 @pytest.mark.skipif(_missing, reason="Live Angel credentials not set in env")
 class TestAngelAuthLive:
-
     def test_authenticate_returns_true(self, angel_session):
         broker, _ = angel_session
         # If we got here, authenticate() already returned True (no exception).

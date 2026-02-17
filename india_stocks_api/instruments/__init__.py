@@ -1,3 +1,3 @@
-from .models import Equity, Future, Option, Index
+from .models import Equity, Future, Index, Option
 
 __all__ = ["Equity", "Future", "Option", "Index"]

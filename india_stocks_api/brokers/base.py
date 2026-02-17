@@ -1,12 +1,12 @@
 from abc import ABC, ABCMeta, abstractmethod
-from typing import Any, Optional, Dict, Type
-from functools import singledispatchmethod
 from datetime import date, datetime
+from functools import singledispatchmethod
+from typing import Any, Dict, Type
 from zoneinfo import ZoneInfo
 
-from ..instruments.models import Equity, Future, Option, Index
-from ..constants import TransactionType, OrderType, ProductType, OrderValidity, CandleInterval
+from ..constants import CandleInterval, OrderType, OrderValidity, ProductType, TransactionType
 from ..exceptions import AuthenticationError, SessionExpiredError
+from ..instruments.models import Equity, Future, Index, Option
 from ..internal import context
 
 _IST = ZoneInfo("Asia/Kolkata")
@@ -15,43 +15,45 @@ _IST = ZoneInfo("Asia/Kolkata")
 class BrokerMeta(ABCMeta):
     """
     Metaclass that auto-provisions instruments database after broker instantiation.
-    
+
     This ensures the instruments.db is always ready and fresh before any trading operations.
     The staleness check is based on file modification date (DB is stale if older than today).
     """
-    
+
     def __call__(cls, *args, **kwargs):
         # Create the broker instance (calls __init__)
         instance = super().__call__(*args, **kwargs)
-        
+
         # Auto-provision instruments DB if needed
         instance._ensure_instruments_ready()
-        
+
         return instance
+
 
 class BaseBroker(ABC, metaclass=BrokerMeta):
     """
     Common interface for all Stock Brokers.
-    
+
     The BrokerMeta metaclass automatically ensures instruments database is ready
     after instantiation, providing transparent auto-provisioning.
     """
+
     _registry: Dict[str, Type["BaseBroker"]] = {}
-    
-    def __init_subclass__(cls, broker_name: str = None, **kwargs):
+
+    def __init_subclass__(cls, broker_name: str | None = None, **kwargs):  # type: ignore[override]
         """Auto-register subclasses when they're defined."""
         super().__init_subclass__(**kwargs)
         if broker_name:
-            cls._broker_name = broker_name
+            cls._broker_name = broker_name  # type: ignore[attr-defined]
             BaseBroker._registry[broker_name] = cls
-    
+
     @classmethod
     def create(cls, broker_name: str, **kwargs) -> "BaseBroker":
         """Factory method to create broker instances."""
         if broker_name not in cls._registry:
             raise ValueError(f"Unknown broker: {broker_name}. Available: {list(cls._registry.keys())}")
         return cls._registry[broker_name](**kwargs)
-    
+
     def _ensure_instruments_ready(self):
         """
         Check if instruments DB is stale and rebuild if needed.
@@ -98,12 +100,12 @@ class BaseBroker(ABC, metaclass=BrokerMeta):
         if not token:
             raise AuthenticationError("Not authenticated. Call authenticate() first.")
 
-        session = context.load_session(self._broker_name)
+        session = context.load_session(self._broker_name)  # type: ignore[attr-defined]
         expires_at = session.get("expires_at")
         if expires_at:
             if datetime.fromisoformat(expires_at) <= datetime.now(_IST):
-                context.set_auth_token(None)
-                context.set_feed_token(None)
+                context.set_auth_token(None)  # type: ignore[arg-type]
+                context.set_feed_token(None)  # type: ignore[arg-type]
                 raise SessionExpiredError(
                     "Session expired (past midnight IST). Call authenticate() to start a new session."
                 )
@@ -125,7 +127,7 @@ class BaseBroker(ABC, metaclass=BrokerMeta):
         price: float = 0.0,
         trigger_price: float = 0.0,
         validity: OrderValidity = OrderValidity.DAY,
-        **kwargs
+        **kwargs,
     ) -> dict:
         """Place a new order."""
         ...
@@ -141,8 +143,9 @@ class BaseBroker(ABC, metaclass=BrokerMeta):
         ...
 
     @abstractmethod
-    def get_history(self, instrument: Equity | Future | Option | Index, 
-                   start_date: str, end_date: str, interval: CandleInterval) -> Any:
+    def get_history(
+        self, instrument: Equity | Future | Option | Index, start_date: str, end_date: str, interval: CandleInterval
+    ) -> Any:
         """
         Get historical candles.
         """
@@ -152,7 +155,7 @@ class BaseBroker(ABC, metaclass=BrokerMeta):
     def get_depth(self, instrument: Equity | Future | Option | Index) -> dict:
         """Get market depth (Level 2 data)."""
         ...
-    
+
     @abstractmethod
     def get_quote(self, instrument: Equity | Future | Option | Index) -> dict:
         """Get current quote for an instrument."""
@@ -204,17 +207,25 @@ class BaseBroker(ABC, metaclass=BrokerMeta):
         ...
 
     # --- GTT Orders ---
-    
+
     @abstractmethod
-    def create_gtt(self, instrument: Equity | Future | Option, transaction_type: TransactionType, 
-                  quantity: int, trigger_price: float, price: float, 
-                  product_type: ProductType = ProductType.DELIVERY, time_period: int = 365) -> dict:
+    def create_gtt(
+        self,
+        instrument: Equity | Future | Option,
+        transaction_type: TransactionType,
+        quantity: int,
+        trigger_price: float,
+        price: float,
+        product_type: ProductType = ProductType.DELIVERY,
+        time_period: int = 365,
+    ) -> dict:
         """Create a new GTT rule."""
         ...
 
     @abstractmethod
-    def modify_gtt(self, id: int, instrument: Equity | Future | Option, 
-                  quantity: int, trigger_price: float, price: float) -> dict:
+    def modify_gtt(
+        self, id: int, instrument: Equity | Future | Option, quantity: int, trigger_price: float, price: float
+    ) -> dict:
         """Modify an existing GTT rule."""
         ...
 
@@ -238,15 +249,15 @@ class BaseBroker(ABC, metaclass=BrokerMeta):
     def get_executed_orders(self) -> list:
         """Get only executed/filled orders."""
         all_orders = self.get_orders()
-        return [o for o in all_orders if o.get('status') == 'complete']
+        return [o for o in all_orders if o.get("status") == "complete"]
 
     def get_pending_orders(self) -> list:
         """Get only pending/open orders."""
         all_orders = self.get_orders()
-        return [o for o in all_orders if o.get('status') in ['open', 'trigger pending', 'validation pending']]
+        return [o for o in all_orders if o.get("status") in ["open", "trigger pending", "validation pending"]]
 
     # --- Resolution Logic (Common) ---
-    
+
     @singledispatchmethod
     def _resolve_instrument(self, instrument) -> dict:
         """
@@ -254,7 +265,7 @@ class BaseBroker(ABC, metaclass=BrokerMeta):
         Returns a dict containing 'symbol', 'exchange', 'token', etc.
         """
         raise TypeError(f"Cannot resolve instrument of type: {type(instrument)}")
-    
+
     @_resolve_instrument.register
     def _(self, instrument: Equity) -> dict:
         # Standard Resolution using context shims (which use InstrumentDB)
@@ -262,9 +273,9 @@ class BaseBroker(ABC, metaclass=BrokerMeta):
             "symbol": instrument.symbol,
             "tradingsymbol": context.get_tradingsymbol(instrument.symbol, instrument.exchange),
             "exchange": instrument.exchange,
-            "token": context.get_token(instrument.symbol, instrument.exchange) or "DUMMY"
+            "token": context.get_token(instrument.symbol, instrument.exchange) or "DUMMY",
         }
-    
+
     @_resolve_instrument.register
     def _(self, instrument: Future) -> dict:
         # For Futures: standard OpenAlgo symbol format
@@ -273,18 +284,19 @@ class BaseBroker(ABC, metaclass=BrokerMeta):
             "symbol": oa_symbol,
             "tradingsymbol": context.get_tradingsymbol(oa_symbol, instrument.exchange),
             "exchange": instrument.exchange,
-            "token": context.get_token(oa_symbol, instrument.exchange) or "DUMMY"
+            "token": context.get_token(oa_symbol, instrument.exchange) or "DUMMY",
         }
 
     @_resolve_instrument.register
     def _(self, instrument: Option) -> dict:
         # For Options: standard OpenAlgo symbol format
-        oa_symbol = f"{instrument.symbol}{instrument.expiry.strftime('%d%b%y').upper()}{int(instrument.strike)}{instrument.opt_type.value}"
+        expiry_str = instrument.expiry.strftime("%d%b%y").upper()
+        oa_symbol = f"{instrument.symbol}{expiry_str}{int(instrument.strike)}{instrument.opt_type.value}"
         return {
             "symbol": oa_symbol,
             "tradingsymbol": context.get_tradingsymbol(oa_symbol, instrument.exchange),
             "exchange": instrument.exchange,
-            "token": context.get_token(oa_symbol, instrument.exchange) or "DUMMY"
+            "token": context.get_token(oa_symbol, instrument.exchange) or "DUMMY",
         }
 
     @_resolve_instrument.register
@@ -293,5 +305,5 @@ class BaseBroker(ABC, metaclass=BrokerMeta):
             "symbol": instrument.symbol,
             "tradingsymbol": context.get_tradingsymbol(instrument.symbol, instrument.exchange),
             "exchange": instrument.exchange,
-            "token": context.get_token(instrument.symbol, instrument.exchange) or "DUMMY"
+            "token": context.get_token(instrument.symbol, instrument.exchange) or "DUMMY",
         }

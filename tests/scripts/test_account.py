@@ -12,14 +12,15 @@ load_dotenv(dotenv_path=Path(__file__).resolve().parent.parent / ".env")
 
 from india_stocks_api.brokers import AngelOne
 
+
 def test_account_info():
     print("--- Testing Account & Portfolio Data ---")
-    
+
     api_key = os.getenv("ANGEL_API_KEY")
     client_id = os.getenv("ANGEL_CLIENT_ID")
     pin = os.getenv("ANGEL_PIN")
     totp = os.getenv("ANGEL_TOTP_SECRET")
-    
+
     if not all([api_key, client_id, pin, totp]):
         print("Error: Missing env vars.")
         return
@@ -28,12 +29,12 @@ def test_account_info():
     if not client.authenticate():
         print("Auth failed.")
         return
-        
+
     # 1. Profile
     print("\n1. Fetching Profile...")
     try:
         profile = client.get_profile()
-        print(f"   ✅ Profile Received!")
+        print("   ✅ Profile Received!")
         print(f"   Name: {profile.get('name')}")
         print(f"   Exchanges: {profile.get('exchanges')}")
         print(f"   Client ID: {profile.get('clientcode')}")
@@ -58,12 +59,13 @@ def test_account_info():
         # Wait, in angel.py get_positions returns get_positions(jwt)
         # Internal get_positions returns json.loads(response.text)
         print(f"   ✅ Positions API raw status: {positions.get('status')}")
-        if positions.get('data'):
+        if positions.get("data"):
             print(f"   Open Positions: {len(positions.get('data'))}")
         else:
             print("   No open positions.")
     except Exception as e:
         print(f"   ❌ Positions Failed: {e}")
+
 
 if __name__ == "__main__":
     test_account_info()

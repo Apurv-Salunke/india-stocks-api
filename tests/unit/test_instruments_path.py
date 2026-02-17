@@ -1,5 +1,4 @@
 """Tests for deterministic instruments.db path resolution."""
-from pathlib import Path
 
 from india_stocks_api.internal.context import (
     _CACHE_DIR,
