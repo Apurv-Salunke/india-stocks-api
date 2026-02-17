@@ -5,6 +5,7 @@ Thin wrapper around india_stocks_api.internal.angel
 
 from datetime import datetime, timedelta
 from typing import Any, Callable, Dict, List, Optional
+from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 import pyotp
@@ -322,11 +323,15 @@ class AngelOne(BaseBroker, broker_name="angel"):
         """Lazy initialization of streaming components."""
         if not hasattr(self, "_ws_client"):
             self._ws_client = None
+        if not hasattr(self, "_pending_subscriptions"):
             self._pending_subscriptions: List[tuple] = []
-
+        if not hasattr(self, "on_tick"):
             self.on_tick: Optional[Callable[[Dict[str, Any]], None]] = None
+        if not hasattr(self, "on_error"):
             self.on_error: Optional[Callable[[str, str], None]] = None
+        if not hasattr(self, "on_close"):
             self.on_close: Optional[Callable[[], None]] = None
+        if not hasattr(self, "on_open"):
             self.on_open: Optional[Callable[[], None]] = None
 
     def subscribe(
@@ -337,6 +342,10 @@ class AngelOne(BaseBroker, broker_name="angel"):
         token_list = []
         for inst in instruments:
             resolved = self._resolve_instrument(inst)
+            if not resolved.get("token") or resolved.get("token") == "DUMMY":
+                raise ValueError(
+                    f"Unable to subscribe: instrument token not found for {inst.symbol} on {resolved.get('exchange')}."
+                )
             token_list.append({"exchange": resolved["exchange"], "token": resolved["token"]})
 
         self._pending_subscriptions.append((token_list, mode.value))
@@ -346,6 +355,12 @@ class AngelOne(BaseBroker, broker_name="angel"):
 
     def _send_subscription(self, token_list: List[Dict], mode: int) -> None:
         """Send subscription request to WebSocket."""
+        ws_token_list = self._build_ws_token_list(token_list)
+
+        self._ws_client.subscribe(correlation_id=f"sub_{uuid4().hex[:12]}", mode=mode, token_list=ws_token_list)
+
+    def _build_ws_token_list(self, token_list: List[Dict[str, str]]) -> List[Dict[str, Any]]:
+        """Build websocket token payload grouped by exchange type."""
         exchange_tokens: Dict[int, List[str]] = {}
         for item in token_list:
             exch_type = self._WS_EXCHANGE_MAP.get(item["exchange"], 1)
@@ -353,11 +368,30 @@ class AngelOne(BaseBroker, broker_name="angel"):
                 exchange_tokens[exch_type] = []
             exchange_tokens[exch_type].append(str(item["token"]))
 
-        ws_token_list = [{"exchangeType": exch, "tokens": tokens} for exch, tokens in exchange_tokens.items()]
+        return [{"exchangeType": exch, "tokens": tokens} for exch, tokens in exchange_tokens.items()]
 
-        self._ws_client.subscribe(
-            correlation_id=f"sub_{int(__import__('time').time())}", mode=mode, token_list=ws_token_list
-        )
+    def unsubscribe(
+        self, instruments: List[Equity | Future | Option | Index], mode: StreamMode = StreamMode.QUOTE
+    ) -> None:
+        self.__init_streaming()
+
+        token_list = []
+        for inst in instruments:
+            resolved = self._resolve_instrument(inst)
+            if not resolved.get("token") or resolved.get("token") == "DUMMY":
+                exchange = resolved.get("exchange")
+                raise ValueError(f"Unable to unsubscribe: instrument token not found for {inst.symbol} on {exchange}.")
+            token_list.append({"exchange": resolved["exchange"], "token": resolved["token"]})
+
+        self._pending_subscriptions = [
+            (tokens, m) for (tokens, m) in self._pending_subscriptions if not (m == mode.value and tokens == token_list)
+        ]
+
+        if self._ws_client and self._ws_client.wsapp:
+            ws_token_list = self._build_ws_token_list(token_list)
+            self._ws_client.unsubscribe(
+                correlation_id=f"unsub_{uuid4().hex[:12]}", mode=mode.value, token_list=ws_token_list
+            )
 
     def start_streaming(self) -> None:
         """
@@ -388,8 +422,12 @@ class AngelOne(BaseBroker, broker_name="angel"):
         )
 
         def handle_open(wsapp):
-            for token_list, mode in self._pending_subscriptions:
-                self._send_subscription(token_list, mode)
+            # On reconnect, SmartWebSocketV2._on_open already calls resubscribe()
+            # from its internal state; replaying pending subscriptions here would
+            # duplicate subscription requests.
+            if not getattr(self._ws_client, "RESUBSCRIBE_FLAG", False):
+                for token_list, mode in self._pending_subscriptions:
+                    self._send_subscription(token_list, mode)
             if self.on_open:
                 self.on_open()
 
@@ -405,10 +443,11 @@ class AngelOne(BaseBroker, broker_name="angel"):
             if self.on_close:
                 self.on_close()
 
-        self._ws_client.on_open = handle_open
-        self._ws_client.on_data = handle_data
-        self._ws_client.on_error = handle_error
-        self._ws_client.on_close = handle_close
+        # SmartWebSocketV2 exposes these as overridable handler attributes.
+        setattr(self._ws_client, "on_open", handle_open)
+        setattr(self._ws_client, "on_data", handle_data)
+        setattr(self._ws_client, "on_error", handle_error)
+        setattr(self._ws_client, "on_close", handle_close)
 
         self._ws_client.connect()
 

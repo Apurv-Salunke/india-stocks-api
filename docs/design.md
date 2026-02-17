@@ -2,7 +2,7 @@
 
 > **Package Name**: `india_stocks_api`
 >
-> > **Version**: 2.0  
+> > **Version**: 2.0
 > > **Last Updated**: January 2026
 
 ---

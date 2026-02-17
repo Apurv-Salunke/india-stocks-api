@@ -44,10 +44,6 @@ class SmartWebSocketV2(object):
     # Subscription Mode Map
     SUBSCRIPTION_MODE_MAP = {1: "LTP", 2: "QUOTE", 3: "SNAP_QUOTE", 4: "DEPTH"}
 
-    wsapp = None
-    input_request_dict = {}
-    current_retry_attempt = 0
-
     def __init__(
         self,
         auth_token,
@@ -84,6 +80,11 @@ class SmartWebSocketV2(object):
         self.retry_delay = retry_delay
         self.retry_multiplier = retry_multiplier
         self.retry_duration = retry_duration
+        self.wsapp = None
+        self.input_request_dict = {}
+        self.current_retry_attempt = 0
+        self.RESUBSCRIBE_FLAG = False
+        self.last_ping_timestamp = None
         # Create a log folder based on the current date
         log_folder = time.strftime("%Y-%m-%d", time.localtime())
         log_folder_path = os.path.join("logs", log_folder)  # Construct the full path to the log folder
@@ -132,8 +133,7 @@ class SmartWebSocketV2(object):
     def _on_open(self, wsapp):
         if self.RESUBSCRIBE_FLAG:
             self.resubscribe()
-        else:
-            self.on_open(wsapp)
+        self.on_open(wsapp)
 
     def _on_pong(self, wsapp, data):
         if data == self.HEART_BEAT_MESSAGE:
@@ -197,10 +197,15 @@ class SmartWebSocketV2(object):
                 self.input_request_dict[mode] = {}
 
             for token in token_list:
+                incoming_tokens = token["tokens"]
                 if token["exchangeType"] in self.input_request_dict[mode]:
-                    self.input_request_dict[mode][token["exchangeType"]].extend(token["tokens"])
+                    self.input_request_dict[mode][token["exchangeType"]].extend(incoming_tokens)
+                    # Preserve order while removing duplicates
+                    self.input_request_dict[mode][token["exchangeType"]] = list(
+                        dict.fromkeys(self.input_request_dict[mode][token["exchangeType"]])
+                    )
                 else:
-                    self.input_request_dict[mode][token["exchangeType"]] = token["tokens"]
+                    self.input_request_dict[mode][token["exchangeType"]] = list(dict.fromkeys(incoming_tokens))
 
             if mode == self.DEPTH:
                 total_tokens = sum(len(token["tokens"]) for token in token_list)
@@ -209,6 +214,9 @@ class SmartWebSocketV2(object):
                     error_message = f"Quota exceeded: You can subscribe to a maximum of {quota_limit} tokens only."
                     logger.error(error_message)
                     raise Exception(error_message)
+
+            if not self.wsapp:
+                raise RuntimeError("WebSocket is not connected. Call connect() before subscribe().")
 
             self.wsapp.send(json.dumps(request_data))
             self.RESUBSCRIBE_FLAG = True
@@ -255,7 +263,25 @@ class SmartWebSocketV2(object):
                 "action": self.UNSUBSCRIBE_ACTION,
                 "params": {"mode": mode, "tokenList": token_list},
             }
-            self.input_request_dict.update(request_data)
+            mode_bucket = self.input_request_dict.get(mode, {})
+            for token in token_list:
+                exchange_type = token.get("exchangeType")
+                existing_tokens = mode_bucket.get(exchange_type, [])
+                tokens_to_remove = set(token.get("tokens", []))
+                remaining_tokens = [t for t in existing_tokens if t not in tokens_to_remove]
+                if remaining_tokens:
+                    mode_bucket[exchange_type] = remaining_tokens
+                elif exchange_type in mode_bucket:
+                    del mode_bucket[exchange_type]
+
+            if mode_bucket:
+                self.input_request_dict[mode] = mode_bucket
+            elif mode in self.input_request_dict:
+                del self.input_request_dict[mode]
+
+            if not self.wsapp:
+                raise RuntimeError("WebSocket is not connected. Call connect() before unsubscribe().")
+
             self.wsapp.send(json.dumps(request_data))
             self.RESUBSCRIBE_FLAG = True
         except Exception as e:
@@ -306,11 +332,12 @@ class SmartWebSocketV2(object):
             logger.error(f"Error occurred during WebSocket connection: {e}")
             raise e
 
-    def close_connection(self):
+    def close_connection(self, clear_resubscribe=True):
         """
         Closes the connection
         """
-        self.RESUBSCRIBE_FLAG = False
+        if clear_resubscribe:
+            self.RESUBSCRIBE_FLAG = False
         self.DISCONNECT_FLAG = True
         if self.wsapp:
             self.wsapp.close()
@@ -329,7 +356,7 @@ class SmartWebSocketV2(object):
                 logger.error(f"Invalid retry strategy {self.retry_strategy}")
                 raise Exception(f"Invalid retry strategy {self.retry_strategy}")
             try:
-                self.close_connection()
+                self.close_connection(clear_resubscribe=False)
                 self.connect()
             except Exception as e:
                 logger.error(f"Error occurred during resubscribe/reconnect: {e}")
@@ -385,8 +412,8 @@ class SmartWebSocketV2(object):
                 parsed_data["52_week_high_price"] = self._unpack_data(binary_data, 363, 371, byte_format="q")[0]
                 parsed_data["52_week_low_price"] = self._unpack_data(binary_data, 371, 379, byte_format="q")[0]
                 best_5_buy_and_sell_data = self._parse_best_5_buy_and_sell_data(binary_data[147:347])
-                parsed_data["best_5_buy_data"] = best_5_buy_and_sell_data["best_5_sell_data"]
-                parsed_data["best_5_sell_data"] = best_5_buy_and_sell_data["best_5_buy_data"]
+                parsed_data["best_5_buy_data"] = best_5_buy_and_sell_data["best_5_buy_data"]
+                parsed_data["best_5_sell_data"] = best_5_buy_and_sell_data["best_5_sell_data"]
 
             if parsed_data["subscription_mode"] == self.DEPTH:
                 parsed_data.pop("sequence_number", None)
@@ -495,5 +522,5 @@ class SmartWebSocketV2(object):
     def on_open(self, wsapp):
         pass
 
-    def on_error(self):
+    def on_error(self, error_type=None, error_msg=None):
         pass
