@@ -138,7 +138,7 @@ class BaseBroker(ABC, metaclass=BrokerMeta):
         ...
 
     @abstractmethod
-    def get_funds(self) -> dict:
+    def get_funds(self) -> Any:
         """Get funds/margin info."""
         ...
 
@@ -152,12 +152,12 @@ class BaseBroker(ABC, metaclass=BrokerMeta):
         ...
 
     @abstractmethod
-    def get_depth(self, instrument: Equity | Future | Option | Index) -> dict:
+    def get_depth(self, instrument: Equity | Future | Option | Index) -> Any:
         """Get market depth (Level 2 data)."""
         ...
 
     @abstractmethod
-    def get_quote(self, instrument: Equity | Future | Option | Index) -> dict:
+    def get_quote(self, instrument: Equity | Future | Option | Index) -> Any:
         """Get current quote for an instrument."""
         ...
 
@@ -182,7 +182,7 @@ class BaseBroker(ABC, metaclass=BrokerMeta):
         ...
 
     @abstractmethod
-    def get_profile(self) -> dict:
+    def get_profile(self) -> Any:
         """Get user profile details."""
         ...
 
