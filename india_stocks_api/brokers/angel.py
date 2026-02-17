@@ -31,7 +31,7 @@ from ..internal.angel.api.order_api import get_order_details as get_order_detail
 from ..internal.angel.api.order_api import get_profile as get_profile_api
 from ..internal.angel.api.order_api import get_trade_book as get_trades_api
 from ..internal.angel.api.order_api import modify_order as modify_order_api
-from ..models import (
+from ..responses import (
     Candle,
     DepthLevel,
     DepthResponse,

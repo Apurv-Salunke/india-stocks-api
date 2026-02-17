@@ -10,7 +10,7 @@ from india_stocks_api.constants import StreamMode
 from india_stocks_api.instruments import Equity
 from india_stocks_api.internal import context
 from india_stocks_api.internal.angel.streaming.smartWebSocketV2 import SmartWebSocketV2
-from india_stocks_api.models import WebSocketTick
+from india_stocks_api.responses import WebSocketTick
 
 
 @pytest.fixture(autouse=True)

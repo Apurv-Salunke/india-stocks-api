@@ -18,7 +18,7 @@ import pytest
 from india_stocks_api.brokers.angel import AngelOne
 from india_stocks_api.constants import StreamMode
 from india_stocks_api.instruments import Equity
-from india_stocks_api.models import WebSocketTick
+from india_stocks_api.responses import WebSocketTick
 
 
 def _get_creds():

@@ -8,7 +8,7 @@ import pytest
 from india_stocks_api.brokers.angel import AngelOne
 from india_stocks_api.constants import CandleInterval
 from india_stocks_api.instruments import Equity
-from india_stocks_api.models import DepthResponse, FundsResponse, HistoryResponse, ProfileResponse, QuoteResponse
+from india_stocks_api.responses import DepthResponse, FundsResponse, HistoryResponse, ProfileResponse, QuoteResponse
 
 
 @pytest.fixture(autouse=True)
