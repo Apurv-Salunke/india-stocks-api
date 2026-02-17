@@ -8,6 +8,8 @@ from .responses import (
     HistoryResponse,
     ProfileResponse,
     QuoteResponse,
+    StreamDepthLevel,
+    WebSocketTick,
 )
 
 __all__ = [
@@ -18,4 +20,6 @@ __all__ = [
     "HistoryResponse",
     "ProfileResponse",
     "QuoteResponse",
+    "StreamDepthLevel",
+    "WebSocketTick",
 ]

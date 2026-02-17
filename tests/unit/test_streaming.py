@@ -10,6 +10,7 @@ from india_stocks_api.constants import StreamMode
 from india_stocks_api.instruments import Equity
 from india_stocks_api.internal import context
 from india_stocks_api.internal.angel.streaming.smartWebSocketV2 import SmartWebSocketV2
+from india_stocks_api.models import WebSocketTick
 
 
 @pytest.fixture(autouse=True)
@@ -142,3 +143,52 @@ def test_start_streaming_skips_pending_replay_when_resubscribe_flag_set(mocker, 
     broker.start_streaming()
 
     replay_spy.assert_not_called()
+
+
+def test_start_streaming_emits_canonical_tick_object(mocker, dummy_creds):
+    broker = AngelOne(**dummy_creds)
+    mocker.patch.object(broker, "_require_auth", return_value="jwt_token_xxx")
+    mocker.patch.object(context, "get_feed_token", return_value="feed_token_xxx")
+    mocker.patch.object(broker, "_resolve_instrument", return_value={"exchange": "NSE", "token": "2885"})
+
+    captured = []
+    broker.on_tick = lambda tick: captured.append(tick)
+    broker.subscribe([Equity("RELIANCE")], mode=StreamMode.QUOTE)
+
+    class FakeWSClient:
+        def __init__(self, *args, **kwargs):
+            self.RESUBSCRIBE_FLAG = False
+            self.wsapp = object()
+
+        def subscribe(self, **kwargs):
+            return None
+
+        def connect(self):
+            self.on_open(None)
+            self.on_data(
+                None,
+                {
+                    "subscription_mode": 2,
+                    "subscription_mode_val": "QUOTE",
+                    "exchange_type": 1,
+                    "token": "2885",
+                    "exchange_timestamp": 1710000000000,
+                    "last_traded_price": 250050,
+                    "last_traded_quantity": 7,
+                    "open_price_of_the_day": 249000,
+                    "high_price_of_the_day": 251000,
+                    "low_price_of_the_day": 248500,
+                    "closed_price": 248000,
+                    "volume_trade_for_the_day": 123456,
+                    "open_interest": 5555,
+                },
+            )
+
+    mocker.patch("india_stocks_api.internal.angel.streaming.SmartWebSocketV2", FakeWSClient)
+
+    broker.start_streaming()
+
+    assert captured
+    assert isinstance(captured[0], WebSocketTick)
+    assert captured[0].symbol == "RELIANCE"
+    assert captured[0].exchange == "NSE"

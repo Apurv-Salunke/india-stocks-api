@@ -18,6 +18,7 @@ import pytest
 from india_stocks_api.brokers.angel import AngelOne
 from india_stocks_api.constants import StreamMode
 from india_stocks_api.instruments import Equity
+from india_stocks_api.models import WebSocketTick
 
 
 def _get_creds():
@@ -79,8 +80,8 @@ class TestAngelStreamingLive:
             assert open_event.wait(20), "WebSocket open callback was not triggered within timeout"
             assert tick_event.wait(40), "No market ticks received within timeout"
             assert not stream_exceptions, f"Streaming thread raised exception: {stream_exceptions}"
-            assert isinstance(ticks[0], dict), "Tick payload is expected to be a dictionary"
-            assert "token" in ticks[0], "Tick payload missing token field"
+            assert isinstance(ticks[0], WebSocketTick), "Tick payload is expected to be WebSocketTick"
+            assert ticks[0].token, "Tick payload missing token field"
         finally:
             broker.stop_streaming()
             t.join(timeout=10)

@@ -165,9 +165,9 @@ broker.authenticate()
 def on_open():
     print("WebSocket connected")
 
-def on_tick(tick: dict):
-    # Example keys: token, exchange_type, last_traded_price, subscription_mode_val
-    print("tick:", tick.get("token"), tick.get("last_traded_price"))
+def on_tick(tick):
+    # tick is a WebSocketTick object
+    print("tick:", tick.symbol, tick.ltp, tick.mode)
 
 def on_error(error_type: str, error_msg: str):
     print("stream error:", error_type, error_msg)

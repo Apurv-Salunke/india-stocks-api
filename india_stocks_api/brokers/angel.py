@@ -31,7 +31,17 @@ from ..internal.angel.api.order_api import get_order_details as get_order_detail
 from ..internal.angel.api.order_api import get_profile as get_profile_api
 from ..internal.angel.api.order_api import get_trade_book as get_trades_api
 from ..internal.angel.api.order_api import modify_order as modify_order_api
-from ..models import Candle, DepthLevel, DepthResponse, FundsResponse, HistoryResponse, ProfileResponse, QuoteResponse
+from ..models import (
+    Candle,
+    DepthLevel,
+    DepthResponse,
+    FundsResponse,
+    HistoryResponse,
+    ProfileResponse,
+    QuoteResponse,
+    StreamDepthLevel,
+    WebSocketTick,
+)
 from .base import BaseBroker
 
 _IST = ZoneInfo("Asia/Kolkata")
@@ -343,6 +353,7 @@ class AngelOne(BaseBroker, broker_name="angel"):
         "NCX": 7,
         "CDS": 13,
     }
+    _WS_EXCHANGE_REVERSE_MAP = {v: k for k, v in _WS_EXCHANGE_MAP.items()}
 
     def __init_streaming(self):
         """Lazy initialization of streaming components."""
@@ -351,7 +362,7 @@ class AngelOne(BaseBroker, broker_name="angel"):
         if not hasattr(self, "_pending_subscriptions"):
             self._pending_subscriptions: List[tuple] = []
         if not hasattr(self, "on_tick"):
-            self.on_tick: Optional[Callable[[Dict[str, Any]], None]] = None
+            self.on_tick: Optional[Callable[[WebSocketTick], None]] = None
         if not hasattr(self, "on_error"):
             self.on_error: Optional[Callable[[str, str], None]] = None
         if not hasattr(self, "on_close"):
@@ -371,7 +382,9 @@ class AngelOne(BaseBroker, broker_name="angel"):
                 raise ValueError(
                     f"Unable to subscribe: instrument token not found for {inst.symbol} on {resolved.get('exchange')}."
                 )
-            token_list.append({"exchange": resolved["exchange"], "token": resolved["token"]})
+            token_list.append(
+                {"symbol": inst.symbol, "exchange": resolved["exchange"], "token": str(resolved["token"])}
+            )
 
         self._pending_subscriptions.append((token_list, mode.value))
 
@@ -406,7 +419,9 @@ class AngelOne(BaseBroker, broker_name="angel"):
             if not resolved.get("token") or resolved.get("token") == "DUMMY":
                 exchange = resolved.get("exchange")
                 raise ValueError(f"Unable to unsubscribe: instrument token not found for {inst.symbol} on {exchange}.")
-            token_list.append({"exchange": resolved["exchange"], "token": resolved["token"]})
+            token_list.append(
+                {"symbol": inst.symbol, "exchange": resolved["exchange"], "token": str(resolved["token"])}
+            )
 
         self._pending_subscriptions = [
             (tokens, m) for (tokens, m) in self._pending_subscriptions if not (m == mode.value and tokens == token_list)
@@ -458,7 +473,7 @@ class AngelOne(BaseBroker, broker_name="angel"):
 
         def handle_data(wsapp, data):
             if self.on_tick:
-                self.on_tick(data)
+                self.on_tick(self._map_stream_tick(data))
 
         def handle_error(error_type, error_msg):
             if self.on_error:
@@ -577,4 +592,70 @@ class AngelOne(BaseBroker, broker_name="angel"):
             email=payload.get("email"),
             mobile=payload.get("mobileno") or payload.get("mobile"),
             raw=payload,
+        )
+
+    def _resolve_stream_symbol_exchange(self, token: str, exchange_type: int) -> tuple[str, str]:
+        for token_list, _mode in self._pending_subscriptions:
+            for entry in token_list:
+                if str(entry.get("token")) != str(token):
+                    continue
+                exchange = str(entry.get("exchange", "NSE"))
+                if self._WS_EXCHANGE_MAP.get(exchange, 1) == exchange_type:
+                    return str(entry.get("symbol", token)), exchange
+        return token, self._WS_EXCHANGE_REVERSE_MAP.get(exchange_type, "NSE")
+
+    def _map_stream_tick(self, payload: dict[str, Any]) -> WebSocketTick:
+        token = str(payload.get("token", ""))
+        exchange_type = self._to_int(payload.get("exchange_type"))
+        symbol, exchange = self._resolve_stream_symbol_exchange(token, exchange_type)
+
+        mode = payload.get("subscription_mode_val")
+        if not mode:
+            mode_map = {1: "LTP", 2: "QUOTE", 3: "SNAP_QUOTE", 4: "DEPTH"}
+            mode = mode_map.get(self._to_int(payload.get("subscription_mode")), "UNKNOWN")
+
+        bids_data = payload.get("best_5_buy_data") or payload.get("depth_20_buy_data") or ()
+        asks_data = payload.get("best_5_sell_data") or payload.get("depth_20_sell_data") or ()
+
+        bids = tuple(
+            StreamDepthLevel(
+                price=self._to_float(level.get("price")) / 100.0,
+                quantity=self._to_int(level.get("quantity")),
+                orders=self._to_int(level.get("no of orders", level.get("num_of_orders", 0))),
+            )
+            for level in bids_data
+        )
+        asks = tuple(
+            StreamDepthLevel(
+                price=self._to_float(level.get("price")) / 100.0,
+                quantity=self._to_int(level.get("quantity")),
+                orders=self._to_int(level.get("no of orders", level.get("num_of_orders", 0))),
+            )
+            for level in asks_data
+        )
+
+        bid = bids[0].price if bids else 0.0
+        ask = asks[0].price if asks else 0.0
+
+        return WebSocketTick(
+            symbol=symbol,
+            exchange=exchange,
+            token=token,
+            mode=str(mode),
+            exchange_type=exchange_type,
+            timestamp=self._to_int(payload.get("exchange_timestamp") or payload.get("packet_received_time")),
+            ltp=self._to_float(payload.get("last_traded_price")) / 100.0,
+            ltq=self._to_int(payload.get("last_traded_quantity")),
+            open=self._to_float(payload.get("open_price_of_the_day")) / 100.0,
+            high=self._to_float(payload.get("high_price_of_the_day")) / 100.0,
+            low=self._to_float(payload.get("low_price_of_the_day")) / 100.0,
+            close=self._to_float(payload.get("closed_price")) / 100.0,
+            volume=self._to_int(payload.get("volume_trade_for_the_day")),
+            oi=self._to_int(payload.get("open_interest")),
+            bid=bid,
+            ask=ask,
+            total_buy_quantity=self._to_float(payload.get("total_buy_quantity")),
+            total_sell_quantity=self._to_float(payload.get("total_sell_quantity")),
+            bids=bids,
+            asks=asks,
         )

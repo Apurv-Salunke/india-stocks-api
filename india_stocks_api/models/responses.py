@@ -93,3 +93,34 @@ class ProfileResponse:
     email: str | None
     mobile: str | None
     raw: dict[str, Any]
+
+
+@dataclass(slots=True, frozen=True)
+class StreamDepthLevel:
+    price: float
+    quantity: int
+    orders: int
+
+
+@dataclass(slots=True, frozen=True)
+class WebSocketTick:
+    symbol: str
+    exchange: str
+    token: str
+    mode: str
+    exchange_type: int
+    timestamp: int
+    ltp: float
+    ltq: int
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: int
+    oi: int
+    bid: float
+    ask: float
+    total_buy_quantity: float
+    total_sell_quantity: float
+    bids: tuple[StreamDepthLevel, ...]
+    asks: tuple[StreamDepthLevel, ...]
