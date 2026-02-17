@@ -41,9 +41,6 @@ class InstrumentDB:
     def __init__(self, db_path="instruments.db"):
         import os
         db_path = os.path.abspath(db_path)
-        print(f"DEBUG: InstrumentDB initializing at {db_path}")
-        print(f"DEBUG: Metadata Tables: {Base.metadata.tables.keys()}")
-        
         self.engine = create_engine(f"sqlite:///{db_path}")
         self.Session = sessionmaker(bind=self.engine)
         Base.metadata.create_all(self.engine)
@@ -134,7 +131,6 @@ class InstrumentDB:
             conn.commit()
             
         except Exception as e:
-            print(f"DEBUG: Raw Insert Error: {e}")
             raise
         finally:
             conn.close()

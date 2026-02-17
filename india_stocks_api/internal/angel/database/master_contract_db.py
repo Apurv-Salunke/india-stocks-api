@@ -7,7 +7,7 @@ import os
 import pandas as pd
 import requests
 from datetime import datetime
-from india_stocks_api.internal.context import get_logger
+from india_stocks_api.internal.context import get_logger, get_instruments_db_path, _CACHE_DIR
 
 logger = get_logger(__name__)
 
@@ -171,20 +171,18 @@ def delete_temp_file(output_path):
         logger.error(f"Error deleting temporary file: {e}")
 
 
-def master_contract_download(db_path='instruments.db'):
+def master_contract_download():
     """
     Main entry point: Downloads Angel One master contract and populates DB.
-    
-    Args:
-        db_path: Path to the instruments database
-        
+
     Returns:
         int: Number of instruments inserted
     """
     logger.info("Starting Angel One master contract download...")
-    
+
+    db_path = str(get_instruments_db_path())
     url = 'https://margincalculator.angelbroking.com/OpenAPI_File/files/OpenAPIScripMaster.json'
-    output_path = 'tmp/angel.json'
+    output_path = str(_CACHE_DIR / "tmp" / "angel.json")
     
     try:
         # Download raw JSON
