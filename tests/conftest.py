@@ -73,10 +73,17 @@ def mock_auth_failure(mocker):
 
 
 @pytest.fixture(autouse=True)
-def _reset_context_globals():
+def _reset_context_globals(request):
     """
     Reset the in-memory config between tests so token state doesn't leak.
+
+    Skipped for integration tests — they authenticate once and share the
+    session across the entire module.
     """
+    if "integration" in [m.name for m in request.node.iter_markers()]:
+        yield
+        return
+
     from india_stocks_api.internal import context
     original_config = dict(context._CONFIG)
     yield
