@@ -2,57 +2,50 @@
 Angel One Adapter
 Thin wrapper around india_stocks_api.internal.angel
 """
+
 from datetime import datetime, timedelta
-from typing import Optional, Callable, List, Dict, Any
+from typing import Any, Callable, Dict, List, Optional
 from zoneinfo import ZoneInfo
 
 import pyotp
 
-from .base import BaseBroker
-from ..instruments.models import Equity, Future, Option, Index
-from ..constants import TransactionType, OrderType, ProductType, OrderValidity, CandleInterval, StreamMode
+from ..constants import CandleInterval, OrderType, OrderValidity, ProductType, StreamMode, TransactionType
 from ..exceptions import AuthenticationError
+from ..instruments.models import Equity, Future, Index, Option
 from ..internal import context
+from ..internal.angel.api.auth_api import authenticate_broker
+from ..internal.angel.api.data import BrokerData
+from ..internal.angel.api.funds import get_margin_data
+from ..internal.angel.api.gtt_api import cancel_gtt_rule, create_gtt_rule, modify_gtt_rule
+from ..internal.angel.api.gtt_api import get_gtt_list as get_gtt_list_api
+from ..internal.angel.api.gtt_api import get_gtt_status as get_gtt_details_api
 
 # Import Ported Logic
-from ..internal.angel.api.order_api import (
-    place_order_api,
-    get_positions,
-    get_holdings as get_holdings_api,
-    cancel_order as cancel_order_api,
-    get_order_book as get_orders_api,
-    get_trade_book as get_trades_api,
-    get_profile as get_profile_api,
-    get_order_details as get_order_details_api,
-    cancel_all_orders_api,
-    close_all_positions as close_all_positions_api,
-    modify_order as modify_order_api
-)
-from ..internal.angel.api.gtt_api import (
-    create_gtt_rule,
-    modify_gtt_rule,
-    cancel_gtt_rule,
-    get_gtt_list as get_gtt_list_api,
-    get_gtt_status as get_gtt_details_api
-)
-from ..internal.angel.api.auth_api import authenticate_broker
-from ..internal.angel.api.funds import get_margin_data
-from ..internal.angel.api.data import BrokerData
+from ..internal.angel.api.order_api import cancel_all_orders_api, get_positions, place_order_api
+from ..internal.angel.api.order_api import cancel_order as cancel_order_api
+from ..internal.angel.api.order_api import close_all_positions as close_all_positions_api
+from ..internal.angel.api.order_api import get_holdings as get_holdings_api
+from ..internal.angel.api.order_api import get_order_book as get_orders_api
+from ..internal.angel.api.order_api import get_order_details as get_order_details_api
+from ..internal.angel.api.order_api import get_profile as get_profile_api
+from ..internal.angel.api.order_api import get_trade_book as get_trades_api
+from ..internal.angel.api.order_api import modify_order as modify_order_api
+from .base import BaseBroker
 
 _IST = ZoneInfo("Asia/Kolkata")
 
 
 class AngelOne(BaseBroker, broker_name="angel"):
-
     def __init__(self, api_key: str, client_code: str, password: str, totp_key: str):
         self.api_key = api_key
         self.client_code = client_code
         self.password = password
         self.totp_key = totp_key
 
-    def _download_master_contract(self, db_path: str = 'instruments.db'):
+    def _download_master_contract(self, db_path: str = "instruments.db"):
         """Download and populate Angel One master contract."""
         from ..internal.angel.database import master_contract_download
+
         master_contract_download(db_path)
 
     def authenticate(self) -> bool:
@@ -77,15 +70,10 @@ class AngelOne(BaseBroker, broker_name="angel"):
         try:
             totp_code = pyotp.TOTP(self.totp_key).now()
         except Exception as exc:
-            raise AuthenticationError(
-                f"Invalid TOTP secret: {exc}"
-            ) from exc
+            raise AuthenticationError(f"Invalid TOTP secret: {exc}") from exc
 
         jwt_token, feed_token, error = authenticate_broker(
-            api_key=self.api_key,
-            clientcode=self.client_code,
-            broker_pin=self.password,
-            totp_code=totp_code
+            api_key=self.api_key, clientcode=self.client_code, broker_pin=self.password, totp_code=totp_code
         )
 
         if not jwt_token:
@@ -97,19 +85,20 @@ class AngelOne(BaseBroker, broker_name="angel"):
 
         # Compute session expiry: next midnight IST
         now_ist = datetime.now(_IST)
-        expires_at = (now_ist + timedelta(days=1)).replace(
-            hour=0, minute=0, second=0, microsecond=0
-        )
+        expires_at = (now_ist + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
 
         # Persist session — only tokens and non-secret identifiers
-        context.save_session("angel", {
-            "access_token": jwt_token,
-            "feed_token": feed_token,
-            "api_key": self.api_key,
-            "client_code": self.client_code,
-            "authenticated_at": now_ist.isoformat(),
-            "expires_at": expires_at.isoformat(),
-        })
+        context.save_session(
+            "angel",
+            {
+                "access_token": jwt_token,
+                "feed_token": feed_token,
+                "api_key": self.api_key,
+                "client_code": self.client_code,
+                "authenticated_at": now_ist.isoformat(),
+                "expires_at": expires_at.isoformat(),
+            },
+        )
 
         return True
 
@@ -125,7 +114,7 @@ class AngelOne(BaseBroker, broker_name="angel"):
         price: float = 0.0,
         trigger_price: float = 0.0,
         validity: OrderValidity = OrderValidity.DAY,
-        **kwargs
+        **kwargs,
     ) -> dict:
         token_info = self._resolve_instrument(instrument)
         jwt_token = self._require_auth()
@@ -139,16 +128,12 @@ class AngelOne(BaseBroker, broker_name="angel"):
             "product": product_type.value,
             "price": str(price),
             "trigger_price": str(trigger_price),
-            "validity": validity.value
+            "validity": validity.value,
         }
 
         res, response, orderid = place_order_api(data, jwt_token)
 
-        return {
-            "order_id": orderid,
-            "raw_response": response,
-            "status": "success" if orderid else "failed"
-        }
+        return {"order_id": orderid, "raw_response": response, "status": "success" if orderid else "failed"}
 
     def get_positions(self) -> list:
         jwt_token = self._require_auth()
@@ -158,8 +143,9 @@ class AngelOne(BaseBroker, broker_name="angel"):
         jwt_token = self._require_auth()
         return get_margin_data(jwt_token)
 
-    def get_history(self, instrument: Equity | Future | Option | Index,
-                   start_date: str, end_date: str, interval: CandleInterval):
+    def get_history(
+        self, instrument: Equity | Future | Option | Index, start_date: str, end_date: str, interval: CandleInterval
+    ):
         token_info = self._resolve_instrument(instrument)
         jwt_token = self._require_auth()
 
@@ -169,7 +155,7 @@ class AngelOne(BaseBroker, broker_name="angel"):
             exchange=token_info["exchange"],
             interval=interval.value,
             start_date=start_date,
-            end_date=end_date
+            end_date=end_date,
         )
 
     def get_depth(self, instrument: Equity | Future | Option | Index) -> dict:
@@ -189,12 +175,12 @@ class AngelOne(BaseBroker, broker_name="angel"):
     def get_holdings(self) -> list:
         jwt_token = self._require_auth()
         resp = get_holdings_api(jwt_token)
-        return resp.get('data') or []
+        return resp.get("data") or []
 
     def get_orders(self) -> list:
         jwt_token = self._require_auth()
         resp = get_orders_api(jwt_token)
-        return resp.get('data') or []
+        return resp.get("data") or []
 
     def cancel_order(self, order_id: str) -> dict:
         jwt_token = self._require_auth()
@@ -205,21 +191,21 @@ class AngelOne(BaseBroker, broker_name="angel"):
         jwt_token = self._require_auth()
 
         all_orders = self.get_orders()
-        target_order = next((o for o in all_orders if o.get('orderid') == order_id), None)
+        target_order = next((o for o in all_orders if o.get("orderid") == order_id), None)
 
         if not target_order:
             raise ValueError(f"Order {order_id} not found.")
 
         data = {
             "orderid": order_id,
-            "symbol": target_order.get('tradingsymbol'),
-            "exchange": target_order.get('exchange'),
-            "transactiontype": target_order.get('transactiontype'),
-            "ordertype": target_order.get('ordertype'),
-            "producttype": target_order.get('producttype'),
-            "quantity": str(quantity) if quantity > 0 else target_order.get('quantity'),
-            "price": str(price) if price > 0 else target_order.get('price'),
-            "triggerprice": str(trigger_price) if trigger_price > 0 else target_order.get('triggerprice')
+            "symbol": target_order.get("tradingsymbol"),
+            "exchange": target_order.get("exchange"),
+            "transactiontype": target_order.get("transactiontype"),
+            "ordertype": target_order.get("ordertype"),
+            "producttype": target_order.get("producttype"),
+            "quantity": str(quantity) if quantity > 0 else target_order.get("quantity"),
+            "price": str(price) if price > 0 else target_order.get("price"),
+            "triggerprice": str(trigger_price) if trigger_price > 0 else target_order.get("triggerprice"),
         }
 
         resp, status = modify_order_api(data, jwt_token)
@@ -228,17 +214,17 @@ class AngelOne(BaseBroker, broker_name="angel"):
     def get_trades(self) -> list:
         jwt_token = self._require_auth()
         resp = get_trades_api(jwt_token)
-        return resp.get('data') or []
+        return resp.get("data") or []
 
     def get_profile(self) -> dict:
         jwt_token = self._require_auth()
         resp = get_profile_api(jwt_token)
-        return resp.get('data') or {}
+        return resp.get("data") or {}
 
     def get_order_details(self, order_id: str) -> dict:
         jwt_token = self._require_auth()
         resp = get_order_details_api(order_id, jwt_token)
-        return resp.get('data') or {}
+        return resp.get("data") or {}
 
     def cancel_all_orders(self) -> dict:
         jwt_token = self._require_auth()
@@ -252,9 +238,16 @@ class AngelOne(BaseBroker, broker_name="angel"):
 
     # --- GTT Orders ---
 
-    def create_gtt(self, instrument: Equity | Future | Option, transaction_type: TransactionType,
-                  quantity: int, trigger_price: float, price: float,
-                  product_type: ProductType = ProductType.DELIVERY, time_period: int = 365) -> dict:
+    def create_gtt(
+        self,
+        instrument: Equity | Future | Option,
+        transaction_type: TransactionType,
+        quantity: int,
+        trigger_price: float,
+        price: float,
+        product_type: ProductType = ProductType.DELIVERY,
+        time_period: int = 365,
+    ) -> dict:
         token_info = self._resolve_instrument(instrument)
         jwt_token = self._require_auth()
 
@@ -270,13 +263,14 @@ class AngelOne(BaseBroker, broker_name="angel"):
             "qty": str(quantity),
             "triggerprice": str(trigger_price),
             "discloseqty": str(quantity),
-            "timeperiod": str(time_period)
+            "timeperiod": str(time_period),
         }
 
         return create_gtt_rule(payload, jwt_token)
 
-    def modify_gtt(self, id: int, instrument: Equity | Future | Option,
-                  quantity: int, trigger_price: float, price: float) -> dict:
+    def modify_gtt(
+        self, id: int, instrument: Equity | Future | Option, quantity: int, trigger_price: float, price: float
+    ) -> dict:
         token_info = self._resolve_instrument(instrument)
         jwt_token = self._require_auth()
 
@@ -286,7 +280,7 @@ class AngelOne(BaseBroker, broker_name="angel"):
             "exchange": token_info["exchange"],
             "price": price,
             "qty": quantity,
-            "triggerprice": trigger_price
+            "triggerprice": trigger_price,
         }
 
         return modify_gtt_rule(payload, jwt_token)
@@ -295,11 +289,7 @@ class AngelOne(BaseBroker, broker_name="angel"):
         token_info = self._resolve_instrument(instrument)
         jwt_token = self._require_auth()
 
-        payload = {
-            "id": id,
-            "symboltoken": token_info["token"],
-            "exchange": token_info["exchange"]
-        }
+        payload = {"id": id, "symboltoken": token_info["token"], "exchange": token_info["exchange"]}
 
         return cancel_gtt_rule(payload, jwt_token)
 
@@ -309,12 +299,12 @@ class AngelOne(BaseBroker, broker_name="angel"):
             status = ["FOR_SETTLEMENT", "CANCELLED", "TRIGGERED"]
         payload = {"status": status, "page": 1, "count": 50}
         resp = get_gtt_list_api(payload, jwt_token)
-        return resp.get('data') or []
+        return resp.get("data") or []
 
     def get_gtt_details(self, id: int) -> dict:
         jwt_token = self._require_auth()
         resp = get_gtt_details_api(id, jwt_token)
-        return resp.get('data') or {}
+        return resp.get("data") or {}
 
     # --- WebSocket Streaming ---
 
@@ -330,7 +320,7 @@ class AngelOne(BaseBroker, broker_name="angel"):
 
     def __init_streaming(self):
         """Lazy initialization of streaming components."""
-        if not hasattr(self, '_ws_client'):
+        if not hasattr(self, "_ws_client"):
             self._ws_client = None
             self._pending_subscriptions: List[tuple] = []
 
@@ -340,19 +330,14 @@ class AngelOne(BaseBroker, broker_name="angel"):
             self.on_open: Optional[Callable[[], None]] = None
 
     def subscribe(
-        self,
-        instruments: List[Equity | Future | Option | Index],
-        mode: StreamMode = StreamMode.QUOTE
+        self, instruments: List[Equity | Future | Option | Index], mode: StreamMode = StreamMode.QUOTE
     ) -> None:
         self.__init_streaming()
 
         token_list = []
         for inst in instruments:
             resolved = self._resolve_instrument(inst)
-            token_list.append({
-                "exchange": resolved["exchange"],
-                "token": resolved["token"]
-            })
+            token_list.append({"exchange": resolved["exchange"], "token": resolved["token"]})
 
         self._pending_subscriptions.append((token_list, mode.value))
 
@@ -368,15 +353,10 @@ class AngelOne(BaseBroker, broker_name="angel"):
                 exchange_tokens[exch_type] = []
             exchange_tokens[exch_type].append(str(item["token"]))
 
-        ws_token_list = [
-            {"exchangeType": exch, "tokens": tokens}
-            for exch, tokens in exchange_tokens.items()
-        ]
+        ws_token_list = [{"exchangeType": exch, "tokens": tokens} for exch, tokens in exchange_tokens.items()]
 
         self._ws_client.subscribe(
-            correlation_id=f"sub_{int(__import__('time').time())}",
-            mode=mode,
-            token_list=ws_token_list
+            correlation_id=f"sub_{int(__import__('time').time())}", mode=mode, token_list=ws_token_list
         )
 
     def start_streaming(self) -> None:
@@ -404,7 +384,7 @@ class AngelOne(BaseBroker, broker_name="angel"):
             client_code=self.client_code,
             feed_token=feed_token,
             max_retry_attempt=3,
-            retry_delay=5
+            retry_delay=5,
         )
 
         def handle_open(wsapp):

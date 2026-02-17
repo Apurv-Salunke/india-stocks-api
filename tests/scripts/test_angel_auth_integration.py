@@ -1,5 +1,7 @@
 import os
+
 from dotenv import load_dotenv
+
 from india_stocks_api.brokers.angel import AngelOne
 from india_stocks_api.internal.context import get_auth_token, get_feed_token, load_session
 
@@ -13,8 +15,9 @@ def test_angel_one_authentication():
     password = os.getenv("ANGEL_PIN")
     totp = os.getenv("ANGEL_TOTP_SECRET")
 
-    assert all([api_key, clientcode, password, totp]), \
+    assert all([api_key, clientcode, password, totp]), (
         "Missing credentials - set ANGEL_API_KEY, ANGEL_CLIENT_ID, ANGEL_PIN, ANGEL_TOTP_SECRET"
+    )
 
     print(f"Using credentials: clientcode={clientcode[:4]}XXXX")
 

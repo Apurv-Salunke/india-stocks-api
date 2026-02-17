@@ -1,9 +1,8 @@
 """Shared fixtures and marker auto-application for the test suite."""
-import json
-import pytest
-from pathlib import Path
+
 from unittest.mock import patch
 
+import pytest
 
 # ---------------------------------------------------------------------------
 # Exclude tests/scripts/ from collection (old ad-hoc scripts)
@@ -16,6 +15,7 @@ collect_ignore_glob = ["scripts/*"]
 # Auto-apply the 'integration' marker to every test under tests/integration/
 # ---------------------------------------------------------------------------
 
+
 def pytest_collection_modifyitems(config, items):
     for item in items:
         if "/integration/" in str(item.fspath):
@@ -25,6 +25,7 @@ def pytest_collection_modifyitems(config, items):
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture()
 def dummy_creds():
@@ -48,9 +49,11 @@ def tmp_session_file(tmp_path):
     so tests don't leak state into one another.
     """
     fake_path = tmp_path / "_cache" / "sessions.json"
-    with patch("india_stocks_api.internal.context._SESSION_FILE", fake_path), \
-         patch("india_stocks_api.internal.context._SESSION_LOADED", False), \
-         patch("india_stocks_api.internal.context._SESSION_CACHE", {}):
+    with (
+        patch("india_stocks_api.internal.context._SESSION_FILE", fake_path),
+        patch("india_stocks_api.internal.context._SESSION_LOADED", False),
+        patch("india_stocks_api.internal.context._SESSION_CACHE", {}),
+    ):
         yield fake_path
 
 
@@ -85,6 +88,7 @@ def _reset_context_globals(request):
         return
 
     from india_stocks_api.internal import context
+
     original_config = dict(context._CONFIG)
     yield
     context._CONFIG.update(original_config)

@@ -3,11 +3,12 @@
 All network calls are mocked; tests exercise the orchestration logic:
 credential validation, TOTP generation, session persistence, error paths.
 """
-import json
-import pytest
-from unittest.mock import patch, MagicMock
+
 from datetime import datetime
+from unittest.mock import MagicMock
 from zoneinfo import ZoneInfo
+
+import pytest
 
 from india_stocks_api.brokers.angel import AngelOne
 from india_stocks_api.exceptions import AuthenticationError
@@ -23,7 +24,6 @@ def _skip_instruments(mocker):
 
 
 class TestAuthenticateSuccess:
-
     def test_returns_true(self, dummy_creds, mock_auth_success, tmp_session_file):
         broker = AngelOne(**dummy_creds)
         assert broker.authenticate() is True
@@ -84,7 +84,6 @@ class TestAuthenticateSuccess:
 
 
 class TestAuthenticateFailure:
-
     def test_raises_on_api_failure(self, dummy_creds, mock_auth_failure, tmp_session_file):
         broker = AngelOne(**dummy_creds)
         with pytest.raises(AuthenticationError, match="Invalid TOTP"):

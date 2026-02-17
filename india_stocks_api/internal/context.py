@@ -3,20 +3,18 @@ Shim Context for Internal OpenAlgo Code.
 This module mocks/replaces the `database` and `utils` dependencies that
 the ported OpenAlgo broker code expects.
 """
-import httpx
-import logging
+
 import json
+import logging
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
+
+import httpx
 
 _logger = logging.getLogger(__name__)
 
 # --- Shared State (Global for simplicity in Shim) ---
-_CONFIG = {
-    "access_token": None,
-    "feed_token": None,
-    "symbol_map": {}
-}
+_CONFIG = {"access_token": None, "feed_token": None, "symbol_map": {}}
 
 _HTTP_CLIENT: Optional[httpx.Client] = None
 
@@ -53,8 +51,7 @@ def _load_all_sessions() -> Dict[str, Dict[str, Any]]:
             data = json.loads(path.read_text(encoding="utf-8"))
             if isinstance(data, dict):
                 _SESSION_CACHE = {
-                    str(broker): (sess if isinstance(sess, dict) else {})
-                    for broker, sess in data.items()
+                    str(broker): (sess if isinstance(sess, dict) else {}) for broker, sess in data.items()
                 }
             else:
                 _SESSION_CACHE = {}
@@ -124,8 +121,10 @@ def get_api_key(broker: str) -> Optional[str]:
 
 # --- Configuration Setters (Called by Broker Adapter) ---
 
+
 def set_auth_token(token: str):
     _CONFIG["access_token"] = token
+
 
 def set_feed_token(token: str):
     _CONFIG["feed_token"] = token
@@ -133,13 +132,16 @@ def set_feed_token(token: str):
 
 # --- Shimmed Functions (Replacements for OpenAlgo imports) ---
 
+
 def get_auth_token(user_id: Optional[str] = None) -> Optional[str]:
     """Replacement for database.auth_db.get_auth_token"""
     return _CONFIG["access_token"]
 
+
 def get_feed_token(user_id: Optional[str] = None) -> Optional[str]:
     """Replacement for database.auth_db.get_feed_token"""
     return _CONFIG["feed_token"]
+
 
 def get_httpx_client() -> httpx.Client:
     """Replacement for utils.httpx_client.get_httpx_client"""
@@ -147,6 +149,7 @@ def get_httpx_client() -> httpx.Client:
     if _HTTP_CLIENT is None:
         _HTTP_CLIENT = httpx.Client(timeout=10.0)
     return _HTTP_CLIENT
+
 
 def get_logger(name: str) -> logging.Logger:
     """Replacement for utils.logging.get_logger"""
@@ -159,6 +162,7 @@ from india_stocks_api.instruments.database import InstrumentDB
 
 _INSTRUMENT_DB = None
 
+
 def _get_db():
     global _INSTRUMENT_DB
     if _INSTRUMENT_DB is None:
@@ -168,6 +172,7 @@ def _get_db():
         _INSTRUMENT_DB = InstrumentDB(str(chk_path))
     return _INSTRUMENT_DB
 
+
 def get_br_symbol(symbol: str, exchange: str) -> str:
     """Replacement for database.token_db.get_br_symbol."""
     db = _get_db()
@@ -175,6 +180,7 @@ def get_br_symbol(symbol: str, exchange: str) -> str:
     if record:
         return record.tradingsymbol
     return symbol
+
 
 def get_token(symbol: str, exchange: str) -> Optional[str]:
     """Replacement for database.token_db.get_token"""
@@ -184,6 +190,7 @@ def get_token(symbol: str, exchange: str) -> Optional[str]:
         return record.token
     return None
 
+
 def get_tradingsymbol(symbol: str, exchange: str) -> Optional[str]:
     """Get broker-specific tradingsymbol (e.g. SBIN-EQ)"""
     db = _get_db()
@@ -192,9 +199,11 @@ def get_tradingsymbol(symbol: str, exchange: str) -> Optional[str]:
         return record.tradingsymbol
     return symbol
 
+
 def get_symbol(token: str, exchange: str) -> Optional[str]:
     """Replacement for database.token_db.get_symbol"""
     return token  # TODO implementation
+
 
 def get_oa_symbol(brsymbol: str, exchange: str) -> Optional[str]:
     """Replacement for database.token_db.get_oa_symbol"""
