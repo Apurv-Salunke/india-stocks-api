@@ -152,6 +152,56 @@ depth = broker.get_depth(Equity("INFY"))
 print(f"Best Bid: {depth['bids'][0]['price']} x {depth['bids'][0]['quantity']}")
 ```
 
+### WebSocket Streaming (AngelOne)
+
+```python
+import threading
+from india_stocks_api.constants import StreamMode
+from india_stocks_api.instruments import Equity
+
+# Authenticate first
+broker.authenticate()
+
+def on_open():
+    print("WebSocket connected")
+
+def on_tick(tick: dict):
+    # Example keys: token, exchange_type, last_traded_price, subscription_mode_val
+    print("tick:", tick.get("token"), tick.get("last_traded_price"))
+
+def on_error(error_type: str, error_msg: str):
+    print("stream error:", error_type, error_msg)
+
+def on_close():
+    print("WebSocket closed")
+
+broker.on_open = on_open
+broker.on_tick = on_tick
+broker.on_error = on_error
+broker.on_close = on_close
+
+# Queue subscriptions before connect (buffered and sent on open)
+broker.subscribe([Equity("RELIANCE"), Equity("INFY")], mode=StreamMode.QUOTE)
+
+# start_streaming() is blocking, so run it in a background thread if needed
+stream_thread = threading.Thread(target=broker.start_streaming, daemon=True)
+stream_thread.start()
+
+# ... your strategy loop here ...
+
+# Optional: unsubscribe specific instruments/mode
+broker.unsubscribe([Equity("INFY")], mode=StreamMode.QUOTE)
+
+# Stop stream when shutting down
+broker.stop_streaming()
+stream_thread.join(timeout=5)
+```
+
+Notes:
+- Call `authenticate()` before starting streaming.
+- `start_streaming()` requires both JWT and feed token from authentication.
+- On reconnect, active subscriptions are automatically restored.
+
 ### Portfolio Management
 
 ```python
