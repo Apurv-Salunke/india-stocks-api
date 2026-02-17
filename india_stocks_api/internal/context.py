@@ -14,7 +14,7 @@ import httpx
 _logger = logging.getLogger(__name__)
 
 # --- Shared State (Global for simplicity in Shim) ---
-_CONFIG = {"access_token": None, "feed_token": None, "symbol_map": {}}
+_CONFIG: Dict[str, Any] = {"access_token": None, "feed_token": None, "symbol_map": {}}
 
 _HTTP_CLIENT: Optional[httpx.Client] = None
 
@@ -26,7 +26,8 @@ _HTTP_CLIENT: Optional[httpx.Client] = None
 
 _SESSION_CACHE: Dict[str, Dict[str, Any]] = {}
 _SESSION_LOADED: bool = False
-_SESSION_FILE = Path(__file__).parent.parent.parent / "_cache" / "sessions.json"
+_CACHE_DIR = Path(__file__).parent.parent.parent / "_cache"
+_SESSION_FILE = _CACHE_DIR / "sessions.json"
 
 
 def _get_session_path() -> Path:
@@ -163,13 +164,15 @@ from india_stocks_api.instruments.database import InstrumentDB
 _INSTRUMENT_DB = None
 
 
+def get_instruments_db_path() -> Path:
+    """Return the canonical path to instruments.db inside _cache/."""
+    return _CACHE_DIR / "instruments.db"
+
+
 def _get_db():
     global _INSTRUMENT_DB
     if _INSTRUMENT_DB is None:
-        chk_path = Path("instruments.db")
-        if not chk_path.exists():
-            chk_path = Path(__file__).parent.parent.parent / "instruments.db"
-        _INSTRUMENT_DB = InstrumentDB(str(chk_path))
+        _INSTRUMENT_DB = InstrumentDB(str(get_instruments_db_path()))
     return _INSTRUMENT_DB
 
 

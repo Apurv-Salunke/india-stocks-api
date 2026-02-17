@@ -42,11 +42,11 @@ class AngelOne(BaseBroker, broker_name="angel"):
         self.password = password
         self.totp_key = totp_key
 
-    def _download_master_contract(self, db_path: str = "instruments.db"):
+    def _download_master_contract(self):
         """Download and populate Angel One master contract."""
         from ..internal.angel.database import master_contract_download
 
-        master_contract_download(db_path)
+        master_contract_download()
 
     def authenticate(self) -> bool:
         """

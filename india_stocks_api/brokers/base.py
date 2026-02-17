@@ -1,4 +1,3 @@
-import os
 from abc import ABC, ABCMeta, abstractmethod
 from datetime import date, datetime
 from functools import singledispatchmethod
@@ -55,51 +54,37 @@ class BaseBroker(ABC, metaclass=BrokerMeta):
             raise ValueError(f"Unknown broker: {broker_name}. Available: {list(cls._registry.keys())}")
         return cls._registry[broker_name](**kwargs)
 
-    def _ensure_instruments_ready(self, db_path: str = "instruments.db"):
+    def _ensure_instruments_ready(self):
         """
         Check if instruments DB is stale and rebuild if needed.
         Called automatically by BrokerMeta after __init__.
-
-        Args:
-            db_path: Path to the instruments database
         """
+        db_path = context.get_instruments_db_path()
         if self._is_db_stale(db_path):
-            from ..internal import context
-
             logger = context.get_logger(__name__)
             logger.info("Instruments DB is stale or missing. Downloading master contract...")
-            self._download_master_contract(db_path)
+            self._download_master_contract()
             logger.info("Instruments DB ready.")
 
-    def _is_db_stale(self, db_path: str) -> bool:
+    @staticmethod
+    def _is_db_stale(db_path) -> bool:
         """
         Returns True if DB doesn't exist or was last modified before today.
-
-        Args:
-            db_path: Path to the instruments database
-
-        Returns:
-            bool: True if DB needs refresh
         """
-        if not os.path.exists(db_path):
+        if not db_path.exists():
             return True
-
-        # Check if file was modified today
-        mtime = os.path.getmtime(db_path)
+        mtime = db_path.stat().st_mtime
         file_date = datetime.fromtimestamp(mtime).date()
         return file_date < date.today()
 
     @abstractmethod
-    def _download_master_contract(self, db_path: str = "instruments.db"):
+    def _download_master_contract(self):
         """
         Subclasses must implement this to call their broker-specific download.
 
         Example for AngelOne:
             from ..internal.angel.database import master_contract_download
-            master_contract_download(db_path)
-
-        Args:
-            db_path: Path to the instruments database
+            master_contract_download()
         """
         ...
 
