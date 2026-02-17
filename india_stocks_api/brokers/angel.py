@@ -355,6 +355,12 @@ class AngelOne(BaseBroker, broker_name="angel"):
 
     def _send_subscription(self, token_list: List[Dict], mode: int) -> None:
         """Send subscription request to WebSocket."""
+        ws_token_list = self._build_ws_token_list(token_list)
+
+        self._ws_client.subscribe(correlation_id=f"sub_{uuid4().hex[:12]}", mode=mode, token_list=ws_token_list)
+
+    def _build_ws_token_list(self, token_list: List[Dict[str, str]]) -> List[Dict[str, Any]]:
+        """Build websocket token payload grouped by exchange type."""
         exchange_tokens: Dict[int, List[str]] = {}
         for item in token_list:
             exch_type = self._WS_EXCHANGE_MAP.get(item["exchange"], 1)
@@ -362,9 +368,7 @@ class AngelOne(BaseBroker, broker_name="angel"):
                 exchange_tokens[exch_type] = []
             exchange_tokens[exch_type].append(str(item["token"]))
 
-        ws_token_list = [{"exchangeType": exch, "tokens": tokens} for exch, tokens in exchange_tokens.items()]
-
-        self._ws_client.subscribe(correlation_id=f"sub_{uuid4().hex[:12]}", mode=mode, token_list=ws_token_list)
+        return [{"exchangeType": exch, "tokens": tokens} for exch, tokens in exchange_tokens.items()]
 
     def unsubscribe(
         self, instruments: List[Equity | Future | Option | Index], mode: StreamMode = StreamMode.QUOTE
@@ -384,13 +388,7 @@ class AngelOne(BaseBroker, broker_name="angel"):
         ]
 
         if self._ws_client and self._ws_client.wsapp:
-            exchange_tokens: Dict[int, List[str]] = {}
-            for item in token_list:
-                exch_type = self._WS_EXCHANGE_MAP.get(item["exchange"], 1)
-                if exch_type not in exchange_tokens:
-                    exchange_tokens[exch_type] = []
-                exchange_tokens[exch_type].append(str(item["token"]))
-            ws_token_list = [{"exchangeType": exch, "tokens": tokens} for exch, tokens in exchange_tokens.items()]
+            ws_token_list = self._build_ws_token_list(token_list)
             self._ws_client.unsubscribe(
                 correlation_id=f"unsub_{uuid4().hex[:12]}", mode=mode.value, token_list=ws_token_list
             )
@@ -424,8 +422,12 @@ class AngelOne(BaseBroker, broker_name="angel"):
         )
 
         def handle_open(wsapp):
-            for token_list, mode in self._pending_subscriptions:
-                self._send_subscription(token_list, mode)
+            # On reconnect, SmartWebSocketV2._on_open already calls resubscribe()
+            # from its internal state; replaying pending subscriptions here would
+            # duplicate subscription requests.
+            if not getattr(self._ws_client, "RESUBSCRIBE_FLAG", False):
+                for token_list, mode in self._pending_subscriptions:
+                    self._send_subscription(token_list, mode)
             if self.on_open:
                 self.on_open()
 

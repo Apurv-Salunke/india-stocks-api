@@ -8,6 +8,7 @@ import pytest
 from india_stocks_api.brokers.angel import AngelOne
 from india_stocks_api.constants import StreamMode
 from india_stocks_api.instruments import Equity
+from india_stocks_api.internal import context
 from india_stocks_api.internal.angel.streaming.smartWebSocketV2 import SmartWebSocketV2
 
 
@@ -120,3 +121,24 @@ def test_broker_unsubscribe_calls_wsclient_and_removes_pending(mocker, dummy_cre
 
     fake_client.unsubscribe.assert_called_once()
     assert broker._pending_subscriptions == []
+
+
+def test_start_streaming_skips_pending_replay_when_resubscribe_flag_set(mocker, dummy_creds):
+    broker = AngelOne(**dummy_creds)
+    broker._pending_subscriptions = [([{"exchange": "NSE", "token": "2885"}], StreamMode.QUOTE.value)]
+    replay_spy = mocker.patch.object(broker, "_send_subscription")
+    mocker.patch.object(broker, "_require_auth", return_value="jwt_token_xxx")
+    mocker.patch.object(context, "get_feed_token", return_value="feed_token_xxx")
+
+    class FakeWSClient:
+        def __init__(self, *args, **kwargs):
+            self.RESUBSCRIBE_FLAG = True
+
+        def connect(self):
+            self.on_open(None)
+
+    mocker.patch("india_stocks_api.internal.angel.streaming.SmartWebSocketV2", FakeWSClient)
+
+    broker.start_streaming()
+
+    replay_spy.assert_not_called()
