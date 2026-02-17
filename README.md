@@ -382,16 +382,16 @@ Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## FAQ
 
-**Q: Do I need to download instrument CSVs manually?**  
+**Q: Do I need to download instrument CSVs manually?**
 A: No! V2.0 auto-downloads and updates instruments on first use.
 
-**Q: Can I use the same code for multiple brokers?**  
+**Q: Can I use the same code for multiple brokers?**
 A: Yes! Just change `AngelOne(...)` to `Zerodha(...)`. Same API.
 
-**Q: How is this different from OpenAlgo?**  
+**Q: How is this different from OpenAlgo?**
 A: We port OpenAlgo's battle-tested broker logic but provide a **standalone library** (no Flask, no UI dependencies).
 
-**Q: Is the instruments database huge?**  
+**Q: Is the instruments database huge?**
 A: ~56MB for 200K+ instruments. Downloads once, updates daily.
 
 ## License

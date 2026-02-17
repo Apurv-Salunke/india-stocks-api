@@ -441,10 +441,11 @@ class AngelOne(BaseBroker, broker_name="angel"):
             if self.on_close:
                 self.on_close()
 
-        self._ws_client.on_open = handle_open
-        self._ws_client.on_data = handle_data
-        self._ws_client.on_error = handle_error
-        self._ws_client.on_close = handle_close
+        # SmartWebSocketV2 exposes these as overridable handler attributes.
+        setattr(self._ws_client, "on_open", handle_open)
+        setattr(self._ws_client, "on_data", handle_data)
+        setattr(self._ws_client, "on_error", handle_error)
+        setattr(self._ws_client, "on_close", handle_close)
 
         self._ws_client.connect()
 
