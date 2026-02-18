@@ -18,7 +18,17 @@ import pytest
 from india_stocks_api.brokers.angel import AngelOne
 from india_stocks_api.constants import CandleInterval
 from india_stocks_api.instruments import Equity
-from india_stocks_api.responses import DepthResponse, FundsResponse, HistoryResponse, ProfileResponse, QuoteResponse
+from india_stocks_api.responses import (
+    DepthResponse,
+    FundsResponse,
+    HistoryResponse,
+    Holding,
+    Order,
+    Position,
+    ProfileResponse,
+    QuoteResponse,
+    Trade,
+)
 
 
 def _get_creds():
@@ -80,18 +90,22 @@ class TestAngelDataMethodsLive:
         assert isinstance(funds, FundsResponse)
         assert isinstance(profile, ProfileResponse)
         assert isinstance(holdings, list)
+        assert all(isinstance(h, Holding) for h in holdings)
         assert isinstance(orders, list)
+        assert all(isinstance(o, Order) for o in orders)
         assert isinstance(trades, list)
+        assert all(isinstance(t, Trade) for t in trades)
         assert isinstance(positions, list)
+        assert all(isinstance(p, Position) for p in positions)
 
     def test_get_order_details_shape_when_orders_exist(self, live_broker):
         orders = live_broker.get_orders()
         if not orders:
             pytest.skip("No orders available for order-details validation.")
 
-        first_order_id = orders[0].get("orderid")
-        if not first_order_id:
-            pytest.skip("Order id missing in first order payload.")
+        first_order = orders[0]
+        assert isinstance(first_order, Order)
 
-        details = live_broker.get_order_details(first_order_id)
-        assert isinstance(details, dict)
+        details = live_broker.get_order_details(first_order.order_id)
+        assert isinstance(details, Order)
+        assert details.order_id == first_order.order_id

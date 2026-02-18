@@ -49,9 +49,10 @@ broker.start_streaming()  # blocking; run in a thread if needed
 
 ## Canonical responses
 Returned from `india_stocks_api.responses`:
-- `QuoteResponse`, `DepthResponse`, `HistoryResponse`
-- `FundsResponse`, `ProfileResponse`
-- `WebSocketTick` (streaming, normalized depth levels)
+- **Market data:** `QuoteResponse`, `DepthResponse`, `HistoryResponse`
+- **Account:** `FundsResponse`, `ProfileResponse`
+- **Orders:** `OrderResponse`, `Order`, `Position`, `Holding`, `Trade`
+- **Streaming:** `WebSocketTick` (normalized depth levels)
 
 ## Streaming behavior (Angel One)
 - Subscriptions are buffered; sent on connect.
@@ -64,9 +65,49 @@ Returned from `india_stocks_api.responses`:
 3. Ported internals (`internal/angel/*`) stay close to upstream for easier syncs.
 
 ## Testing
-- Unit: `poetry run pytest tests/unit`
-- Integration (live Angel creds in `.env`): `poetry run pytest tests/integration/test_data_methods_live.py -v`
-- Lint/type: `poetry run ruff check .` and `poetry run mypy india_stocks_api`
+
+```bash
+# Unit tests
+poetry run pytest tests/unit/ -v
+
+# Lint + type check
+poetry run ruff check .
+poetry run ruff format --check .
+poetry run mypy india_stocks_api/
+
+# Integration tests (require live Angel creds in .env)
+# .env must contain: ANGEL_API_KEY, ANGEL_CLIENT_ID, ANGEL_PIN, ANGEL_TOTP_SECRET
+poetry run pytest tests/integration/test_angel_auth_live.py -v
+poetry run pytest tests/integration/test_data_methods_live.py -v
+```
+
+> **Note:** Run integration test files individually, not together — Angel's TOTP
+> rate-limits duplicate auth calls within the same 30-second window.
+
+## Publishing
+
+Builds are managed with Poetry. The package is published as `india-stocks-api` on PyPI.
+
+```bash
+# Build sdist + wheel
+poetry build
+
+# Publish to TestPyPI (for verification before production release)
+poetry config repositories.testpypi https://test.pypi.org/legacy/
+poetry config pypi-token.testpypi <your-test-pypi-token>
+poetry publish --repository testpypi
+
+# Install from TestPyPI to verify
+pip install --index-url https://test.pypi.org/simple/ \
+            --extra-index-url https://pypi.org/simple/ \
+            india-stocks-api==<version>
+
+# Publish to production PyPI
+poetry publish
+```
+
+TestPyPI tokens are separate from PyPI tokens. Generate one at
+https://test.pypi.org/manage/account/token/.
 
 ## Contributing
 - Install hooks: `pre-commit install`
