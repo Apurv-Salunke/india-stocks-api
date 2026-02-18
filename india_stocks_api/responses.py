@@ -96,6 +96,67 @@ class ProfileResponse:
 
 
 @dataclass(slots=True, frozen=True)
+class OrderResponse:
+    order_id: str | None
+    status: str  # "success" | "failed" | "error"
+    message: str
+
+
+@dataclass(slots=True, frozen=True)
+class Order:
+    order_id: str
+    symbol: str
+    exchange: str
+    transaction_type: str  # "BUY" | "SELL"
+    order_type: str  # "MARKET" | "LIMIT" | "SL" | "SL-M"
+    product_type: str
+    quantity: int
+    price: float
+    trigger_price: float
+    average_price: float
+    status: str  # "open" | "complete" | "rejected" | "cancelled"
+    timestamp: str
+    raw: dict[str, Any]
+
+
+@dataclass(slots=True, frozen=True)
+class Position:
+    symbol: str
+    exchange: str
+    product_type: str
+    quantity: int
+    average_price: float
+    ltp: float
+    pnl: float
+    raw: dict[str, Any]
+
+
+@dataclass(slots=True, frozen=True)
+class Holding:
+    symbol: str
+    exchange: str
+    quantity: int
+    average_price: float
+    ltp: float
+    pnl: float
+    pnl_percent: float
+    raw: dict[str, Any]
+
+
+@dataclass(slots=True, frozen=True)
+class Trade:
+    order_id: str
+    symbol: str
+    exchange: str
+    transaction_type: str
+    quantity: int
+    price: float
+    trade_value: float
+    timestamp: str
+    raw: dict[str, Any]
+
+
+@dataclass(slots=True, frozen=True)
 class StreamDepthLevel:
     price: float
     quantity: int

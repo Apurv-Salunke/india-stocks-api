@@ -1,0 +1,16 @@
+[x] store tokens in cache | Done — _cache/sessions.json (PR #35)
+[x] store instruments in cache | Done — _cache/instruments.db (PR #36)
+[x] delete tmp directory | Done — downloads to _cache/tmp/, file deleted after processing
+[x] add logging | Done — get_logger() shim wired across all internal modules (156 usages)
+[x] add unit tests | Done — 50 unit tests + CI pipeline (PR #35, #37)
+[x] test all functions for data and use common response format | Done — canonical responses (PR #39)
+[x] test websocket | Done — WebSocketTick canonical response (PR #39)
+[x] canonical responses for order methods | Done — OrderResponse, Order, Position, Holding, Trade
+[ ] re-enable GTT methods (create/modify/cancel/list/details) after testing
+[ ] re-enable bulk ops (cancel_all_orders, square_off_all_positions) after testing
+[ ] add custom error codes | Later
+[ ] add integration tests | Later
+[ ] add documentation | Basic Immediate
+[ ] add rate limiting | Later
+[ ] review instruments DB structure and make it common for all brokers | Later
+[ ] multiple broker support | Later

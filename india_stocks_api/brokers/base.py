@@ -8,6 +8,7 @@ from ..constants import CandleInterval, OrderType, OrderValidity, ProductType, T
 from ..exceptions import AuthenticationError, SessionExpiredError
 from ..instruments.models import Equity, Future, Index, Option
 from ..internal import context
+from ..responses import Holding, Order, OrderResponse, Position, Trade
 
 _IST = ZoneInfo("Asia/Kolkata")
 
@@ -128,12 +129,12 @@ class BaseBroker(ABC, metaclass=BrokerMeta):
         trigger_price: float = 0.0,
         validity: OrderValidity = OrderValidity.DAY,
         **kwargs,
-    ) -> dict:
+    ) -> OrderResponse:
         """Place a new order."""
         ...
 
     @abstractmethod
-    def get_positions(self) -> list:
+    def get_positions(self) -> list[Position]:
         """Get current open positions."""
         ...
 
@@ -162,22 +163,24 @@ class BaseBroker(ABC, metaclass=BrokerMeta):
         ...
 
     @abstractmethod
-    def get_holdings(self) -> list:
+    def get_holdings(self) -> list[Holding]:
         """Get long term holdings."""
         ...
 
     @abstractmethod
-    def get_orders(self) -> list:
+    def get_orders(self) -> list[Order]:
         """Get order book."""
         ...
 
     @abstractmethod
-    def modify_order(self, order_id: str, price: float = 0.0, trigger_price: float = 0.0, quantity: int = 0) -> dict:
+    def modify_order(
+        self, order_id: str, price: float = 0.0, trigger_price: float = 0.0, quantity: int = 0
+    ) -> OrderResponse:
         """Modify an open order."""
         ...
 
     @abstractmethod
-    def cancel_order(self, order_id: str) -> dict:
+    def cancel_order(self, order_id: str) -> OrderResponse:
         """Cancel an open order."""
         ...
 
@@ -187,74 +190,76 @@ class BaseBroker(ABC, metaclass=BrokerMeta):
         ...
 
     @abstractmethod
-    def get_trades(self) -> list:
+    def get_trades(self) -> list[Trade]:
         """Get executed trades."""
         ...
 
     @abstractmethod
-    def get_order_details(self, order_id: str) -> dict:
+    def get_order_details(self, order_id: str) -> Order:
         """Get detailed status and history for a specific order."""
         ...
 
-    @abstractmethod
-    def cancel_all_orders(self) -> dict:
-        """Cancel all open/pending orders."""
-        ...
-
-    @abstractmethod
-    def square_off_all_positions(self) -> dict:
-        """Exit all open positions at market price."""
-        ...
+    # TODO: re-enable when tested
+    # @abstractmethod
+    # def cancel_all_orders(self) -> dict:
+    #     """Cancel all open/pending orders."""
+    #     ...
+    #
+    # @abstractmethod
+    # def square_off_all_positions(self) -> dict:
+    #     """Exit all open positions at market price."""
+    #     ...
 
     # --- GTT Orders ---
+    # TODO: re-enable when tested
 
-    @abstractmethod
-    def create_gtt(
-        self,
-        instrument: Equity | Future | Option,
-        transaction_type: TransactionType,
-        quantity: int,
-        trigger_price: float,
-        price: float,
-        product_type: ProductType = ProductType.DELIVERY,
-        time_period: int = 365,
-    ) -> dict:
-        """Create a new GTT rule."""
-        ...
-
-    @abstractmethod
-    def modify_gtt(
-        self, id: int, instrument: Equity | Future | Option, quantity: int, trigger_price: float, price: float
-    ) -> dict:
-        """Modify an existing GTT rule."""
-        ...
-
-    @abstractmethod
-    def cancel_gtt(self, id: int, instrument: Equity | Future | Option) -> dict:
-        """Cancel an active GTT rule."""
-        ...
-
-    @abstractmethod
-    def get_gtt_list(self, status: list | None = None) -> list:
-        """Get list of GTT rules."""
-        ...
-
-    @abstractmethod
-    def get_gtt_details(self, id: int) -> dict:
-        """Get details for a specific GTT rule."""
-        ...
+    # @abstractmethod
+    # def create_gtt(
+    #     self,
+    #     instrument: Equity | Future | Option,
+    #     transaction_type: TransactionType,
+    #     quantity: int,
+    #     trigger_price: float,
+    #     price: float,
+    #     product_type: ProductType = ProductType.DELIVERY,
+    #     time_period: int = 365,
+    # ) -> dict:
+    #     """Create a new GTT rule."""
+    #     ...
+    #
+    # @abstractmethod
+    # def modify_gtt(
+    #     self, id: int, instrument: Equity | Future | Option, quantity: int, trigger_price: float, price: float
+    # ) -> dict:
+    #     """Modify an existing GTT rule."""
+    #     ...
+    #
+    # @abstractmethod
+    # def cancel_gtt(self, id: int, instrument: Equity | Future | Option) -> dict:
+    #     """Cancel an active GTT rule."""
+    #     ...
+    #
+    # @abstractmethod
+    # def get_gtt_list(self, status: list | None = None) -> list:
+    #     """Get list of GTT rules."""
+    #     ...
+    #
+    # @abstractmethod
+    # def get_gtt_details(self, id: int) -> dict:
+    #     """Get details for a specific GTT rule."""
+    #     ...
 
     # --- Convenience Helpers ---
 
-    def get_executed_orders(self) -> list:
+    def get_executed_orders(self) -> list[Order]:
         """Get only executed/filled orders."""
         all_orders = self.get_orders()
-        return [o for o in all_orders if o.get("status") == "complete"]
+        return [o for o in all_orders if o.status == "complete"]
 
-    def get_pending_orders(self) -> list:
+    def get_pending_orders(self) -> list[Order]:
         """Get only pending/open orders."""
         all_orders = self.get_orders()
-        return [o for o in all_orders if o.get("status") in ["open", "trigger pending", "validation pending"]]
+        return [o for o in all_orders if o.status in ("open", "trigger pending", "validation pending")]
 
     # --- Resolution Logic (Common) ---
 

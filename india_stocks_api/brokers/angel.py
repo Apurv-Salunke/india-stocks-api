@@ -17,17 +17,13 @@ from ..internal import context
 from ..internal.angel.api.auth_api import authenticate_broker
 from ..internal.angel.api.data import BrokerData
 from ..internal.angel.api.funds import get_margin_data
-from ..internal.angel.api.gtt_api import cancel_gtt_rule, create_gtt_rule, modify_gtt_rule
-from ..internal.angel.api.gtt_api import get_gtt_list as get_gtt_list_api
-from ..internal.angel.api.gtt_api import get_gtt_status as get_gtt_details_api
-
-# Import Ported Logic
-from ..internal.angel.api.order_api import cancel_all_orders_api, get_positions, place_order_api
 from ..internal.angel.api.order_api import cancel_order as cancel_order_api
-from ..internal.angel.api.order_api import close_all_positions as close_all_positions_api
 from ..internal.angel.api.order_api import get_holdings as get_holdings_api
 from ..internal.angel.api.order_api import get_order_book as get_orders_api
 from ..internal.angel.api.order_api import get_order_details as get_order_details_api
+
+# Import Ported Logic
+from ..internal.angel.api.order_api import get_positions, place_order_api
 from ..internal.angel.api.order_api import get_profile as get_profile_api
 from ..internal.angel.api.order_api import get_trade_book as get_trades_api
 from ..internal.angel.api.order_api import modify_order as modify_order_api
@@ -37,9 +33,14 @@ from ..responses import (
     DepthResponse,
     FundsResponse,
     HistoryResponse,
+    Holding,
+    Order,
+    OrderResponse,
+    Position,
     ProfileResponse,
     QuoteResponse,
     StreamDepthLevel,
+    Trade,
     WebSocketTick,
 )
 from .base import BaseBroker
@@ -127,7 +128,7 @@ class AngelOne(BaseBroker, broker_name="angel"):
         trigger_price: float = 0.0,
         validity: OrderValidity = OrderValidity.DAY,
         **kwargs,
-    ) -> dict:
+    ) -> OrderResponse:
         token_info = self._resolve_instrument(instrument)
         jwt_token = self._require_auth()
 
@@ -145,18 +146,19 @@ class AngelOne(BaseBroker, broker_name="angel"):
 
         res, response, orderid = place_order_api(data, jwt_token)
 
-        return {"order_id": orderid, "raw_response": response, "status": "success" if orderid else "failed"}
+        return self._map_order_response(orderid, response)
 
-    def get_positions(self) -> list:
+    def get_positions(self) -> list[Position]:
         jwt_token = self._require_auth()
         resp = get_positions(jwt_token)
+        raw_list: list = []
         if isinstance(resp, list):
-            return resp
-        if isinstance(resp, dict):
+            raw_list = resp
+        elif isinstance(resp, dict):
             data = resp.get("data")
             if isinstance(data, list):
-                return data
-        return []
+                raw_list = data
+        return [self._map_position(p) for p in raw_list]
 
     def get_funds(self) -> FundsResponse:
         jwt_token = self._require_auth()
@@ -197,36 +199,42 @@ class AngelOne(BaseBroker, broker_name="angel"):
         payload = bd.get_quotes(symbol=token_info["symbol"], exchange=token_info["exchange"])
         return self._map_quote_response(payload)
 
-    def get_holdings(self) -> list:
+    def get_holdings(self) -> list[Holding]:
         jwt_token = self._require_auth()
         resp = get_holdings_api(jwt_token)
         if not isinstance(resp, dict):
             return []
 
+        raw_list: list = []
         data = resp.get("data")
         if isinstance(data, list):
-            return data
-        if isinstance(data, dict):
+            raw_list = data
+        elif isinstance(data, dict):
             holdings = data.get("holdings")
             if isinstance(holdings, list):
-                return holdings
-        return []
+                raw_list = holdings
+        return [self._map_holding(h) for h in raw_list]
 
-    def get_orders(self) -> list:
+    def get_orders(self) -> list[Order]:
         jwt_token = self._require_auth()
         resp = get_orders_api(jwt_token)
-        return resp.get("data") or []
+        raw_list = resp.get("data") or []
+        return [self._map_order(o) for o in raw_list]
 
-    def cancel_order(self, order_id: str) -> dict:
+    def cancel_order(self, order_id: str) -> OrderResponse:
         jwt_token = self._require_auth()
         resp, status = cancel_order_api(order_id, jwt_token)
-        return {"status": "success" if status == 200 else "error", "response": resp}
+        st = "success" if status == 200 else "error"
+        msg = resp.get("message", "") if isinstance(resp, dict) else str(resp)
+        return OrderResponse(order_id=order_id, status=st, message=msg)
 
-    def modify_order(self, order_id: str, price: float = 0.0, trigger_price: float = 0.0, quantity: int = 0) -> dict:
+    def modify_order(
+        self, order_id: str, price: float = 0.0, trigger_price: float = 0.0, quantity: int = 0
+    ) -> OrderResponse:
         jwt_token = self._require_auth()
 
-        all_orders = self.get_orders()
-        target_order = next((o for o in all_orders if o.get("orderid") == order_id), None)
+        all_orders_raw = get_orders_api(jwt_token).get("data") or []
+        target_order = next((o for o in all_orders_raw if o.get("orderid") == order_id), None)
 
         if not target_order:
             raise ValueError(f"Order {order_id} not found.")
@@ -244,12 +252,15 @@ class AngelOne(BaseBroker, broker_name="angel"):
         }
 
         resp, status = modify_order_api(data, jwt_token)
-        return {"status": "success" if status == 200 else "error", "response": resp}
+        st = "success" if status == 200 else "error"
+        msg = resp.get("message", "") if isinstance(resp, dict) else str(resp)
+        return OrderResponse(order_id=order_id, status=st, message=msg)
 
-    def get_trades(self) -> list:
+    def get_trades(self) -> list[Trade]:
         jwt_token = self._require_auth()
         resp = get_trades_api(jwt_token)
-        return resp.get("data") or []
+        raw_list = resp.get("data") or []
+        return [self._map_trade(t) for t in raw_list]
 
     def get_profile(self) -> ProfileResponse:
         jwt_token = self._require_auth()
@@ -257,90 +268,31 @@ class AngelOne(BaseBroker, broker_name="angel"):
         data = resp.get("data") if isinstance(resp, dict) else {}
         return self._map_profile_response(data if isinstance(data, dict) else {})
 
-    def get_order_details(self, order_id: str) -> dict:
+    def get_order_details(self, order_id: str) -> Order:
         jwt_token = self._require_auth()
         resp = get_order_details_api(order_id, jwt_token)
-        return resp.get("data") or {}
+        data = resp.get("data") or {}
+        return self._map_order(data)
 
-    def cancel_all_orders(self) -> dict:
-        jwt_token = self._require_auth()
-        canceled, failed = cancel_all_orders_api({}, jwt_token)
-        return {"status": "success", "canceled": canceled, "failed": failed}
-
-    def square_off_all_positions(self) -> dict:
-        jwt_token = self._require_auth()
-        resp, status = close_all_positions_api(self.api_key, jwt_token)
-        return {"status": "success" if status == 200 else "error", "response": resp}
+    # TODO: re-enable when tested
+    # def cancel_all_orders(self) -> dict:
+    #     jwt_token = self._require_auth()
+    #     canceled, failed = cancel_all_orders_api({}, jwt_token)
+    #     return {"status": "success", "canceled": canceled, "failed": failed}
+    #
+    # def square_off_all_positions(self) -> dict:
+    #     jwt_token = self._require_auth()
+    #     resp, status = close_all_positions_api(self.api_key, jwt_token)
+    #     return {"status": "success" if status == 200 else "error", "response": resp}
 
     # --- GTT Orders ---
+    # TODO: re-enable when tested
 
-    def create_gtt(
-        self,
-        instrument: Equity | Future | Option,
-        transaction_type: TransactionType,
-        quantity: int,
-        trigger_price: float,
-        price: float,
-        product_type: ProductType = ProductType.DELIVERY,
-        time_period: int = 365,
-    ) -> dict:
-        token_info = self._resolve_instrument(instrument)
-        jwt_token = self._require_auth()
-
-        from ..internal.angel.mapping.transform_data import map_product_type
-
-        payload = {
-            "tradingsymbol": token_info["tradingsymbol"],
-            "symboltoken": token_info["token"],
-            "exchange": token_info["exchange"],
-            "transactiontype": transaction_type.value.upper(),
-            "producttype": map_product_type(product_type.value),
-            "price": str(price),
-            "qty": str(quantity),
-            "triggerprice": str(trigger_price),
-            "discloseqty": str(quantity),
-            "timeperiod": str(time_period),
-        }
-
-        return create_gtt_rule(payload, jwt_token)
-
-    def modify_gtt(
-        self, id: int, instrument: Equity | Future | Option, quantity: int, trigger_price: float, price: float
-    ) -> dict:
-        token_info = self._resolve_instrument(instrument)
-        jwt_token = self._require_auth()
-
-        payload = {
-            "id": id,
-            "symboltoken": token_info["token"],
-            "exchange": token_info["exchange"],
-            "price": price,
-            "qty": quantity,
-            "triggerprice": trigger_price,
-        }
-
-        return modify_gtt_rule(payload, jwt_token)
-
-    def cancel_gtt(self, id: int, instrument: Equity | Future | Option) -> dict:
-        token_info = self._resolve_instrument(instrument)
-        jwt_token = self._require_auth()
-
-        payload = {"id": id, "symboltoken": token_info["token"], "exchange": token_info["exchange"]}
-
-        return cancel_gtt_rule(payload, jwt_token)
-
-    def get_gtt_list(self, status: list | None = None) -> list:
-        jwt_token = self._require_auth()
-        if status is None:
-            status = ["FOR_SETTLEMENT", "CANCELLED", "TRIGGERED"]
-        payload = {"status": status, "page": 1, "count": 50}
-        resp = get_gtt_list_api(payload, jwt_token)
-        return resp.get("data") or []
-
-    def get_gtt_details(self, id: int) -> dict:
-        jwt_token = self._require_auth()
-        resp = get_gtt_details_api(id, jwt_token)
-        return resp.get("data") or {}
+    # def create_gtt(self, ...): ...
+    # def modify_gtt(self, id, instrument, quantity, trigger_price, price): ...
+    # def cancel_gtt(self, id, instrument): ...
+    # def get_gtt_list(self, status=None): ...
+    # def get_gtt_details(self, id): ...
 
     # --- WebSocket Streaming ---
 
@@ -574,6 +526,77 @@ class AngelOne(BaseBroker, broker_name="angel"):
             m2m_realized=self._to_float(payload.get("m2mrealized")),
             m2m_unrealized=self._to_float(payload.get("m2munrealized")),
             utilized_debits=self._to_float(payload.get("utiliseddebits")),
+        )
+
+    def _map_order_response(self, order_id: str | None, raw: Any) -> OrderResponse:
+        status = "success" if order_id else "failed"
+        msg = ""
+        if isinstance(raw, dict):
+            msg = raw.get("message", "")
+        return OrderResponse(order_id=order_id, status=status, message=msg)
+
+    def _map_order(self, raw: dict) -> Order:
+        return Order(
+            order_id=str(raw.get("orderid", "")),
+            symbol=str(raw.get("tradingsymbol", "")),
+            exchange=str(raw.get("exchange", "")),
+            transaction_type=str(raw.get("transactiontype", "")),
+            order_type=str(raw.get("ordertype", "")),
+            product_type=str(raw.get("producttype", "")),
+            quantity=self._to_int(raw.get("quantity")),
+            price=self._to_float(raw.get("price")),
+            trigger_price=self._to_float(raw.get("triggerprice")),
+            average_price=self._to_float(raw.get("averageprice")),
+            status=str(raw.get("status", "")),
+            timestamp=str(raw.get("updatetime") or raw.get("exchorderupdatetime") or ""),
+            raw=raw,
+        )
+
+    def _map_position(self, raw: dict) -> Position:
+        buy_qty = self._to_int(raw.get("buyqty"))
+        sell_qty = self._to_int(raw.get("sellqty"))
+        net_qty = buy_qty - sell_qty
+        return Position(
+            symbol=str(raw.get("tradingsymbol", "")),
+            exchange=str(raw.get("exchange", "")),
+            product_type=str(raw.get("producttype", "")),
+            quantity=net_qty,
+            average_price=self._to_float(raw.get("netprice") or raw.get("averageprice")),
+            ltp=self._to_float(raw.get("ltp")),
+            pnl=self._to_float(raw.get("pnl") or raw.get("realised")),
+            raw=raw,
+        )
+
+    def _map_holding(self, raw: dict) -> Holding:
+        avg = self._to_float(raw.get("averageprice"))
+        ltp = self._to_float(raw.get("ltp"))
+        qty = self._to_int(raw.get("quantity") or raw.get("t1quantity"))
+        pnl = (ltp - avg) * qty if avg else 0.0
+        pnl_pct = ((ltp - avg) / avg * 100.0) if avg else 0.0
+        return Holding(
+            symbol=str(raw.get("tradingsymbol", "")),
+            exchange=str(raw.get("exchange", "")),
+            quantity=qty,
+            average_price=avg,
+            ltp=ltp,
+            pnl=round(pnl, 2),
+            pnl_percent=round(pnl_pct, 2),
+            raw=raw,
+        )
+
+    def _map_trade(self, raw: dict) -> Trade:
+        qty = self._to_int(raw.get("fillquantity") or raw.get("quantity"))
+        price = self._to_float(raw.get("fillprice") or raw.get("price"))
+        return Trade(
+            order_id=str(raw.get("orderid", "")),
+            symbol=str(raw.get("tradingsymbol", "")),
+            exchange=str(raw.get("exchange", "")),
+            transaction_type=str(raw.get("transactiontype", "")),
+            quantity=qty,
+            price=price,
+            trade_value=round(qty * price, 2),
+            timestamp=str(raw.get("filltime") or raw.get("updatetime") or ""),
+            raw=raw,
         )
 
     def _map_profile_response(self, payload: dict) -> ProfileResponse:
