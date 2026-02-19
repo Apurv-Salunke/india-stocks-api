@@ -35,7 +35,8 @@ def test_angel_one_authentication():
     auth_result = broker.authenticate()
     
     # Assert authentication succeeded
-    assert auth_result is True
+    assert auth_result.success
+    assert auth_result.session_active
     
     # Assert tokens exist
     auth_token = get_auth_token()

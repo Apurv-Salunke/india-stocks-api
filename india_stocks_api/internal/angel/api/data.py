@@ -331,7 +331,7 @@ class BrokerData:
         return skipped_symbols + results
 
     def get_history(self, symbol: str, exchange: str, interval: str,
-                   start_date: str, end_date: str) -> pd.DataFrame:
+                   start_date: str, end_date: str, include_oi: bool = None) -> pd.DataFrame:
         """
         Get historical data for given symbol
         Args:

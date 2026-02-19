@@ -1,11 +1,9 @@
 import json
-import os
-import httpx
-from india_stocks_api.internal.context import get_auth_token
 from india_stocks_api.internal.context import get_token , get_br_symbol, get_symbol, get_api_key
 from india_stocks_api.internal.angel.mapping.transform_data import transform_data , map_product_type, reverse_map_product_type, transform_modify_order_data
 from india_stocks_api.internal.context import get_httpx_client
 from india_stocks_api.internal.context import get_logger
+from india_stocks_api.brokers.response import SquareOffResult
 
 logger = get_logger(__name__)
 
@@ -140,9 +138,11 @@ def place_order_api(data,auth):
     
     if response_data['status'] == True:
         orderid = response_data['data']['orderid']
+        uniqueorderid= response_data['data']['uniqueorderid']
     else:
         orderid = None
-    return response, response_data, orderid
+        uniqueorderid = None
+    return response, response_data, orderid, uniqueorderid
 
 def place_smartorder_api(data,auth):
 
@@ -177,11 +177,12 @@ def place_smartorder_api(data,auth):
         quantity = data['quantity']
         #logger.info(f"action : {action}")
         #logger.info(f"Quantity : {quantity}")
-        res, response, orderid = place_order_api(data,AUTH_TOKEN)
+        res, response, orderid, uniqueorderid = place_order_api(data,AUTH_TOKEN)
         #logger.info(f"{res}")
         #logger.info(f"{response}")
-        
-        return res , response, orderid
+        #logger.info(f"{orderid}")
+        #logger.info(f"{uniqueorderid}")
+        return res , response, orderid, uniqueorderid
         
     elif position_size == current_position:
         if int(data['quantity'])==0:
@@ -222,69 +223,96 @@ def place_smartorder_api(data,auth):
 
         #logger.info(f"{order_data}")
         # Place the order
-        res, response, orderid = place_order_api(order_data,auth)
+        res, response, orderid, uniqueorderid = place_order_api(order_data,auth)
         #logger.info(f"{res}")
         logger.info(f"{response}")
         logger.info(f"{orderid}")
+        logger.info(f"{uniqueorderid}")
         
-        return res , response, orderid
+        return res , response, orderid, uniqueorderid
     
 
 
 
-def close_all_positions(current_api_key,auth):
-    # Fetch the current open positions
-    AUTH_TOKEN = auth
+def close_all_positions(api_key: str, auth_token: str) -> list[SquareOffResult]:
+    """
+    Flatten all open positions by placing opposite MARKET orders.
+    Angel One specific implementation.
+    """
 
-    positions_response = get_positions(AUTH_TOKEN)
+    positions_response = get_positions(auth_token)
 
-    # Check if the positions data is null or empty
-    if positions_response['data'] is None or not positions_response['data']:
-        return {"message": "No Open Positions Found"}, 200
+    results: list[SquareOffResult] = []
 
-    if positions_response['status']:
-        # Loop through each position to close
-        for position in positions_response['data']:
-            # Skip if net quantity is zero
-            if int(position['netqty']) == 0:
-                continue
+    if not positions_response.get("status"):
+        return results
 
-            # Determine action based on net quantity
-            action = 'SELL' if int(position['netqty']) > 0 else 'BUY'
-            quantity = abs(int(position['netqty']))
+    for pos in positions_response.get("data", []):
+        try:
+            net_qty = int(pos.get("netqty", 0))
+        except Exception:
+            continue
 
+        if net_qty == 0:
+            continue
 
-            #get openalgo symbol to send to placeorder function
-            symbol = get_symbol(position['symboltoken'],position['exchange'])
-            logger.info(f"The Symbol is {symbol}")
+        side = "SELL" if net_qty > 0 else "BUY"
+        quantity = abs(net_qty)
 
-            # Prepare the order payload
-            place_order_payload = {
-                "apikey": current_api_key,
-                "strategy": "Squareoff",
-                "symbol": symbol,
-                "action": action,
-                "exchange": position['exchange'],
-                "pricetype": "MARKET",
-                "product": reverse_map_product_type(position['producttype']),
-                "quantity": str(quantity)
-            }
+        symbol = get_symbol(pos["symboltoken"], pos["exchange"])
 
-            logger.info(f"{place_order_payload}")
+        payload = {
+            "apikey": api_key,
+            "symbol": symbol,
+            "exchange": pos["exchange"],
+            "action": side,
+            "pricetype": "MARKET",
+            "product": reverse_map_product_type(pos["producttype"]),
+            "quantity": str(quantity),
+        }
 
-            # Place the order to close the position
-            res, response, orderid =   place_order_api(place_order_payload,auth)
+        try:
+            response, response_data, order_id, unique_id = place_order_api(
+                payload, auth_token
+            )
 
-            # logger.info(f"{res}")
-            # logger.info(f"{response}")
-            # logger.info(f"{orderid}")
+            if order_id:
+                results.append(
+                    SquareOffResult(
+                        symbol=symbol,
+                        exchange=pos["exchange"],
+                        quantity=quantity,
+                        side=side,
+                        execution_id=order_id,
+                        broker_reference_id=unique_id,
+                        status="CLOSED",
+                    )
+                )
+            else:
+                results.append(
+                    SquareOffResult(
+                        symbol=symbol,
+                        exchange=pos["exchange"],
+                        quantity=quantity,
+                        side=side,
+                        status="REJECTED",
+                        error=response_data.get("message"),
+                    )
+                )
 
+        except Exception as e:
+            results.append(
+                SquareOffResult(
+                    symbol=symbol,
+                    exchange=pos["exchange"],
+                    quantity=quantity,
+                    side=side,
+                    status="FAILED",
+                    error=str(e),
+                )
+            )
 
-            
-            # Note: Ensure place_order_api handles any errors and logs accordingly
-
-    return {'status': 'success', "message": "All Open Positions SquaredOff"}, 200
-
+    return results
 
 def cancel_order(orderid,auth):
     # Assuming you have a function to get the authentication token
@@ -328,10 +356,10 @@ def cancel_order(orderid,auth):
     # Check if the request was successful
     if data.get("status"):
         # Return a success response
-        return {"status": "success", "orderid": orderid}, 200
+        return {"status": "success", "orderid": orderid, "uniqueorderid": data["data"]["uniqueorderid"]}, 200
     else:
         # Return an error response
-        return {"status": "error", "message": data.get("message", "Failed to cancel order")}, response.status
+        return {"status": "error", "errorcode": data.get("errorcode", ""), "message": data.get("message", "Failed to cancel order")}, response.status
 
 
 def modify_order(data,auth):
@@ -374,9 +402,9 @@ def modify_order(data,auth):
     data = json.loads(response.text)
 
     if data.get("status") == "true" or data.get("message") == "SUCCESS":
-        return {"status": "success", "orderid": data["data"]["orderid"]}, 200
+        return {"status": "success", "orderid": data["data"]["orderid"], "uniqueorderid": data["data"]["uniqueorderid"]}, 200
     else:
-        return {"status": "error", "message": data.get("message", "Failed to modify order")}, response.status
+        return {"status": "error", "errorcode": data.get("errorcode", ""), "message": data.get("message", "Failed to modify order")}, response.status
 
 
 def cancel_all_orders_api(data,auth):

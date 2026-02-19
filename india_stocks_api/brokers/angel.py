@@ -3,12 +3,49 @@ Angel One Adapter
 Thin wrapper around india_stocks_api.internal.angel
 """
 from typing import Optional, Callable, List, Dict, Any
+
 from .base import BaseBroker
 from ..instruments.models import Equity, Future, Option, Index
-from ..constants import TransactionType, OrderType, ProductType, OrderValidity, CandleInterval, StreamMode
+from ..constants import TransactionType, OrderType, ProductType, OrderValidity, CandleInterval, StreamMode, ExecutionStatus, GTTRuleStatus
 from ..internal import context
+from .response import (
+    DepthResponse,
+    ErrorDetail,
+    AuthResponse,
+    OrderExecutionResponse, 
+    OrdersResponse,
+    OrderResponse,
+    Order,
+    GTTRule,
+    GTTRuleResponse,
+    GTTRulesResponse,
+    GTTExecutionResponse,
+    Profile,
+    ProfileResponse,
+    Funds,
+    FundsResponse,
+    Holding,
+    HoldingsResponse,
+    Position,
+    PositionsResponse,
+    Trade,
+    TradesResponse,
+    Candle,
+    CandlesResponse,
+    Quote,
+    QuoteResponse,
+    DepthLevel,
+    MarketDepth,
+    BatchExecutionResponse
+)
 
 # Import Ported Logic
+from ..internal.angel.mapping.transform_data import (
+    map_product_type,
+    reverse_map_product_type, 
+    map_order_status,
+    map_gtt_status
+)
 from ..internal.angel.api.order_api import (
     place_order_api, 
     get_positions, 
@@ -32,7 +69,6 @@ from ..internal.angel.api.gtt_api import (
 from ..internal.angel.api.auth_api import authenticate_broker
 from ..internal.angel.api.funds import get_margin_data
 from ..internal.angel.api.data import BrokerData
-import os
 import pyotp
 
 class AngelOne(BaseBroker, broker_name="angel"):
@@ -51,7 +87,7 @@ class AngelOne(BaseBroker, broker_name="angel"):
         from ..internal.angel.database import master_contract_download
         master_contract_download(db_path)
 
-    def authenticate(self) -> bool:
+    def authenticate(self) -> AuthResponse:
         """
         Login using SmartAPI.
         Updates the internal context with the session token.
@@ -79,14 +115,14 @@ class AngelOne(BaseBroker, broker_name="angel"):
              generated_totp = totp_obj.now()
              
              # Call Internal API
-             jwt_token, feed_token, error = authenticate_broker(
+             jwt_token, feed_token, state, error_code, error_msg = authenticate_broker(
                 api_key=self.api_key,
                 clientcode=self.client_code,
                 broker_pin=self.password,
                 totp_code=generated_totp
              )
              
-             if jwt_token:
+             if jwt_token and feed_token:
                 context.set_auth_token(jwt_token)
                 context.set_feed_token(feed_token)
                 context.set_credentials("angel", {
@@ -95,13 +131,31 @@ class AngelOne(BaseBroker, broker_name="angel"):
                     "password": self.password,
                     "totp_key": self.totp_key
                 })
-                return True
+                return AuthResponse(
+                success=True,
+                broker="angel",
+                session_active=True,
+                environment=state
+            )
              
-             print(f"Auth failed: {error}")
-             return False
+             
+             return AuthResponse(
+            success=False,
+            broker="angel",
+            error=ErrorDetail(
+                code=error_code or "AUTH_FAILED",
+                message=error_msg or "Authentication failed"
+            )
+        )
         except Exception as e:
-            print(f"Auth failed exception: {e}")
-            return False
+            return AuthResponse( # Create custom exception class for this
+            success=False,
+            broker="angel",
+            error=ErrorDetail(
+                code="AUTH_EXCEPTION",
+                message=str(e)
+            )
+        )
 
     def place_order(
         self,
@@ -114,7 +168,7 @@ class AngelOne(BaseBroker, broker_name="angel"):
         trigger_price: float = 0.0,
         validity: OrderValidity = OrderValidity.DAY,
         **kwargs
-    ) -> dict:
+    ) -> OrderExecutionResponse:
         
         # 1. Resolve Instrument
         token_info = self._resolve_instrument(instrument)
@@ -131,27 +185,120 @@ class AngelOne(BaseBroker, broker_name="angel"):
             "trigger_price": str(trigger_price),
             "validity": validity.value
         }
+        try: 
+            # 3. Call Internal API
+            jwt_token = context.get_auth_token()
+            res, response, orderid, uniqueorderid = place_order_api(data, jwt_token)
+            
+            if orderid:
+                return OrderExecutionResponse(
+                success=True,
+                broker="angel",
+                execution_id=orderid,
+                broker_reference_id=uniqueorderid,
+                execution_status=ExecutionStatus.ACCEPTED,
+            )
         
-        # 3. Call Internal API
+            # BROKER REJECTED
+            return OrderExecutionResponse(
+                success=False,
+                broker="angel",
+                execution_status=ExecutionStatus.REJECTED,
+                error=ErrorDetail(
+                    code=response.get("errorcode", "ORDER_REJECTED"),
+                    message=response.get("message", "Order rejected")
+                )
+            )
+
+        except Exception as e:
+            return OrderExecutionResponse(  #TODO: Create custom exception class for this
+                success=False,
+                broker="angel",
+                execution_status=ExecutionStatus.FAILED,
+                error=ErrorDetail(
+                    code="INTERNAL_ERROR",
+                    message=str(e)
+                )
+            )
+
+
+    def get_positions(self) -> PositionsResponse:
         jwt_token = context.get_auth_token()
-        res, response, orderid = place_order_api(data, jwt_token)
+        if not jwt_token:
+            raise RuntimeError("Authentication required.")
+
+        resp = get_positions(jwt_token)
         
-        return {
-            "order_id": orderid,
-            "raw_response": response,
-            "status": "success" if orderid else "failed"
-        }
+        if not resp.get("status"):
+            return PositionsResponse(
+                success=False,
+                broker="angel",
+                error=ErrorDetail(
+                    code=resp.get("errorcode", "POSITIONS_FETCH_FAILED"),
+                    message=resp.get("message", "Failed to fetch positions"),
+                )
+            )
 
-    def get_positions(self) -> list:
-        jwt_token = context.get_auth_token()
-        return get_positions(jwt_token)
+        positions = []
 
-    def get_funds(self) -> dict:
+        for p in resp.get("data", []):
+            qty = int(p.get("netqty", 0))
+            if qty == 0:
+                continue
+
+            positions.append(Position(
+                symbol=p["tradingsymbol"], #TODO: send standardized symbol after coorect the function in context fiel     
+                exchange=p["exchange"],
+                quantity=qty,
+                average_price=float(p.get("avgnetprice") or 0),
+                last_price=None, # TODO: check documentation
+                pnl=None,
+                unrealized_pnl=None,
+                realized_pnl=None,
+                product_type=reverse_map_product_type(p["producttype"]),
+                multiplier=abs(int(p.get("multiplier", 1))) or 1
+            ))
+
+        return PositionsResponse(
+            success=True,
+            broker="angel",
+            data=positions
+        )
+
+    def get_funds(self) -> FundsResponse:
         jwt_token = context.get_auth_token()
-        return get_margin_data(jwt_token)
+        
+        if not jwt_token:
+            raise RuntimeError("Authentication required.")
+
+        resp = get_margin_data(jwt_token)
+
+        if not resp:
+            return FundsResponse(
+                success=False,
+                broker="angel",
+                error=ErrorDetail(
+                    code="FUNDS_FETCH_FAILED",
+                    message="Unable to retrieve funds"
+                ),
+            )
+
+        funds = Funds(
+            available=resp.get("availablecash"),
+            used=resp.get("utiliseddebits"),
+            collateral=resp.get("collateral"),
+            realized_pnl=resp.get("m2mrealized"),
+            unrealized_pnl=resp.get("m2munrealized"),
+        )
+
+        return FundsResponse(
+            success=True,
+            broker="angel",
+            data=funds
+        )
 
     def get_history(self, instrument: Equity | Future | Option | Index, 
-                   start_date: str, end_date: str, interval: CandleInterval):
+                   start_date: str, end_date: str, interval: CandleInterval) -> CandlesResponse:
         """
         Get historical data.
         """
@@ -165,7 +312,7 @@ class AngelOne(BaseBroker, broker_name="angel"):
             
         # 3. Fetch
         bd = BrokerData(jwt_token)
-        return bd.get_history(
+        resp= bd.get_history(
             symbol=token_info["symbol"],
             exchange=token_info["exchange"],
             interval=interval.value,
@@ -173,18 +320,112 @@ class AngelOne(BaseBroker, broker_name="angel"):
             end_date=end_date
         )
 
-    def get_depth(self, instrument: Equity | Future | Option | Index) -> dict:
+        if not resp:
+            return CandlesResponse(
+                success=False,
+                broker="angel",
+                error=ErrorDetail(
+                    code="HISTORY_FETCH_FAILED",
+                    message="No historical data returned"
+                ),
+            )
+
+        candles = []
+        for row in resp:
+                try:
+                    candle = Candle(
+                        timestamp=row[0],
+                        open=float(row[1] or 0),
+                        high=float(row[2] or 0),
+                        low=float(row[3] or 0),
+                        close=float(row[4] or 0),
+                        volume=int(row[5] or 0),
+                        oi=int(row[6]) if len(row) > 6 and row[6] else None,
+                    )
+                    candles.append(candle)
+
+                except Exception:
+                    # skip malformed rows
+                    continue
+
+        return CandlesResponse(
+            success=True,
+            broker="angel",
+            data=candles,
+        )
+
+    def get_depth(self, instrument: Equity | Future | Option | Index) -> DepthResponse:
         """
         Get market depth.
         """
         token_info = self._resolve_instrument(instrument)
         jwt_token = context.get_auth_token()
-        if not jwt_token: raise RuntimeError("Auth required.")
-        
-        bd = BrokerData(jwt_token)
-        return bd.get_depth(symbol=token_info["symbol"], exchange=token_info["exchange"])
+        if not jwt_token:
+            raise RuntimeError("Auth required.")
 
-    def get_quote(self, instrument: Equity | Future | Option | Index) -> dict:
+        # Fetch depth
+        bd = BrokerData(jwt_token)
+        resp = bd.get_depth(
+            symbol=token_info["symbol"],
+            exchange=token_info["exchange"],
+        )
+
+        if not resp:
+            return DepthResponse(
+                success=False,
+                broker="angel",
+                error=ErrorDetail(
+                    code="DEPTH_FETCH_FAILED",
+                    message="No depth data received",
+                ),
+            )
+
+        # Angel sometimes returns list instead of dict
+        q = resp[0] if isinstance(resp, list) and resp else resp
+
+        depth = q.get("depth", {}) or {}
+        buy_levels = depth.get("buy", [])
+        sell_levels = depth.get("sell", [])
+
+        def build_levels(levels):
+            result = []
+            for i in range(5):  # enforce 5 levels
+                if i < len(levels):
+                    lvl = levels[i] or {}
+                    try:
+                        result.append(
+                            DepthLevel(
+                                price=float(lvl.get("price") or 0),
+                                quantity=int(lvl.get("quantity") or 0),
+                                orders=int(lvl.get("orders")) if lvl.get("orders") else None,
+                            )
+                        )
+                    except Exception:
+                        result.append(DepthLevel(price=0.0, quantity=0, orders=None))
+                else:
+                    result.append(DepthLevel(price=0.0, quantity=0, orders=None))
+            return result
+
+        market_depth = MarketDepth(
+            symbol=token_info["symbol"],
+            exchange=token_info["exchange"],
+            bids=build_levels(buy_levels),
+            asks=build_levels(sell_levels),
+            last_price=float(q.get("ltp") or 0),
+            last_quantity=int(q.get("lastTradeQty")) if q.get("lastTradeQty") else None,
+            total_bid_qty=int(q.get("totBuyQuan")) if q.get("totBuyQuan") else None,
+            total_ask_qty=int(q.get("totSellQuan")) if q.get("totSellQuan") else None,
+            volume=int(q.get("tradeVolume")) if q.get("tradeVolume") else None,
+            oi=int(q.get("opnInterest")) if q.get("opnInterest") else None,
+        )
+
+        return DepthResponse(
+            success=True,
+            broker="angel",
+            data=market_depth,
+        )
+     
+    def get_quote(self, instrument: Equity | Future | Option | Index) -> QuoteResponse:
         """
         Get real-time quote from Angel One.
         """
@@ -201,92 +442,516 @@ class AngelOne(BaseBroker, broker_name="angel"):
         # Note: We pass the standardized symbol/exchange, 
         # and checking if internal/angel/api/data.py:get_quotes calls get_br_symbol correctly.
         # Yes, lines 92-93 of data.py call get_br_symbol/get_token again.
-        return bd.get_quotes(symbol=token_info["symbol"], exchange=token_info["exchange"])
+        resp= bd.get_quotes(symbol=token_info["symbol"], exchange=token_info["exchange"])
+        if not resp:
+            return QuoteResponse(
+                success=False,
+                broker="angel",
+                error=ErrorDetail(
+                    code="QUOTE_FETCH_FAILED",
+                    message="No quote data received",
+                ),
+            )
+        q = resp[0] if isinstance(resp, list) and resp else resp
+
+        try:
+            depth = q.get("depth", {})
+            bids = depth.get("buy", [])
+            asks = depth.get("sell", [])
+
+            ltp_val = float(q.get("ltp") or 0)
+
+            quote = Quote(
+                symbol=token_info["symbol"],
+                exchange=token_info["exchange"],
+                last_price=ltp_val,
+                open=float(q.get("open")) if q.get("open") else None,
+                high=float(q.get("high")) if q.get("high") else None,
+                low=float(q.get("low")) if q.get("low") else None,
+                close=float(q.get("close")) if q.get("close") else None,
+                volume=int(q.get("tradeVolume")) if q.get("tradeVolume") else None,
+                oi=int(q.get("opnInterest")) if q.get("opnInterest") else None,
+                bid=float(bids[0]["price"]) if bids else None,
+                ask=float(asks[0]["price"]) if asks else None,
+            )
+
+        except Exception:
+            return QuoteResponse(
+                success=False,
+                broker="angel",
+                error=ErrorDetail(
+                    code="QUOTE_PARSE_FAILED",
+                    message="Malformed quote received from broker",
+                ),
+            )
+
+        return QuoteResponse(
+            success=True,
+            broker="angel",
+            data=quote,
+        )
 
     def get_holdings(self) -> list:
         jwt_token = context.get_auth_token()
+        if not jwt_token:
+            raise RuntimeError("Authentication required.")
+
         resp = get_holdings_api(jwt_token)
-        return resp.get('data') or []
 
-    def get_orders(self) -> list:
-        jwt_token = context.get_auth_token()
-        resp = get_orders_api(jwt_token)
-        return resp.get('data') or []
+        if not resp.get("status"):
+            return HoldingsResponse(
+                success=False,
+                broker="angel",
+                error=ErrorDetail(
+                    code=resp.get("errorcode", "HOLDINGS_FETCH_FAILED"),
+                    message=resp.get("message", "Failed to fetch holdings")
+                )
+            )
 
-    def cancel_order(self, order_id: str) -> dict:
-        jwt_token = context.get_auth_token()
-        resp, status = cancel_order_api(order_id, jwt_token)
-        return {"status": "success" if status == 200 else "error", "response": resp}
+        holdings = []
 
-    def modify_order(self, order_id: str, price: float = 0.0, trigger_price: float = 0.0, quantity: int = 0) -> dict:
+        for h in resp.get("data", {}).get("holdings", []):
+            holdings.append(
+                Holding(
+                    symbol=h["tradingsymbol"],
+                    exchange=h["exchange"],
+                    quantity=int(h.get("quantity", 0)),
+                    average_price=float(h.get("averageprice", 0)),
+                    current_price=float(h.get("ltp", 0)),
+                    pnl=float(h.get("profitandloss", 0)),
+                    pnl_percent=float(h.get("pnlpercentage", 0)),
+                    product_type=reverse_map_product_type(h["product"]),
+                )
+            )
+
+        return HoldingsResponse(
+            success=True,
+            broker="angel",
+            data=holdings,
+        )
+
+    def get_orders(self) -> OrdersResponse:
+        """
+        Get all orders.
+        """
         jwt_token = context.get_auth_token()
+        if not jwt_token:
+            raise RuntimeError("Not authenticated. Call authenticate() first.")
         
-        # 1. Find Order to get Symbol/Exchange
-        all_orders = self.get_orders()
-        target_order = next((o for o in all_orders if o.get('orderid') == order_id), None)
+        try:
+            resp = get_orders_api(jwt_token)
+            if not resp.get("status"):
+                return OrdersResponse(
+                    success=False,
+                    broker="angel",
+                    error=ErrorDetail(
+                        code=resp.get("errorcode", "ORDER_FETCH_FAILED"),
+                        message=resp.get("message", "Failed to fetch orders")
+                    )
+                )
+            orders: List[Order] = []
+
+            for o in resp.get("data", []):
+                filled = int(o.get("filledshares", 0))
+                qty = int(o.get("quantity", 0))
+
+                orders.append(
+                    Order(
+                        order_id=str(o["orderid"]),
+                        symbol=o["tradingsymbol"],
+                        exchange=o["exchange"],
+                        transaction_type=TransactionType(o["transactiontype"]),
+                        order_type=OrderType(o["ordertype"]),
+                        product_type=reverse_map_product_type(o["producttype"]),
+                        quantity=qty,
+                        filled_quantity=filled,
+                        price=float(o.get("price", 0)),
+                        average_price=float(o.get("averageprice", 0)),
+                        status=map_order_status(o.get("orderstatus")),
+                        timestamp=o.get("updatetime")
+                    )
+                )
+
+            return OrdersResponse(
+                success=True,
+                broker="angel",
+                data=orders
+            )
+
+        except Exception as e:
+            return OrdersResponse(
+                success=False,
+                broker="angel",
+                error=ErrorDetail(
+                    code="ORDER_FETCH_FAILED",
+                    message=str(e)
+                )
+            )
+
+    def cancel_order(self, order_id: str) -> OrderExecutionResponse:
+        jwt_token = context.get_auth_token()
+        if not jwt_token:
+            raise RuntimeError("Auth failed")
         
-        if not target_order:
-            raise ValueError(f"Order {order_id} not found locally.")
+        try:
+            resp, status = cancel_order_api(order_id, jwt_token)
+            if resp.get("status") == "success":
+                data = resp.get("data", {})
+
+                return OrderExecutionResponse(
+                    success=True,
+                    broker="angel",
+                    execution_id=data.get("orderid", order_id),
+                    broker_reference_id=data.get("uniqueorderid", order_id),
+                    execution_status=ExecutionStatus.CANCELLED,
+                    raw=resp,
+                )
+
+            # BROKER REJECTED
+            return OrderExecutionResponse(
+                success=False,
+                broker="angel",
+                execution_status=ExecutionStatus.REJECTED,
+                error=ErrorDetail(
+                    code=resp.get("errorcode", "CANCEL_REJECTED"),
+                    message=resp.get("message", "Cancel rejected"),
+                )
+            )
+
+        except Exception as e:
+            return OrderExecutionResponse(
+                success=False,
+                broker="angel",
+                execution_status=ExecutionStatus.FAILED,
+                error=ErrorDetail(
+                    code="INTERNAL_ERROR",
+                    message=str(e),
+                ),
+            )
+
+    def modify_order(self, order_id: str, price: float = 0.0, trigger_price: float = 0.0, quantity: int = 0) -> OrderExecutionResponse:
+        jwt_token = context.get_auth_token()
+        if not jwt_token:
+            raise RuntimeError("Auth failed")
+        
+        try:
+            # 1. Find Order to get Symbol/Exchange
+            all_orders = self.get_orders()
+            if not all_orders.success:
+                return OrderExecutionResponse(
+                    success=False,
+                    broker="angel",
+                    execution_status=ExecutionStatus.FAILED,
+                    error=all_orders.error
+                )
+
+            target_order = next((o for o in all_orders.data if o.order_id == order_id), None)
+
+            if not target_order:
+                return OrderExecutionResponse(
+                    success=False,
+                    broker="angel",
+                    execution_status=ExecutionStatus.FAILED,
+                    error=ErrorDetail(
+                        code="ORDER_NOT_FOUND",
+                        message=f"Order {order_id} not found."
+                    )
+                )
+
+                
+            # 2. Construct Payload
+            # modify_order_api requires data dict with symbol, exchange, etc.
+            data = {
+                "orderid": order_id,
+                "symbol": target_order.symbol, # Verify naming
+                "exchange": target_order.exchange,
+                "ordertype": target_order.order_type.value,
+                "producttype": map_product_type(target_order.product_type.value),
+                "quantity": str(quantity) if quantity > 0 else str(target_order.quantity),
+                "price": str(price) if price > 0 else str(target_order.price)
+            }
             
-        # 2. Construct Payload
-        # modify_order_api requires data dict with symbol, exchange, etc.
-        data = {
-            "orderid": order_id,
-            "symbol": target_order.get('tradingsymbol'), # Verify naming
-            "exchange": target_order.get('exchange'),
-            "transactiontype": target_order.get('transactiontype'),
-            "ordertype": target_order.get('ordertype'),
-            "producttype": target_order.get('producttype'),
-            "quantity": str(quantity) if quantity > 0 else target_order.get('quantity'),
-            "price": str(price) if price > 0 else target_order.get('price'),
-            "triggerprice": str(trigger_price) if trigger_price > 0 else target_order.get('triggerprice')
-        }
-        
-        # Note: modify_order_api inside order_api.py tries to resolve token again.
-        # It calls get_token(data['symbol'], data['exchange']).
-        # If 'tradingsymbol' (e.g. RELIANCE-EQ) is passed as 'symbol', my Shim get_token should find it.
-        # BUT 'data.symbol' must match what shim expects. 
-        # Target Order from Angel likely has 'tradingsymbol': 'RELIANCE-EQ'.
-        # Shim logic (Step 614) supports tradingsymbol lookup. So this should work.
-        
-        # 3. Call Modify
-        resp, status = modify_order_api(data, jwt_token)
-        return {"status": "success" if status == 200 else "error", "response": resp}
+            # Note: modify_order_api inside order_api.py tries to resolve token again.
+            # It calls get_token(data['symbol'], data['exchange']).
+            # If 'tradingsymbol' (e.g. RELIANCE-EQ) is passed as 'symbol', my Shim get_token should find it.
+            # BUT 'data.symbol' must match what shim expects. 
+            # Target Order from Angel likely has 'tradingsymbol': 'RELIANCE-EQ'.
+            # Shim logic (Step 614) supports tradingsymbol lookup. So this should work.
+            
+            # 3. Call Modify
+            resp, status = modify_order_api(data, jwt_token)
+            if resp.get("status") == "success":
+                return OrderExecutionResponse(
+                    success=True,
+                    broker="angel",
+                    execution_id=resp.get("orderid"),
+                    broker_reference_id=resp.get("uniqueorderid"),
+                    execution_status=ExecutionStatus.MODIFIED,
+                )
 
-    def get_trades(self) -> list:
+            return OrderExecutionResponse(
+                success=False,
+                broker="angel",
+                execution_status=ExecutionStatus.REJECTED,
+                error=ErrorDetail(
+                    code=resp.get("errorcode", "MODIFY_REJECTED"),
+                    message=resp.get("message", "Modify rejected")
+                )
+            )
+
+        except Exception as e:
+            return OrderExecutionResponse(
+                success=False,
+                broker="angel",
+                execution_status=ExecutionStatus.FAILED,
+                error=ErrorDetail(
+                    code="INTERNAL_ERROR",
+                    message=str(e)
+                )
+            )
+
+    def get_trades(self):
         jwt_token = context.get_auth_token()
+        if not jwt_token:
+            raise RuntimeError("Authentication required.")
+
         resp = get_trades_api(jwt_token)
-        return resp.get('data') or []
 
-    def get_profile(self) -> dict:
-        jwt_token = context.get_auth_token()
-        resp = get_profile_api(jwt_token)
-        return resp.get('data') or {}
+        # Validate response
+        if not resp or not resp.get("status"):
+            return TradesResponse(
+                success=False,
+                broker="angel",
+                error=ErrorDetail(
+                    code=resp.get("errorcode", "TRADES_FETCH_FAILED") if resp else "TRADES_FETCH_FAILED",
+                    message=resp.get("message", "Failed to fetch trades") if resp else "No response from broker",
+                ),
+            )
 
-    def get_order_details(self, order_id: str) -> dict:
-        jwt_token = context.get_auth_token()
-        resp = get_order_details_api(order_id, jwt_token)
-        return resp.get('data') or {}
+        trades = []
 
-    def cancel_all_orders(self) -> dict:
+        for t in resp.get("data", []):
+            try:
+                trade = Trade(
+                    trade_id=t.get("fillid"),
+                    order_id=t.get("orderid"),
+                    symbol=t.get("tradingsymbol"),
+                    exchange=t.get("exchange"),
+                    side=TransactionType(t.get("transactiontype")),
+                    quantity=int(t.get("fillsize", 0) or 0),
+                    price=float(t.get("fillprice", 0) or 0),
+                    product_type=reverse_map_product_type(t.get("producttype")),
+                    timestamp=None,  # Angel does not provide full timestamp
+                )
+                trades.append(trade)
+
+            except Exception as e:
+                # skip malformed trades but log if logger available
+                # logger.warning(f"Skipping malformed trade: {t} error={e}")
+                continue
+
+        return TradesResponse(
+            success=True,
+            broker="angel",
+            data=trades,
+        )
+
+    def get_profile(self) -> ProfileResponse:
         jwt_token = context.get_auth_token()
+        if not jwt_token:
+            raise RuntimeError("Authentication required.")
+
+        raw = get_profile_api(jwt_token)
+
+        if not raw.get("status"):
+            return ProfileResponse(
+                success=False,
+                broker="angel",
+                error=ErrorDetail(
+                    code=raw.get("errorcode", "PROFILE_FETCH_FAILED"),
+                    message=raw.get("message", "Failed to fetch profile")
+                ),
+                raw=raw
+            )
+
+        d = raw["data"]
+
+        profile = Profile(
+            user_id=d["clientcode"],
+            name=d["name"],
+            broker="angel",
+            email=d.get("email") or None,
+            phone=d.get("mobileno") or None,
+            last_login=d.get("lastlogintime"),
+        )
+
+        return ProfileResponse(
+            success=True,
+            broker="angel",
+            data=profile,
+            raw=raw
+        )
+
+    def get_order_details(self, unique_order_id: str) -> OrderResponse:
+        jwt_token = context.get_auth_token()
+        if not jwt_token:
+            raise RuntimeError("Authentication required.")
+        
+        try:
+            resp = get_order_details_api(unique_order_id, jwt_token)
+
+            if not resp.get("status"):
+                return OrderResponse(
+                    success=False,
+                    broker="angel",
+                    error=ErrorDetail(
+                        code=resp.get("errorcode", "API_ERROR"),
+                        message=resp.get("message", "Failed to fetch order details")
+                    )
+                )
+
+            data = resp.get("data", {})
+
+            order = Order(
+                order_id=data.get("orderid"),
+                symbol=data.get("tradingsymbol"),
+                exchange=data.get("exchange"),
+                transaction_type=TransactionType(data.get("transactiontype")),
+                order_type=OrderType(data.get("ordertype")),
+                product_type=reverse_map_product_type(data.get("producttype")),
+                quantity=int(data.get("quantity", 0)),
+                filled_quantity=int(data.get("filledshares", 0)),
+                price=float(data.get("price", 0)),
+                average_price=float(data.get("averageprice", 0) or 0),
+                status=data.get("status"),
+                timestamp=data.get("updatetime")
+            )
+
+            return OrderResponse(
+                success=True,
+                broker="angel",
+                data=order
+            )
+
+        except Exception as e:
+            return OrderResponse(
+                success=False,
+                broker="angel",
+                error=ErrorDetail(
+                    code="INTERNAL_ERROR",
+                    message=str(e)
+                )
+            )
+
+    def cancel_all_orders(self) -> BatchExecutionResponse:
+        jwt_token = context.get_auth_token()
+        if not jwt_token:
+            raise RuntimeError("Auth failed")
+        
         # cancel_all_orders_api(data, auth)
         # Internal API expects data arg but doesn't seem to use it for basic cancellation?
         # Actually it calls get_order_book(auth) internally.
-        canceled, failed = cancel_all_orders_api({}, jwt_token)
-        return {"status": "success", "canceled": canceled, "failed": failed}
+        try:
+            canceled, failed = cancel_all_orders_api({}, jwt_token)
 
-    def square_off_all_positions(self) -> dict:
+            total = len(canceled) + len(failed)
+
+            # NOTHING TO CANCEL
+            if total == 0:
+                return BatchExecutionResponse(
+                    success=True,
+                    broker="angel",
+                    execution_status=ExecutionStatus.NO_ACTION,
+                    data=[],
+                )
+
+            # ALL SUCCESS
+            if len(failed) == 0:
+                return BatchExecutionResponse(
+                    success=True,
+                    broker="angel",
+                    execution_status=ExecutionStatus.COMPLETED,
+                    data=canceled,
+                )
+
+            # PARTIAL SUCCESS
+            if len(canceled) > 0:
+                return BatchExecutionResponse(
+                    success=True,
+                    broker="angel",
+                    execution_status=ExecutionStatus.PARTIAL,
+                    data={
+                        "cancelled": canceled,
+                        "failed": failed,
+                    },
+                )
+
+            # TOTAL FAILURE
+            return BatchExecutionResponse(
+                success=False,
+                broker="angel",
+                execution_status=ExecutionStatus.FAILED,
+                data={"failed": failed},
+                error=ErrorDetail(
+                    code="CANCEL_FAILED",
+                    message="Failed to cancel open orders.",
+                ),
+            )
+
+        except Exception as e:
+            return BatchExecutionResponse(
+                success=False,
+                broker="angel",
+                execution_status=ExecutionStatus.FAILED,
+                error=ErrorDetail(
+                    code="INTERNAL_ERROR",
+                    message=str(e),
+                ),
+            )
+
+    def square_off_all_positions(self) -> BatchExecutionResponse:
         jwt_token = context.get_auth_token()
+        if not jwt_token:
+            raise RuntimeError("Authentication required.")
         # close_all_positions(current_api_key,auth)
-        resp, status = close_all_positions_api(self.api_key, jwt_token)
-        return {"status": "success" if status == 200 else "error", "response": resp}
+
+        try:
+            results = close_all_positions_api(self.api_key, jwt_token)
+
+            if not results:
+                return BatchExecutionResponse(
+                    success=True,
+                    broker="angel",
+                    execution_status=ExecutionStatus.NO_ACTION,
+                    data=[]
+                )
+
+            failed = [r for r in results if r.status != "CLOSED"]
+
+            return BatchExecutionResponse(
+                success=len(failed) == 0,
+                broker="angel",
+                execution_status=ExecutionStatus.PARTIAL if failed else ExecutionStatus.COMPLETED,
+                data=results
+            )
+
+        except Exception as e:
+            return BatchExecutionResponse(
+                success=False,
+                broker="angel",
+                execution_status=ExecutionStatus.FAILED,
+                data=[],
+                error=ErrorDetail(
+                    code="SQUARE_OFF_FAILED",
+                    message=str(e)
+                )
+            )
 
     # --- GTT Orders ---
 
     def create_gtt(self, instrument: Equity | Future | Option, transaction_type: TransactionType, 
                   quantity: int, trigger_price: float, price: float, 
-                  product_type: ProductType = ProductType.DELIVERY, time_period: int = 365) -> dict:
+                  product_type: ProductType = ProductType.DELIVERY, time_period: int = 365) -> GTTExecutionResponse:
         token_info = self._resolve_instrument(instrument)
         jwt_token = context.get_auth_token()
         
@@ -306,10 +971,29 @@ class AngelOne(BaseBroker, broker_name="angel"):
             "timeperiod": str(time_period)
         }
         
-        return create_gtt_rule(payload, jwt_token)
+        resp = create_gtt_rule(payload, jwt_token)
+        if resp.get("status"):
+            rule_id = resp["data"]["id"]
+
+            return GTTExecutionResponse(
+                success=True,
+                broker="angel",
+                execution_id=rule_id,
+                execution_status=GTTRuleStatus.ACTIVE
+            )
+
+        return GTTExecutionResponse(
+            success=False,
+            broker="angel",
+            execution_status=GTTRuleStatus.REJECTED,
+            error=ErrorDetail(
+                code=resp.get("errorcode", "GTT_CREATE_FAILED"),
+                message=resp.get("message")
+            )
+        )
 
     def modify_gtt(self, id: int, instrument: Equity | Future | Option, 
-                  quantity: int, trigger_price: float, price: float) -> dict:
+                  quantity: int, trigger_price: float, price: float) -> GTTExecutionResponse:
         token_info = self._resolve_instrument(instrument)
         jwt_token = context.get_auth_token()
         
@@ -322,9 +1006,28 @@ class AngelOne(BaseBroker, broker_name="angel"):
             "triggerprice": trigger_price
         }
         
-        return modify_gtt_rule(payload, jwt_token)
+        resp = modify_gtt_rule(payload, jwt_token)
+        if resp.get("status"):
+            rule_id = resp["data"]["id"]
 
-    def cancel_gtt(self, id: int, instrument: Equity | Future | Option) -> dict:
+            return GTTExecutionResponse(
+                success=True,
+                broker="angel",
+                execution_id=rule_id,
+                execution_status=GTTRuleStatus.ACTIVE
+            )
+
+        return GTTExecutionResponse(
+            success=False,
+            broker="angel",
+            execution_status=GTTRuleStatus.REJECTED,
+            error=ErrorDetail(
+                code=resp.get("errorcode", "GTT_CREATE_FAILED"),
+                message=resp.get("message")
+            )
+        )
+
+    def cancel_gtt(self, id: int, instrument: Equity | Future | Option) -> GTTExecutionResponse:
         token_info = self._resolve_instrument(instrument)
         jwt_token = context.get_auth_token()
         
@@ -334,18 +1037,91 @@ class AngelOne(BaseBroker, broker_name="angel"):
             "exchange": token_info["exchange"]
         }
         
-        return cancel_gtt_rule(payload, jwt_token)
+        resp = cancel_gtt_rule(payload, jwt_token)
+        if resp.get("status"):
+            rule_id = resp["data"]["id"]
 
-    def get_gtt_list(self, status: list = ["FOR_SETTLEMENT", "CANCELLED", "TRIGGERED"]) -> list:
-        jwt_token = context.get_auth_token()
-        payload = {"status": status, "page": 1, "count": 50}
-        resp = get_gtt_list_api(payload, jwt_token)
-        return resp.get('data') or []
+            return GTTExecutionResponse(
+                success=True,
+                broker="angel",
+                execution_id=rule_id,
+                execution_status=GTTRuleStatus.CANCELLED
+            )
 
-    def get_gtt_details(self, id: int) -> dict:
+        return GTTExecutionResponse(
+            success=False,
+            broker="angel",
+            execution_status=GTTRuleStatus.REJECTED,
+            error=ErrorDetail(
+                code=resp.get("errorcode", "GTT_CANCEL_FAILED"),
+                message=resp.get("message")
+            )
+        )
+
+    def get_gtt_list(self, status: str) -> GTTRuleResponse:
         jwt_token = context.get_auth_token()
-        resp = get_gtt_details_api(id, jwt_token)
-        return resp.get('data') or {}
+        if not jwt_token:
+            raise RuntimeError("Authentication token is required")
+        
+        try: 
+            payload = {"status": status, "page": 1, "count": 50}
+            resp = get_gtt_list_api(payload, jwt_token)
+            if not resp.get("status"):
+                return GTTRuleResponse(success=False, broker="angel", error=ErrorDetail(code=resp.get("errorcode", "GTT_LIST_FAILED"), message=resp.get("message")))
+
+            rules= []
+            for d in resp.get("data", []):
+                rules.append(GTTRule(
+                    rule_id=str(d["id"]),
+                    symbol=d["tradingsymbol"],
+                    exchange=d["exchange"],
+                    transaction_type=TransactionType(d["transactiontype"]),
+                    product_type=reverse_map_product_type(d["producttype"]),
+                    quantity=int(d["qty"]),
+                    price=float(d["price"]),
+                    trigger_price=float(d["triggerprice"]),
+                    status=map_gtt_status(d["status"]),
+                    created_at=d.get("createddate"),
+                    updated_at=d.get("updateddate"),
+                    expires_at=d.get("expirydate"),
+                ))
+
+            return GTTRulesResponse(success=True, broker="angel", data=rules)
+
+        except Exception as e:
+            return GTTRuleResponse(success=False, broker="angel", error=ErrorDetail(code="GTT_LIST_FAILED", message=str(e)))
+
+    def get_gtt_details(self, id: int) -> GTTRuleResponse:
+        jwt_token = context.get_auth_token()
+        if not jwt_token:
+            raise RuntimeError("Authentication token is required")
+
+        try: 
+            resp = get_gtt_details_api(id, jwt_token)
+            if not resp.get("status"):
+                return GTTRuleResponse(success=False, broker="angel", error=ErrorDetail(code=resp.get("errorcode", "GTT_DETAILS_FAILED"), message=resp.get("message")))
+
+            d = resp["data"]
+
+            rule = GTTRule(
+                rule_id=str(id),
+                symbol=d["tradingsymbol"],
+                exchange=d["exchange"],
+                transaction_type=TransactionType(d["transactiontype"]),
+                product_type=reverse_map_product_type(d["producttype"]),
+                quantity=int(d["qty"]),
+                price=float(d["price"]),
+                trigger_price=float(d["triggerprice"]),
+                status=map_gtt_status(d["status"]),
+                created_at=d.get("createddate"),
+                updated_at=d.get("updateddate"),
+                expires_at=d.get("expirydate"),
+            )
+
+            return GTTRuleResponse(success=True, broker="angel", data=rule)
+            
+        except Exception as e:
+            return GTTRuleResponse(success=False, broker="angel", error=ErrorDetail(code="GTT_DETAILS_FAILED", message=str(e)))
 
     # --- WebSocket Streaming ---
     
@@ -503,4 +1279,3 @@ class AngelOne(BaseBroker, broker_name="angel"):
         if self._ws_client:
             self._ws_client.close_connection()
             self._ws_client = None
-

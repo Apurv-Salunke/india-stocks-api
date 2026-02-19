@@ -2,6 +2,7 @@
 #Mapping Angel Broking Parameters https://smartapi.angelbroking.com/docs/Orders
 
 from india_stocks_api.internal.context import get_br_symbol
+from india_stocks_api.constants import OrderStatus, GTTRuleStatus
 
 def transform_data(data,token):
     """
@@ -100,3 +101,33 @@ def reverse_map_product_type(product):
     }
     return reverse_product_type_mapping.get(product)  
 
+
+
+def map_order_status(status: str) -> OrderStatus:
+    angel_status_map = {
+        "complete": OrderStatus.FILLED,
+        "open": OrderStatus.OPEN,
+        "cancelled": OrderStatus.CANCELLED,
+        "rejected": OrderStatus.REJECTED,
+        "trigger pending": OrderStatus.TRIGGER_PENDING,
+    }
+    if not status:
+        return OrderStatus.UNKNOWN
+    return angel_status_map.get(status.lower(), OrderStatus.UNKNOWN)
+
+def map_gtt_status(status: str | None) -> str:
+    """
+    Normalize Angel One GTT rule status to SDK standard.
+
+    Returns a broker-agnostic status string.
+    """
+    normalized = status.strip().upper()
+
+    angel_gtt_status_map = {
+        "NEW": GTTRuleStatus.ACTIVE,            # still waiting
+        "ACTIVE": GTTRuleStatus.ACTIVE,
+        "SENTTOEXCHANGE": GTTRuleStatus.TRIGGERED,
+        "CANCELLED": GTTRuleStatus.CANCELLED,
+    }
+
+    return angel_gtt_status_map.get(normalized, GTTRuleStatus.UNKNOWN)
