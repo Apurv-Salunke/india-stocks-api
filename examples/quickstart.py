@@ -34,10 +34,10 @@ if not all([api_key, client_code, password, totp_key]):
 
 # Create broker instance (auto-provisions instrument database)
 broker = AngelOne(
-api_key=api_key,
-client_code=client_code,
-password=password,
-totp_key=totp_key,
+    api_key=api_key,
+    client_code=client_code,
+    password=password,
+    totp_key=totp_key,
 )
 
 # Authenticate with Angel One
