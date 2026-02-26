@@ -94,6 +94,10 @@ def main():
     print("=== PLACING LIVE ORDER ===")
     print("WARNING: This will use real money!")
     print()
+    confirm = input("Type YES to place this live order: ").strip()
+    if confirm != "YES":
+        print("Live order aborted.")
+        return
 
     # Place a market order
     response = broker.place_order(

@@ -152,14 +152,16 @@ def retry_with_backoff(func, max_retries=3, base_delay=1.0):
             return func()
         except RateLimitError as e:
             last_error = e
-            print(f"Rate limited, waiting {delay}s...")
-            time.sleep(delay)
-            delay *= 2
+            if attempt < max_retries - 1:
+                print(f"Rate limited, waiting {delay}s...")
+                time.sleep(delay)
+                delay *= 2
         except NetworkError as e:
             last_error = e
-            print(f"Network error (attempt {attempt + 1}/{max_retries}), retrying...")
-            time.sleep(delay)
-            delay *= 2
+            if attempt < max_retries - 1:
+                print(f"Network error (attempt {attempt + 1}/{max_retries}), retrying...")
+                time.sleep(delay)
+                delay *= 2
 
     print(f"All retries failed: {last_error}")
     return None

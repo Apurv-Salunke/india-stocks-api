@@ -30,7 +30,7 @@ Expected output:
 
 import os
 import sys
-from datetime import date
+from datetime import date, timedelta
 
 from dotenv import load_dotenv
 
@@ -100,15 +100,24 @@ def main():
     reliance = Equity("RELIANCE", exchange="NSE")
     print(f"Equity: {reliance}")
 
+    today = date.today()
+
+    # simple next Thursday calculation (NFO index expiries are Thursdays)
+    days_ahead = (3 - today.weekday()) % 7  # Thursday = 3
+    if days_ahead == 0:
+        days_ahead = 7
+
+    next_expiry = today + timedelta(days=days_ahead)
+
     # Future - symbol, expiry date, exchange
     # Note: Use actual expiry dates from NSE calendar
-    nifty_fut = Future("NIFTY", expiry=date(2025, 1, 30), exchange="NFO")
+    nifty_fut = Future("NIFTY", expiry=next_expiry, exchange="NFO")
     print(f"Future: {nifty_fut}")
 
     # Option - symbol, expiry, strike, option type, exchange
     banknifty_opt = Option(
         symbol="BANKNIFTY",
-        expiry=date(2025, 1, 29),
+        expiry=next_expiry,
         strike=48000.0,
         opt_type=OptionType.CE,
         exchange="NFO",

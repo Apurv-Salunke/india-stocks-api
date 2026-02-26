@@ -45,7 +45,7 @@ broker.authenticate()
 print("Authenticated successfully")
 
 # Define the instrument
-reliance = Equity("IIFL", exchange="NSE")
+reliance = Equity("RELIANCE", exchange="NSE")
 
 # Fetch quote and print LTP
 quote = broker.get_quote(reliance)

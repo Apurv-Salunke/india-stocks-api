@@ -113,7 +113,7 @@ def main():
     print()
     print("=== Index Quote ===")
     index_quote = broker.get_quote(nifty)
-    print(f"NIFTY 50 LTP: {index_quote.ltp}")
+    print(f"NIFTY 500 LTP: {index_quote.ltp}")
 
 
 if __name__ == "__main__":
