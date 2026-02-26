@@ -72,10 +72,7 @@ class ISAError(Exception):
         self.details = details
 
     def __repr__(self) -> str:
-        return (
-            f"{self.__class__.__name__}("
-            f"{self.args[0]!r}, code={self.code.name}, details={self.details!r})"
-        )
+        return f"{self.__class__.__name__}({self.args[0]!r}, code={self.code.name}, details={self.details!r})"
 
     def __str__(self) -> str:
         base = self.args[0] if self.args else ""

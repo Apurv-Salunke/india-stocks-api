@@ -294,6 +294,4 @@ class TestPerformance:
             err.to_dict()
 
         elapsed = time.perf_counter() - start
-
-        # Allow margin for CI variability
-        assert elapsed < 2.0, f"Exception handling too slow: {elapsed:.2f}s"
+        assert elapsed < 2.0
