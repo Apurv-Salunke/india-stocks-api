@@ -217,7 +217,7 @@ StreamMode.DEPTH       # Full 20-level depth (NSE CM only)
 
 ### Authentication Flow
 
-```
+```text
 authenticate()
     ↓
 TOTP generated automatically
@@ -248,6 +248,7 @@ except SessionExpiredError:
 ### Session Persistence
 
 Session tokens are stored in `_cache/sessions.json`. This file:
+
 - Contains access token, feed token, client code
 - Does **not** contain passwords or TOTP secrets
 - Has restricted permissions (chmod 600)
@@ -295,6 +296,7 @@ broker = BaseBroker.create(
 ## Error Handling Model
 
 All SDK exceptions inherit from `ISAError` and include:
+
 - Human-readable message
 - Standardized error code
 - Optional details (broker response, etc.)

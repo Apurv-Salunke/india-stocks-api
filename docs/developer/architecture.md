@@ -8,7 +8,7 @@ This document explains the internal architecture of the SDK for developers and c
 
 ### High-Level Architecture
 
-```
+``` text
 ┌─────────────────────────────────────────────────────────────┐
 │                        User Code                            │
 │  broker.place_order(Equity("RELIANCE"), TransactionType.BUY)│
@@ -133,7 +133,7 @@ Exception hierarchy with error codes.
 
 ### Order Placement
 
-```
+```text
 1. User: broker.place_order(Equity("RELIANCE"), TransactionType.BUY, 1)
 
 2. AngelOne.place_order():
@@ -162,7 +162,7 @@ Exception hierarchy with error codes.
 
 ### Quote Fetching
 
-```
+```text
 1. User: broker.get_quote(Equity("SBIN"))
 
 2. AngelOne.get_quote():
@@ -255,7 +255,7 @@ Sessions stored in `_cache/sessions.json`:
 
 ### Session Lifecycle
 
-```
+```text
 authenticate()
     ↓
 Generate TOTP → Send to broker → Receive tokens
@@ -275,7 +275,7 @@ On expiry: SessionExpiredError → Re-authenticate
 
 ### Resolution Process
 
-```
+```text
 Input: Equity("RELIANCE")
     ↓
 Build query: symbol="RELIANCE", exchange="NSE"
@@ -297,7 +297,7 @@ Return: {
 
 For options/futures, additional fields are matched:
 
-```
+```text
 Input: Option("NIFTY", date(2024,12,26), 22000, OptionType.CE)
     ↓
 Query with: symbol, expiry, strike, option_type
@@ -311,7 +311,7 @@ Returns unique contract token
 
 ### Architecture
 
-```
+```text
 ┌───────────────────────────────────────────────────────┐
 │                   AngelOne Adapter                    │
 │  • subscribe() - buffer subscriptions                 │
@@ -353,7 +353,7 @@ broker.start_streaming()
 
 ### Exception Hierarchy
 
-```
+```text
 ISAError (base)
 ├── AuthenticationError
 │   └── SessionExpiredError

@@ -27,6 +27,7 @@ Create a broker instance by name.
 **Raises:** `ValidationError` if broker_name is unknown
 
 **Example:**
+
 ```python
 broker = BaseBroker.create("angel",
     api_key="xxx",
@@ -52,10 +53,12 @@ Authenticate with the broker. Required before any trading operations.
 **Returns:** `True` if authentication succeeds
 
 **Raises:**
+
 - `AuthenticationError` - Invalid credentials
 - `NetworkError` - Connection failed
 
 **Example:**
+
 ```python
 broker = AngelOne(...)
 broker.authenticate()
@@ -84,11 +87,13 @@ Get current market quote for an instrument.
 **Returns:** [`QuoteResponse`](responses.md#quoteresponse)
 
 **Raises:**
+
 - `AuthenticationError` - Not authenticated
 - `SessionExpiredError` - Session expired
 - `ValidationError` - Invalid instrument
 
 **Example:**
+
 ```python
 quote = broker.get_quote(Equity("RELIANCE"))
 print(f"LTP: {quote.ltp}")
@@ -113,10 +118,12 @@ Get market depth (Level 2 order book data).
 **Returns:** [`DepthResponse`](responses.md#depthresponse)
 
 **Raises:**
+
 - `AuthenticationError` - Not authenticated
 - `SessionExpiredError` - Session expired
 
 **Example:**
+
 ```python
 depth = broker.get_depth(Equity("SBIN"))
 for bid in depth.bids[:5]:
@@ -148,10 +155,12 @@ Get historical OHLCV candle data.
 **Returns:** [`HistoryResponse`](responses.md#historyresponse) with candle data
 
 **Raises:**
+
 - `AuthenticationError` - Not authenticated
 - `ValidationError` - Invalid date range or interval
 
 **Example:**
+
 ```python
 from india_stocks_api import CandleInterval
 
@@ -204,11 +213,13 @@ Place a new order.
 **Returns:** [`OrderResponse`](responses.md#orderresponse)
 
 **Raises:**
+
 - `AuthenticationError` - Not authenticated
 - `OrderError` - Order rejected by broker
 - `ValidationError` - Invalid parameters
 
 **Example:**
+
 ```python
 from india_stocks_api import TransactionType, OrderType
 
@@ -254,9 +265,11 @@ Modify an existing pending order.
 **Returns:** [`OrderResponse`](responses.md#orderresponse)
 
 **Raises:**
+
 - `OrderError` - Order not found or not modifiable
 
 **Example:**
+
 ```python
 response = broker.modify_order(
     order_id="123456789",
@@ -280,6 +293,7 @@ Cancel a pending order.
 **Returns:** [`OrderResponse`](responses.md#orderresponse)
 
 **Example:**
+
 ```python
 response = broker.cancel_order("123456789")
 ```
@@ -296,6 +310,7 @@ Get all orders for the current trading day.
 **Returns:** List of [`Order`](responses.md#order) objects
 
 **Example:**
+
 ```python
 orders = broker.get_orders()
 for order in orders:
@@ -353,6 +368,7 @@ Get current open positions.
 **Returns:** List of [`Position`](responses.md#position) objects
 
 **Example:**
+
 ```python
 positions = broker.get_positions()
 for pos in positions:
@@ -371,6 +387,7 @@ Get long-term delivery holdings.
 **Returns:** List of [`Holding`](responses.md#holding) objects
 
 **Example:**
+
 ```python
 holdings = broker.get_holdings()
 total_value = sum(h.ltp * h.quantity for h in holdings)
@@ -399,6 +416,7 @@ Get account funds and margin information.
 **Returns:** [`FundsResponse`](responses.md#fundsresponse)
 
 **Example:**
+
 ```python
 funds = broker.get_funds()
 print(f"Available: ₹{funds.available_cash:,.2f}")
@@ -443,6 +461,7 @@ Start WebSocket streaming for live tick data.
 | `on_close` | `Callable` | `None` | Disconnect callback |
 
 **Example:**
+
 ```python
 def handle_tick(tick):
     print(f"{tick.symbol}: {tick.ltp}")
@@ -509,13 +528,13 @@ def cancel_gtt(
 ### get_gtt_list()
 
 ```python
-def get_gtt_list(status: GTTStatus | None = None) -> list[GTTRule]
+def get_gtt_list(self, status: GTTStatus | None = None) -> list[GTTRule]
 ```
 
 ### get_gtt_details()
 
 ```python
-def get_gtt_details(rule_id: int) -> GTTRule
+def get_gtt_details(self, rule_id: int) -> GTTRule
 ```
 
 ---

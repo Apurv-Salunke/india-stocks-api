@@ -83,7 +83,8 @@ print(f"Total Sell Qty: {depth.total_sell_qty}")
 ```
 
 Output:
-```
+
+```text
 Top Bids:
   1. 2845.35 x 500
   2. 2845.30 x 1200
@@ -177,7 +178,8 @@ print(df.head())
 ```
 
 Output:
-```
+
+```text
     timestamp    open    high     low   close    volume  oi
 0  1704067200  2820.0  2830.5  2815.0  2825.0   8234567   0
 1  1704153600  2825.0  2850.0  2820.0  2845.0  10234567   0

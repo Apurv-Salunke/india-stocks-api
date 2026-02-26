@@ -26,7 +26,7 @@ from india_stocks_api.exceptions import ErrorCode
 
 ## Exception Hierarchy
 
-```
+```text
 Exception
 └── ISAError                    # Base exception
     ├── AuthenticationError     # Auth failures
@@ -292,7 +292,7 @@ except OrderError as e:
     if e.code == ErrorCode.INSUFFICIENT_FUNDS:
         print("Not enough margin")
     elif e.code == ErrorCode.ORDER_REJECTED:
-        print(f"Rejected: {e.message}")
+        print(f"Rejected: {str(e)}")
 ```
 
 ---

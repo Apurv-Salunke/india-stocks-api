@@ -6,7 +6,7 @@ This document covers the test organization, writing tests, and running the test 
 
 ## Test Organization
 
-```
+```text
 tests/
 ├── __init__.py
 ├── conftest.py           # Shared fixtures
@@ -35,6 +35,7 @@ tests/
 Fast, isolated tests that don't require network access or credentials.
 
 **Characteristics:**
+
 - Mock external dependencies
 - Run in milliseconds
 - Deterministic (no randomness)
@@ -43,6 +44,7 @@ Fast, isolated tests that don't require network access or credentials.
 **Location:** `tests/unit/`
 
 **Run:**
+
 ```bash
 poetry run pytest tests/unit/ -v
 ```
@@ -52,6 +54,7 @@ poetry run pytest tests/unit/ -v
 Tests that require live broker credentials and network access.
 
 **Characteristics:**
+
 - Use real broker APIs
 - Require credentials in environment
 - May be slow
@@ -60,6 +63,7 @@ Tests that require live broker credentials and network access.
 **Location:** `tests/integration/`
 
 **Run:**
+
 ```bash
 # Requires .env with broker credentials
 poetry run pytest tests/integration/ -v
@@ -72,6 +76,7 @@ Manual tests for development and debugging.
 **Location:** `tests/scripts/`
 
 **Run:**
+
 ```bash
 poetry run python tests/scripts/test_trading.py
 ```

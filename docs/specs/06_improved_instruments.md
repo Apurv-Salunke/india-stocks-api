@@ -39,15 +39,15 @@ results = client.instruments.search("Relia")
 
 ## Implementation Strategy
 
-1.  **Reuse Existing Logic**: OpenAlgo's `Token DB` (`database/token_db_enhanced.py`) already has excellent logic for `search_symbols` and `fno_search_symbols`.
-2.  **Port to Internal**: We will port the **read-only** parts of `token_db_enhanced.py` and `symbol.py` into `openalgo_brokers.internal.instruments`.
-3.  **Factory Pattern**: The search results are automatically instantiated into the correct Domain Class (`Equity` vs `Future` vs `Option`) based on the `instrumenttype` column in the DB.
+1. **Reuse Existing Logic**: OpenAlgo's `Token DB` (`database/token_db_enhanced.py`) already has excellent logic for `search_symbols` and `fno_search_symbols`.
+2. **Port to Internal**: We will port the **read-only** parts of `token_db_enhanced.py` and `symbol.py` into `openalgo_brokers.internal.instruments`.
+3. **Factory Pattern**: The search results are automatically instantiated into the correct Domain Class (`Equity` vs `Future` vs `Option`) based on the `instrumenttype` column in the DB.
 
 ## Classification Tiers
 
-1.  **Equities (EQ)**: Maps to `Equity` class.
-2.  **Indices (IDX)**: Maps to `Index` class.
-3.  **Futures (FUT)**: Maps to `Future` class.
-4.  **Options (OPT)**: Maps to `Option` class.
+1. **Equities (EQ)**: Maps to `Equity` class.
+2. **Indices (IDX)**: Maps to `Index` class.
+3. **Futures (FUT)**: Maps to `Future` class.
+4. **Options (OPT)**: Maps to `Option` class.
 
 This structure allows us to build powerful higher-order functions later, like "Buy the straddle" (Find ATM CE + ATM PE and buy both).

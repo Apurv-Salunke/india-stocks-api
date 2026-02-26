@@ -310,13 +310,17 @@ broker.on_tick = on_tick
 ```python
 from india_stocks_api.instruments import Future, Option
 from india_stocks_api.constants import OptionType, StreamMode
-from datetime import date
+from datetime import date, timedelta
+
+# Stream futures and options for a near-month expiry
+today = date.today()
+expiry = today + timedelta(days=30)
 
 # Stream futures and options
 instruments = [
-    Future("NIFTY", expiry=date(2024, 12, 26)),
-    Option("BANKNIFTY", date(2024, 12, 26), 52000.0, OptionType.CE),
-    Option("BANKNIFTY", date(2024, 12, 26), 52000.0, OptionType.PE),
+    Future("NIFTY", expiry=expiry),
+    Option("BANKNIFTY", expiry, 52000.0, OptionType.CE),
+    Option("BANKNIFTY", expiry, 52000.0, OptionType.PE),
 ]
 
 def on_tick(tick):
@@ -352,7 +356,7 @@ broker.on_error = on_error
 |------------|---------|
 | Max instruments | ~200 per connection (broker limit) |
 | Depth mode | NSE CM instruments only |
-| Market hours | Streaming only during market hours |
+| Market hours | Streaming during market hours |
 | Reconnection | Limited retry attempts |
 
 ---

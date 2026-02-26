@@ -130,7 +130,8 @@ print(f"Volume: {quote.volume}")
 ```
 
 Output:
-```
+
+```text
 Symbol: RELIANCE
 LTP: 2845.50
 Bid: 2845.35 | Ask: 2845.65
@@ -166,7 +167,8 @@ print(f"Message: {response.message}")
 ```
 
 Output:
-```
+
+```text
 Order ID: 240115000012345
 Status: success
 Message: Order placed successfully
@@ -195,7 +197,8 @@ broker.start_streaming()
 ```
 
 Output:
-```
+
+```text
 RELIANCE: LTP=2845.50, Vol=12345678
 SBIN: LTP=825.40, Vol=9876543
 RELIANCE: LTP=2845.55, Vol=12345700

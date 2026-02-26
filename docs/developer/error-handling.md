@@ -6,7 +6,7 @@ This document covers the exception hierarchy, error codes, and error handling pa
 
 ## Exception Hierarchy
 
-```
+```text
 ISAError (base)
 │
 ├── AuthenticationError
@@ -255,6 +255,8 @@ except BrokerError as e:
 ### Comprehensive Handler
 
 ```python
+import logging
+import time
 from india_stocks_api import (
     ISAError,
     AuthenticationError,
@@ -264,6 +266,8 @@ from india_stocks_api import (
     NetworkError,
     RateLimitError,
 )
+
+logger = logging.getLogger(__name__)
 
 def safe_operation(broker, func, *args, **kwargs):
     """Execute with comprehensive error handling."""

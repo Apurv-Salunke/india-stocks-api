@@ -17,7 +17,7 @@ The instrument system:
 
 ## Database Location
 
-```
+```text
 _cache/
 └── instruments.db    # SQLite database
 ```
@@ -151,7 +151,7 @@ Raw broker symbols are transformed to NSE-style:
 
 ### Resolution Flow
 
-```
+```text
 User: Equity("RELIANCE")
          │
          ▼
@@ -279,7 +279,9 @@ Resolution requires matching symbol + expiry:
 ```python
 # Find current month NIFTY future
 Future("NIFTY", expiry=date(2024, 12, 26))
+```
 
+```sql
 # Query
 SELECT * FROM instruments
 WHERE symbol = 'NIFTY'

@@ -32,7 +32,7 @@ A standalone, PyPI-installable Python package for programmatic trading on Indian
 
 ### 2.1 Package Structure
 
-```
+```text
 india_stocks_api/
 ├── __init__.py              # Public exports
 ├── constants.py             # Enums (OrderType, TransactionType, etc.)
@@ -141,7 +141,7 @@ class ProductType(str, Enum):
 
 The broker adapters are **thin wrappers** that delegate to the actual OpenAlgo code (ported into `internal/`). We do NOT rewrite the broker logic—we reuse it.
 
-```
+```text
 User Code
     ↓
 brokers/zerodha.py      ← Thin Wrapper (Domain Objects → dict)
@@ -355,7 +355,7 @@ Keep broker logic updated when OpenAlgo releases new versions.
 
 **Future Consideration**: Normalized schema for richer queries.
 
-```
+```text
 underlyings(id, name, exchange, lot_size, tick_size)
     └── expiries(id, underlying_id, expiry_date, is_weekly, is_monthly)
            └── contracts(token, expiry_id, strike, opt_type, tradingsymbol)
@@ -395,4 +395,4 @@ underlyings(id, name, exchange, lot_size, tick_size)
 
 ---
 
-_End of Design Document_
+<!-- End of Design Document -->

@@ -22,7 +22,7 @@ Some files (like `SmartWebSocketV2.py`) require **no shimming** because they onl
 
 ## Proposed Architecture
 
-```
+```text
 india-stocks-api/
 ├── scripts/
 │   ├── sync_upstream.py        # Main extraction script
@@ -189,7 +189,7 @@ jobs:
 
 A simple file that records the last synced commit:
 
-```
+```text
 # Last synced OpenAlgo commit
 abc123def456...
 ```
@@ -200,7 +200,7 @@ The sync script checks this before running to avoid redundant syncs.
 
 ## Workflow Summary
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    GitHub Action (Weekly)                    │
 ├─────────────────────────────────────────────────────────────┤

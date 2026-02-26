@@ -15,7 +15,7 @@ This document covers coding standards, development workflow, and contribution gu
 ### Clone and Install
 
 ```bash
-git clone https://github.com/yourorg/india-stocks-api.git
+git clone https://github.com/Apurv-Salunke/india-stocks-api.git
 cd india-stocks-api
 poetry install
 ```
@@ -91,7 +91,6 @@ def place_order(
     
     Raises:
         AuthenticationError: If not authenticated.
-        OrderRejectedError: If broker rejects order.
     """
 ```
 
@@ -133,7 +132,7 @@ poetry run pre-commit run --all-files
 
 ### Branch Naming
 
-```
+```text
 feature/add-zerodha-support
 fix/session-expiry-handling
 refactor/instrument-resolution
@@ -145,6 +144,7 @@ docs/streaming-guide
 Follow conventional commits: `type(scope): message`
 
 **Types:**
+
 - `feat`: New feature
 - `fix`: Bug fix
 - `refactor`: Code change (no new feature or fix)
@@ -154,7 +154,8 @@ Follow conventional commits: `type(scope): message`
 - `chore`: Maintenance tasks
 
 **Examples:**
-```
+
+```text
 feat(orders): add GTT order support
 fix(auth): handle session expiry correctly
 refactor(instruments): simplify resolution logic
@@ -166,6 +167,7 @@ ci: add Python 3.12 to test matrix
 ### Pull Request Process
 
 1. **Fork and branch**
+
    ```bash
    git checkout -b feature/your-feature
    ```
@@ -176,23 +178,27 @@ ci: add Python 3.12 to test matrix
    - Update docs
 
 3. **Run checks**
+
    ```bash
    poetry run pre-commit run --all-files
    poetry run pytest tests/unit/ -v
    ```
 
 4. **Commit**
+
    ```bash
    git add .
    git commit -m "feat(scope): description"
    ```
 
 5. **Push and PR**
+
    ```bash
    git push origin feature/your-feature
    ```
 
 6. **PR description template**
+
    ```markdown
    ## Summary
    Brief description of changes.
@@ -229,7 +235,7 @@ Adding a new broker follows a strict 4-step workflow. Each step is completed in 
 
 ### Branch Order
 
-```
+```text
 broker/<broker-name>           # Step 1: Raw code
     ↓
 feat/<broker-name>-remove-env  # Step 2: Cleanup
@@ -247,11 +253,12 @@ broker/<broker-name>-instruments  # Step 4: Instrument DB
 
 Copy the broker folder from OpenAlgo exactly as-is:
 
-```
+```text
 openalgo/broker/zerodha → india_stocks_api/internal/zerodha
 ```
 
 **Actions:**
+
 - Copy OpenAlgo broker code exactly as provided
 - Do NOT modify anything
 - Do NOT refactor
@@ -261,7 +268,8 @@ openalgo/broker/zerodha → india_stocks_api/internal/zerodha
 **Purpose:** Keep an untouched baseline for traceability and future diffs.
 
 **Final structure:**
-```
+
+```text
 india_stocks_api/internal/<broker-name>/
 ├── __init__.py
 ├── api/
@@ -290,12 +298,14 @@ india_stocks_api/internal/<broker-name>/
 **What to do:**
 
 Modify imported code to:
+
 - Remove `dotenv`/env usage
 - Remove Flask/db dependencies
 - Replace imports with `internal.context`
 - Ensure standalone usage
 
 **Actions:**
+
 - Remove environment variable dependencies
 - Fix imports to match project structure
 - Standardize paths
@@ -317,6 +327,7 @@ from ...internal import context
 ```
 
 **Output:**
+
 - Open PR for review
 - Merge after approval
 
@@ -354,6 +365,7 @@ class NewBroker(BaseBroker, broker_name="newbroker"):
 ```
 
 **Actions:**
+
 - Implement broker adapter class
 - Follow `BaseBroker` interface/contracts
 - Map broker-specific logic to unified entry points
@@ -362,6 +374,7 @@ class NewBroker(BaseBroker, broker_name="newbroker"):
 - Apply architecture patterns (see [Broker Adapter Guide](broker-adapter-guide.md))
 
 **Output:**
+
 - Raise PR
 - Peer review required
 - Merge after approval
@@ -377,6 +390,7 @@ class NewBroker(BaseBroker, broker_name="newbroker"):
 **Branch from:** Latest merged branch
 
 **Actions:**
+
 - Add master contract download function
 - Implement `_download_master_contract()` in adapter
 - Register broker instruments in database
@@ -385,7 +399,7 @@ class NewBroker(BaseBroker, broker_name="newbroker"):
 
 **Implementation:**
 
-```python
+```text
 # india_stocks_api/internal/<broker>/database/master_contract.py
 def master_contract_download():
     """Download and populate instruments.db"""
@@ -398,6 +412,7 @@ def _download_master_contract(self):
 ```
 
 **Output:**
+
 - Raise PR
 - Merge after review
 
@@ -424,6 +439,7 @@ See [Broker Adapter Guide](broker-adapter-guide.md) for detailed implementation 
 ### New Response Types
 
 1. Add to responses.py:
+
    ```python
    @dataclass(frozen=True, slots=True)
    class NewResponse:
@@ -432,6 +448,7 @@ See [Broker Adapter Guide](broker-adapter-guide.md) for detailed implementation 
    ```
 
 2. Export in \_\_init\_\_.py:
+
    ```python
    from .responses import NewResponse
    ```
@@ -442,12 +459,14 @@ See [Broker Adapter Guide](broker-adapter-guide.md) for detailed implementation 
 ### New Exceptions
 
 1. Add to exceptions.py:
+
    ```python
    class NewError(ISAError):
        pass
    ```
 
 2. Add error code if needed:
+
    ```python
    class ErrorCode(IntEnum):
        NEW_ERROR = 7001
@@ -523,6 +542,7 @@ poetry version major  # 2.0.0 -> 3.0.0
 ### Changelog
 
 Update CHANGELOG.md with:
+
 - New features
 - Bug fixes
 - Breaking changes

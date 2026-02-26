@@ -6,10 +6,10 @@ To extract the `broker` directory from the existing OpenAlgo repository and pack
 
 ## Goals
 
-1.  **Reuse Tested Code**: Leverage the existing, battle-tested connection logic for 24+ brokers.
-2.  **Active Maintenance**: Ensure the layout allows for easy syncing with the active OpenAlgo codebase.
-3.  **Standalone**: The new package must not depend on the OpenAlgo Flask server, UI, or database models.
-4.  **Clean Interface**: Provide a unified, type-safe interface for end-users (Python scripts/strategies) without exposing internal complexity.
+1. **Reuse Tested Code**: Leverage the existing, battle-tested connection logic for 24+ brokers.
+2. **Active Maintenance**: Ensure the layout allows for easy syncing with the active OpenAlgo codebase.
+3. **Standalone**: The new package must not depend on the OpenAlgo Flask server, UI, or database models.
+4. **Clean Interface**: Provide a unified, type-safe interface for end-users (Python scripts/strategies) without exposing internal complexity.
 
 ## Scope
 

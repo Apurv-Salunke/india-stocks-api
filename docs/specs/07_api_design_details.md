@@ -27,8 +27,8 @@ def place_order(
 
 ### Validation Logic
 
-1.  **Type Check**: If `instrument` is an instance of `Index`, the method immediately raises `TypeError("Cannot place order on non-tradable Index")`.
-2.  **Resolution**:
+1. **Type Check**: If `instrument` is an instance of `Index`, the method immediately raises `TypeError("Cannot place order on non-tradable Index")`.
+2. **Resolution**:
     - If `Instrument` object: Uses `instrument.symbol`, `instrument.expiry`, etc., to resolve the Token ID from the internal DB.
     - If `str`: Performs a standard lookup assuming it is a Tradingsymbol.
 

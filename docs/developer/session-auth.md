@@ -19,7 +19,7 @@ The SDK manages:
 
 ### Sequence Diagram
 
-```
+```text
 User                     Broker Adapter              Context             Broker API
   │                           │                         │                    │
   │ authenticate()            │                         │                    │
@@ -88,7 +88,7 @@ def set_feed_token(token: str | None):
 
 ### File Location
 
-```
+```text
 _cache/
 └── sessions.json    # Contains session data (chmod 600)
 ```
@@ -98,10 +98,10 @@ _cache/
 ```json
 {
   "angel": {
-    "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6...",
-    "feed_token": "abc123...",
-    "api_key": "API_KEY_HERE",
-    "client_code": "CLIENT_ID",
+    "access_token": "<ACCESS_TOKEN>",
+    "feed_token": "<FEED_TOKEN>",
+    "api_key": "<API_KEY>",
+    "client_code": "<CLIENT_CODE>",
     "authenticated_at": "2024-01-15T09:30:00+05:30",
     "expires_at": "2024-01-16T00:00:00+05:30"
   }

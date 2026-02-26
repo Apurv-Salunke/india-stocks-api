@@ -141,6 +141,7 @@ broker.place_order(
 ### Finding Expiry Dates
 
 Check exchange circulars or use known expiry patterns:
+
 - **Weekly expiry**: Every Thursday (or previous trading day if holiday)
 - **Monthly expiry**: Last Thursday of the month
 

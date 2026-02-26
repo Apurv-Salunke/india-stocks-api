@@ -19,7 +19,7 @@ Adding a new broker involves:
 
 Create the directory structure:
 
-```
+```text
 india_stocks_api/
 ├── brokers/
 │   └── newbroker.py           # Public adapter (you create)
@@ -471,6 +471,7 @@ Before submitting your broker adapter:
 Study `brokers/angel.py` (~940 lines) as a complete reference implementation.
 
 Key patterns:
+
 - `_resolve_instrument()` for domain object → token
 - `_require_auth()` for session validation
 - `_map_*_response()` for response normalization
