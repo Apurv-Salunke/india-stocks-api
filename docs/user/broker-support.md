@@ -54,27 +54,7 @@ This guide documents broker-specific capabilities, limitations, and differences.
 | MCX | MCX | Commodities |
 | CDS | CDS | Currency derivatives |
 
-### API Rate Limits
-
-| Endpoint | Limit | Period |
-|----------|-------|--------|
-| Orders | 10 | Per second |
-| Quotes | 1 | Per second |
-| Historical | 3 | Per second |
-| WebSocket | 200 | Instruments per connection |
-
-> **Note**: Exceeding rate limits results in `RateLimitError`.
-
-### Historical Data Limits
-
-| Interval | Max Range |
-|----------|-----------|
-| 1 minute | 30 days |
-| 3-5 minutes | 60 days |
-| 10-15 minutes | 90 days |
-| 30 minutes | 180 days |
-| 1 hour | 365 days |
-| Daily | No limit |
+---
 
 ### Session Behavior
 
