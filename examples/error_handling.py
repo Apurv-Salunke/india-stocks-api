@@ -197,6 +197,9 @@ def safe_get_quote(broker, instrument):
         except AuthenticationError as e:
             print(f"Re-authentication failed: {e}")
             return None
+        except ISAError as e:
+            print(f"Quote fetch failed after re-authentication: {e}")
+            return None
 
     except RateLimitError as e:
         # Too many requests - back off
