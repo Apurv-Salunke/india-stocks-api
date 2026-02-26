@@ -72,8 +72,8 @@ To mitigate the risk of ambiguous expiries (e.g., Weekly vs Monthly on same day)
 
 - **Standardization**: The `symbol` input always expects the **OpenAlgo Standard Name** (which mirrors NSE naming).
 - **Mapping**: The internal SQLite database contains a `brsymbol` column. Finding the right token is a 2-step process:
-  1.  User Input ("M&M") -> Match OpenAlgo Symbol column ("M&M") -> Get internal Token.
-  2.  Use Token -> Look up `brsymbol` (Broker specific, e.g., "MM") -> Send to API.
+  1. User Input ("M&M") -> Match OpenAlgo Symbol column ("M&M") -> Get internal Token.
+  2. Use Token -> Look up `brsymbol` (Broker specific, e.g., "MM") -> Send to API.
 - This creates a "Firewall" where the user only speaks OpenAlgo/NSE dialect, and the system translates.
 
 ### Solution for Point 4 (Index vs Spot)

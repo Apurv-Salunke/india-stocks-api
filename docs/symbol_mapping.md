@@ -68,10 +68,12 @@ When placing an order:
 1. **User sends**: `symbol="NIFTY26DEC24FUT"` (OpenAlgo format)
 2. **`transform_data()`** calls `get_br_symbol("NIFTY26DEC24FUT", "NFO")`
 3. **`get_br_symbol`** queries:
+
    ```sql
    SELECT brsymbol FROM symtoken
    WHERE symbol='NIFTY26DEC24FUT' AND exchange='NFO'
    ```
+
 4. **Returns broker symbol**: `NIFTY24DECFUT`
 5. **This `brsymbol`** is sent to the broker API
 
@@ -108,7 +110,7 @@ def transform_data(data):
 
 Each broker has its own master contract handling:
 
-```
+```text
 broker/
 ├── zerodha/database/master_contract_db.py
 ├── angel/database/master_contract_db.py
