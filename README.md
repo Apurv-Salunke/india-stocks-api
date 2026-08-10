@@ -1,3 +1,5 @@
+
+
 # India Stocks API v2.0
 
 Type-safe Python client for Indian brokers with canonical responses and auto-provisioned instruments.
@@ -26,7 +28,12 @@ from india_stocks_api.brokers import AngelOne
 from india_stocks_api.constants import TransactionType, OrderType, StreamMode
 from india_stocks_api.instruments import Equity
 
-broker = AngelOne(api_key, client_code, password, totp_key)
+broker = AngelOne(
+    api_key="your_api_key",
+    client_code="your_client_code",
+    password="your_pin",
+    totp_key="your_totp_seed"
+)
 broker.authenticate()
 
 # Market data (canonical QuoteResponse)
